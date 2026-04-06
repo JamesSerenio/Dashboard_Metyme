@@ -1,3 +1,37 @@
+:root {
+  --dash-page-bg: #f7f2e8;
+  --dash-page-bg-soft: #f2eadc;
+
+  --dash-card: rgba(255, 250, 243, 0.88);
+  --dash-card-strong: #fffaf2;
+  --dash-card-soft: #f8efe3;
+
+  --dash-text: #1f1a14;
+  --dash-text-soft: #7b6d59;
+  --dash-text-muted: #9a8a75;
+
+  --dash-line: rgba(110, 88, 57, 0.12);
+  --dash-line-strong: rgba(110, 88, 57, 0.18);
+
+  --dash-gold: #c89b52;
+  --dash-gold-deep: #a57b3d;
+  --dash-brown: #5d4629;
+  --dash-brown-2: #7b6040;
+  --dash-green: #46634c;
+  --dash-green-2: #23473d;
+  --dash-purple: #7754b3;
+  --dash-orange: #c46b2d;
+
+  --dash-shadow-lg: 0 24px 60px rgba(90, 69, 42, 0.12);
+  --dash-shadow-md: 0 18px 38px rgba(90, 69, 42, 0.1);
+  --dash-shadow-sm: 0 10px 24px rgba(90, 69, 42, 0.08);
+
+  --dash-radius-xl: 30px;
+  --dash-radius-lg: 24px;
+  --dash-radius-md: 18px;
+  --dash-radius-sm: 14px;
+}
+
 *,
 *::before,
 *::after {
@@ -6,12 +40,19 @@
 
 .admin-dashboard-page {
   width: 100%;
+  min-height: 100%;
+  background:
+    radial-gradient(900px 420px at 100% 0%, rgba(200, 155, 82, 0.09), transparent 55%),
+    radial-gradient(720px 420px at 0% 100%, rgba(123, 96, 64, 0.07), transparent 55%),
+    linear-gradient(180deg, var(--dash-page-bg) 0%, var(--dash-page-bg-soft) 100%);
+  border-radius: 34px;
+  padding: 8px;
 }
 
 .admin-dashboard-wrap {
   width: 100%;
   display: grid;
-  gap: 20px;
+  gap: 22px;
 }
 
 .admin-dash-headline {
@@ -19,69 +60,78 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 18px;
-  padding: 8px 2px 4px;
+  padding: 10px 4px 6px;
 }
 
 .admin-dash-badge {
-  display: inline-block;
-  margin-bottom: 8px;
-  padding: 6px 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  min-height: 40px;
+  padding: 0 16px;
   border-radius: 999px;
   font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
+  font-weight: 900;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: #5f5548;
-  background: rgba(255, 255, 255, 0.55);
-  border: 1px solid rgba(138, 124, 103, 0.16);
+  color: #fff7eb;
+  background: linear-gradient(135deg, #5b4529 0%, #7b6040 45%, #a88652 100%);
+  border: 1px solid rgba(255, 230, 191, 0.3);
+  box-shadow:
+    0 12px 26px rgba(91, 69, 41, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
 }
 
 .admin-dash-headline h2 {
   margin: 0;
-  font-size: clamp(28px, 3vw, 40px);
-  line-height: 1;
-  font-weight: 900;
-  letter-spacing: -0.04em;
-  color: #121212;
+  font-size: clamp(30px, 3vw, 42px);
+  line-height: 0.98;
+  font-weight: 1000;
+  letter-spacing: -0.05em;
+  color: var(--dash-text);
 }
 
 .admin-dash-headline p {
-  margin: 10px 0 0;
-  color: #645c51;
+  margin: 12px 0 0;
+  color: var(--dash-text-soft);
   font-size: 15px;
-  line-height: 1.7;
+  line-height: 1.8;
   font-weight: 600;
-  max-width: 560px;
+  max-width: 620px;
 }
 
 .admin-dash-date-btn {
-  min-height: 52px;
-  padding: 0 16px;
-  border: 0;
-  border-radius: 16px;
+  min-height: 54px;
+  padding: 0 18px;
+  border: 1px solid rgba(255, 235, 204, 0.22);
+  border-radius: 18px;
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  background: linear-gradient(135deg, #111111 0%, #000000 100%);
-  color: #ffffff;
+  background: linear-gradient(135deg, #17110b 0%, #4f3b22 45%, #8d6b41 100%);
+  color: #fffaf2;
   font-size: 13px;
-  font-weight: 800;
-  box-shadow: 0 14px 24px rgba(0, 0, 0, 0.16);
+  font-weight: 900;
+  box-shadow: 0 16px 30px rgba(79, 59, 34, 0.24);
   cursor: pointer;
   transition:
-    transform 0.2s ease,
-    box-shadow 0.2s ease;
+    transform 0.22s ease,
+    box-shadow 0.22s ease,
+    filter 0.22s ease;
 }
 
 .admin-dash-date-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 18px 30px rgba(0, 0, 0, 0.22);
+  transform: translateY(-2px);
+  box-shadow: 0 20px 34px rgba(79, 59, 34, 0.28);
+  filter: brightness(1.04);
 }
 
 .admin-dash-date-btn img {
   width: 18px;
   height: 18px;
   object-fit: contain;
+  filter: brightness(0) invert(1);
 }
 
 .admin-dash-totals-row {
@@ -97,42 +147,58 @@
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 18px 16px;
-  border-radius: 22px;
-  background: rgba(255, 255, 255, 0.78);
-  box-shadow: 0 16px 34px rgba(92, 76, 56, 0.1);
-  border: 1px solid rgba(120, 106, 88, 0.08);
+  padding: 20px 18px;
+  border-radius: 24px;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 250, 243, 0.92) 0%,
+    rgba(248, 240, 229, 0.88) 100%
+  );
+  box-shadow: var(--dash-shadow-md);
+  border: 1px solid var(--dash-line);
   backdrop-filter: blur(10px);
+  overflow: hidden;
   transition:
-    transform 0.22s ease,
-    box-shadow 0.22s ease;
+    transform 0.24s ease,
+    box-shadow 0.24s ease,
+    border-color 0.24s ease;
+}
+
+.admin-dash-total-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.42), transparent 34%);
+  pointer-events: none;
 }
 
 .admin-dash-total-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 22px 40px rgba(92, 76, 56, 0.14);
+  transform: translateY(-3px);
+  box-shadow: 0 24px 46px rgba(92, 76, 56, 0.15);
+  border-color: var(--dash-line-strong);
 }
 
 .admin-dash-total-card--walkin {
-  border-left: 6px solid #2f3b2f;
+  border-left: 6px solid var(--dash-green-2);
 }
 
 .admin-dash-total-card--reserve {
-  border-left: 6px solid #6a3fb5;
+  border-left: 6px solid var(--dash-purple);
 }
 
 .admin-dash-total-card--promo {
-  border-left: 6px solid #c04b1a;
+  border-left: 6px solid var(--dash-orange);
 }
 
 .admin-dash-total-card--all {
-  border-left: 6px solid #0f5a4a;
+  border-left: 6px solid var(--dash-gold-deep);
 }
 
 .admin-dash-total-icon {
-  width: 46px;
-  height: 46px;
-  flex: 0 0 46px;
+  width: 48px;
+  height: 48px;
+  flex: 0 0 48px;
   object-fit: contain;
 }
 
@@ -140,22 +206,24 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
+  position: relative;
+  z-index: 1;
 }
 
 .admin-dash-total-label {
   font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.06em;
+  font-weight: 900;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: rgba(0, 0, 0, 0.64);
+  color: rgba(45, 34, 23, 0.62);
 }
 
 .admin-dash-total-value {
   margin-top: 6px;
-  font-size: 30px;
+  font-size: 32px;
   line-height: 1;
-  font-weight: 900;
-  color: #121212;
+  font-weight: 1000;
+  color: var(--dash-text);
 }
 
 .admin-dash-total-percent {
@@ -165,21 +233,23 @@
   flex-direction: column;
   align-items: flex-end;
   gap: 4px;
+  position: relative;
+  z-index: 1;
 }
 
 .admin-dash-total-percent strong {
   font-size: 20px;
   line-height: 1;
-  font-weight: 900;
-  color: #111111;
+  font-weight: 1000;
+  color: var(--dash-text);
 }
 
 .admin-dash-total-percent span {
   font-size: 11px;
-  font-weight: 700;
-  color: rgba(0, 0, 0, 0.55);
+  font-weight: 800;
+  color: rgba(45, 34, 23, 0.5);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
 }
 
 .admin-dash-charts-grid {
@@ -189,18 +259,31 @@
 }
 
 .admin-dash-chart-card {
+  position: relative;
   padding: 22px;
-  border-radius: 26px;
+  border-radius: 28px;
   background: linear-gradient(
     180deg,
-    rgba(236, 226, 210, 0.88) 0%,
-    rgba(245, 238, 228, 0.84) 100%
+    rgba(255, 250, 243, 0.94) 0%,
+    rgba(245, 236, 223, 0.9) 100%
   );
-  box-shadow: 0 22px 44px rgba(92, 76, 56, 0.1);
-  border: 1px solid rgba(124, 111, 95, 0.08);
+  box-shadow: var(--dash-shadow-lg);
+  border: 1px solid var(--dash-line);
+  overflow: hidden;
+}
+
+.admin-dash-chart-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at top right, rgba(200, 155, 82, 0.12), transparent 28%);
+  pointer-events: none;
 }
 
 .admin-dash-chart-head {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -210,30 +293,34 @@
 
 .admin-dash-chart-title {
   font-size: 18px;
-  font-weight: 900;
-  color: #121212;
+  font-weight: 1000;
+  color: var(--dash-text);
 }
 
 .admin-dash-chart-sub {
   margin-top: 4px;
   font-size: 12px;
-  font-weight: 800;
-  color: rgba(0, 0, 0, 0.6);
+  font-weight: 900;
+  color: rgba(45, 34, 23, 0.58);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
 }
 
 .admin-dash-line-wrap {
+  position: relative;
+  z-index: 1;
   width: 100%;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.45);
-  border: 1px solid rgba(0, 0, 0, 0.05);
-  padding: 10px;
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.58) 0%, rgba(255, 250, 243, 0.42) 100%);
+  border: 1px solid rgba(110, 88, 57, 0.08);
+  padding: 12px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
 }
 
 .admin-dash-chart-body {
   position: relative;
   width: 100%;
+  z-index: 1;
 }
 
 .admin-dash-chart-center {
@@ -249,17 +336,17 @@
 .admin-dash-chart-center-label {
   font-size: 12px;
   font-weight: 900;
-  color: rgba(0, 0, 0, 0.58);
+  color: rgba(45, 34, 23, 0.54);
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
 
 .admin-dash-chart-center-value {
   margin-top: 4px;
-  font-size: 30px;
+  font-size: 32px;
   line-height: 1;
   font-weight: 1000;
-  color: #121212;
+  color: var(--dash-text);
 }
 
 .admin-dash-chart-empty {
@@ -267,12 +354,13 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.42);
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.5) 0%, rgba(248, 240, 228, 0.44) 100%);
   font-weight: 800;
-  color: rgba(0, 0, 0, 0.58);
+  color: rgba(45, 34, 23, 0.58);
   text-align: center;
   padding: 16px;
+  border: 1px solid rgba(110, 88, 57, 0.07);
 }
 
 .admin-dash-chart-loading {
@@ -281,17 +369,18 @@
   align-items: center;
   justify-content: center;
   gap: 12px;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.42);
-  color: rgba(0, 0, 0, 0.65);
-  font-weight: 800;
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.5) 0%, rgba(248, 240, 228, 0.44) 100%);
+  color: rgba(45, 34, 23, 0.66);
+  font-weight: 900;
+  border: 1px solid rgba(110, 88, 57, 0.07);
 }
 
 .admin-dash-loader {
   width: 18px;
   height: 18px;
-  border: 2px solid rgba(0, 0, 0, 0.18);
-  border-top-color: #111111;
+  border: 2px solid rgba(93, 70, 41, 0.18);
+  border-top-color: var(--dash-brown);
   border-radius: 999px;
   animation: adminDashSpin 0.8s linear infinite;
 }
@@ -300,7 +389,8 @@
   position: fixed;
   inset: 0;
   z-index: 70;
-  background: rgba(0, 0, 0, 0.42);
+  background: rgba(29, 21, 12, 0.42);
+  backdrop-filter: blur(4px);
   display: grid;
   place-items: center;
   padding: 18px;
@@ -308,15 +398,15 @@
 
 .admin-dash-calendar-card {
   width: min(100%, 420px);
-  border-radius: 24px;
+  border-radius: 26px;
   background: linear-gradient(
     180deg,
-    rgba(236, 226, 210, 0.96) 0%,
-    rgba(245, 238, 228, 0.94) 100%
+    rgba(255, 250, 243, 0.98) 0%,
+    rgba(245, 236, 223, 0.96) 100%
   );
-  box-shadow: 0 24px 50px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 28px 56px rgba(48, 35, 20, 0.2);
   padding: 22px;
-  border: 1px solid rgba(124, 111, 95, 0.08);
+  border: 1px solid rgba(110, 88, 57, 0.1);
   animation: adminDashPopIn 0.22s ease;
 }
 
@@ -331,32 +421,45 @@
 .admin-dash-calendar-head h3 {
   margin: 0;
   font-size: 18px;
-  font-weight: 900;
-  color: #121212;
+  font-weight: 1000;
+  color: var(--dash-text);
 }
 
 .admin-dash-calendar-close {
   min-height: 40px;
   padding: 0 14px;
-  border: 0;
+  border: 1px solid rgba(110, 88, 57, 0.08);
   border-radius: 12px;
-  background: rgba(0, 0, 0, 0.08);
-  color: #121212;
+  background: rgba(110, 88, 57, 0.08);
+  color: var(--dash-text);
   font-weight: 800;
   cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.admin-dash-calendar-close:hover {
+  background: rgba(110, 88, 57, 0.14);
 }
 
 .admin-dash-calendar-input {
   width: 100%;
   min-height: 54px;
-  border-radius: 14px;
-  border: 1px solid rgba(124, 111, 95, 0.18);
+  border-radius: 16px;
+  border: 1px solid rgba(110, 88, 57, 0.16);
   padding: 0 14px;
   font-size: 14px;
-  font-weight: 700;
-  background: rgba(255, 255, 255, 0.7);
-  color: #121212;
+  font-weight: 800;
+  background: rgba(255, 255, 255, 0.74);
+  color: var(--dash-text);
   outline: none;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.admin-dash-calendar-input:focus {
+  border-color: rgba(139, 107, 63, 0.45);
+  box-shadow: 0 0 0 4px rgba(200, 155, 82, 0.12);
 }
 
 .admin-dash-calendar-actions {
@@ -367,22 +470,32 @@
 }
 
 .admin-dash-calendar-btn {
-  min-height: 42px;
+  min-height: 44px;
   padding: 0 16px;
   border: 0;
-  border-radius: 12px;
-  font-weight: 800;
+  border-radius: 14px;
+  font-weight: 900;
   cursor: pointer;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    filter 0.2s ease;
+}
+
+.admin-dash-calendar-btn:hover {
+  transform: translateY(-1px);
 }
 
 .admin-dash-calendar-btn.secondary {
-  background: rgba(0, 0, 0, 0.08);
-  color: #111111;
+  background: rgba(110, 88, 57, 0.08);
+  color: var(--dash-text);
+  border: 1px solid rgba(110, 88, 57, 0.08);
 }
 
 .admin-dash-calendar-btn.primary {
-  background: #111111;
+  background: linear-gradient(135deg, #17110b 0%, #4f3b22 45%, #8d6b41 100%);
   color: #ffffff;
+  box-shadow: 0 12px 22px rgba(79, 59, 34, 0.18);
 }
 
 @keyframes adminDashSpin {
@@ -413,6 +526,11 @@
 }
 
 @media (max-width: 680px) {
+  .admin-dashboard-page {
+    border-radius: 24px;
+    padding: 4px;
+  }
+
   .admin-dash-headline {
     flex-direction: column;
     align-items: flex-start;
@@ -428,9 +546,15 @@
 
   .admin-dash-chart-card {
     padding: 18px;
+    border-radius: 22px;
   }
 
   .admin-dash-headline h2 {
     font-size: 26px;
+  }
+
+  .admin-dash-date-btn {
+    width: 100%;
+    justify-content: center;
   }
 }

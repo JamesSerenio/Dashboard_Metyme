@@ -248,7 +248,7 @@ const Admin_Dashboard: React.FC = () => {
       <div className="admin-dashboard-wrap">
         <div className="admin-dash-headline">
           <div>
-            <span className="admin-dash-badge">Analytics Overview</span>
+            <span className="admin-dash-badge">Metyme Lounge Performance</span>
             <h2>Admin Dashboard</h2>
             <p>Monitor walk-ins, reservations, promos, and weekly activity.</p>
           </div>

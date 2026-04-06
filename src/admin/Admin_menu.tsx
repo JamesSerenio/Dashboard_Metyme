@@ -4,6 +4,7 @@ import { supabase } from "../utils/supabaseClient";
 import "../styles/admin_menu.css";
 
 import Admin_Dashboard from "./Admin_Dashboard";
+import Admin_Add_Ons from "./Admin_Add_Ons";
 
 import dashboardIcon from "../assets/graph.png";
 import addOnsIcon from "../assets/ons.png";
@@ -68,6 +69,26 @@ const Admin_menu: React.FC = () => {
   );
 
   const activeMenu = menuItems.find((m) => m.key === active);
+
+  const renderContent = () => {
+    switch (active) {
+      case "dashboard":
+        return <Admin_Dashboard />;
+
+      case "addons":
+        return <Admin_Add_Ons />;
+
+      case "items":
+      case "seat":
+      case "sales":
+      default:
+        return (
+          <div className="admin-content-box">
+            <h3>{activeMenu?.name}</h3>
+          </div>
+        );
+    }
+  };
 
   return (
     <div className={`admin-page ${mounted ? "is-mounted" : ""}`}>
@@ -138,15 +159,7 @@ const Admin_menu: React.FC = () => {
         </div>
       </aside>
 
-      <main className="admin-main">
-        {active === "dashboard" ? (
-          <Admin_Dashboard />
-        ) : (
-          <div className="admin-content-box">
-            <h3>{activeMenu?.name}</h3>
-          </div>
-        )}
-      </main>
+      <main className="admin-main">{renderContent()}</main>
     </div>
   );
 };
