@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { supabase } from "../utils/supabaseClient";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
@@ -121,9 +122,12 @@ const deleteStorageByUrl = async (
   const path = extractPathFromPublicUrl(url, bucket);
   if (!path) return;
   const { error } = await supabase.storage.from(bucket).remove([path]);
-  if (error) {
-    console.warn("Storage delete failed:", error.message);
-  }
+  if (error) console.warn("Storage delete failed:", error.message);
+};
+
+const ModalPortal: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  if (typeof document === "undefined") return null;
+  return createPortal(children, document.body);
 };
 
 const Admin_Item_Lists: React.FC = () => {
@@ -1013,430 +1017,441 @@ const Admin_Item_Lists: React.FC = () => {
           </section>
         )}
 
-        {showToast && <div className="admin-toast">{toastMessage}</div>}
+        {showToast &&
+          createPortal(<div className="admin-toast">{toastMessage}</div>, document.body)}
 
         {editingAddOn && (
-          <div
-            className="admin-modal-overlay"
-            onClick={() => (savingEdit ? null : setEditingAddOn(null))}
-          >
-            <div className="admin-modal-card" onClick={(e) => e.stopPropagation()}>
-              <h3 className="admin-modal-title">Edit Add-On</h3>
-              <p className="admin-modal-subtitle">{editingAddOn.name}</p>
+          <ModalPortal>
+            <div
+              className="admin-modal-overlay"
+              onClick={() => (savingEdit ? null : setEditingAddOn(null))}
+            >
+              <div className="admin-modal-card" onClick={(e) => e.stopPropagation()}>
+                <h3 className="admin-modal-title">Edit Add-On</h3>
+                <p className="admin-modal-subtitle">{editingAddOn.name}</p>
 
-              <div className="admin-edit-image-row">
-                <div className="admin-edit-image-box">
-                  {newImagePreview ? (
-                    <img src={newImagePreview} alt="New" className="admin-edit-image" />
-                  ) : editingAddOn.image_url && !removeImage ? (
-                    <img
-                      src={editingAddOn.image_url}
-                      alt="Current"
-                      className="admin-edit-image"
-                    />
-                  ) : (
-                    <div className="admin-no-image">No Image</div>
-                  )}
+                <div className="admin-edit-image-row">
+                  <div className="admin-edit-image-box">
+                    {newImagePreview ? (
+                      <img src={newImagePreview} alt="New" className="admin-edit-image" />
+                    ) : editingAddOn.image_url && !removeImage ? (
+                      <img
+                        src={editingAddOn.image_url}
+                        alt="Current"
+                        className="admin-edit-image"
+                      />
+                    ) : (
+                      <div className="admin-no-image">No Image</div>
+                    )}
+                  </div>
+
+                  <div className="admin-edit-image-actions">
+                    <label className="admin-action-btn admin-action-btn--soft">
+                      Upload Image
+                      <input
+                        type="file"
+                        accept="image/*"
+                        style={{ display: "none" }}
+                        disabled={savingEdit}
+                        onChange={(e) => {
+                          const f = e.currentTarget.files?.[0] ?? null;
+                          onPickImage(f);
+                          e.currentTarget.value = "";
+                        }}
+                      />
+                    </label>
+
+                    <button
+                      className="admin-action-btn admin-action-btn--soft"
+                      onClick={() => {
+                        onPickImage(null);
+                        setRemoveImage(true);
+                      }}
+                      disabled={savingEdit}
+                      type="button"
+                    >
+                      Remove Image
+                    </button>
+
+                    {newImageFile ? (
+                      <div className="admin-helper-text">Selected: {newImageFile.name}</div>
+                    ) : null}
+
+                    {removeImage && !newImageFile ? (
+                      <div className="admin-helper-text">Image will be removed.</div>
+                    ) : null}
+                  </div>
                 </div>
 
-                <div className="admin-edit-image-actions">
-                  <label className="admin-action-btn admin-action-btn--soft">
-                    Upload Image
+                <div className="admin-form-grid">
+                  <div className="admin-form-group">
+                    <label>Name *</label>
                     <input
-                      type="file"
-                      accept="image/*"
-                      style={{ display: "none" }}
+                      className="admin-input"
+                      value={editingAddOn.name}
+                      onChange={(e) =>
+                        setEditingAddOn({ ...editingAddOn, name: e.currentTarget.value })
+                      }
                       disabled={savingEdit}
-                      onChange={(e) => {
-                        const f = e.currentTarget.files?.[0] ?? null;
-                        onPickImage(f);
-                        e.currentTarget.value = "";
-                      }}
                     />
-                  </label>
+                  </div>
 
+                  <div className="admin-form-group">
+                    <label>Category *</label>
+                    <input
+                      className="admin-input"
+                      value={editingAddOn.category}
+                      onChange={(e) =>
+                        setEditingAddOn({
+                          ...editingAddOn,
+                          category: e.currentTarget.value,
+                        })
+                      }
+                      disabled={savingEdit}
+                    />
+                  </div>
+
+                  <div className="admin-form-group">
+                    <label>Size</label>
+                    <input
+                      className="admin-input"
+                      value={editingAddOn.size ?? ""}
+                      placeholder='e.g. "Small", "16oz"'
+                      onChange={(e) =>
+                        setEditingAddOn({ ...editingAddOn, size: e.currentTarget.value })
+                      }
+                      disabled={savingEdit}
+                    />
+                  </div>
+
+                  <div className="admin-form-group">
+                    <label>Price</label>
+                    <input
+                      className="admin-input"
+                      type="number"
+                      value={editingAddOn.price}
+                      onChange={(e) => {
+                        const v = parseFloat(e.currentTarget.value);
+                        setEditingAddOn({
+                          ...editingAddOn,
+                          price: Number.isNaN(v) ? 0 : v,
+                        });
+                      }}
+                      disabled={savingEdit}
+                    />
+                  </div>
+
+                  <div className="admin-form-group">
+                    <label>Sold</label>
+                    <input
+                      className="admin-input"
+                      type="number"
+                      value={editingAddOn.sold}
+                      onChange={(e) => {
+                        const v = parseInt(e.currentTarget.value, 10);
+                        setEditingAddOn({
+                          ...editingAddOn,
+                          sold: Number.isNaN(v) ? 0 : v,
+                        });
+                      }}
+                      disabled={savingEdit}
+                    />
+                  </div>
+
+                  <div className="admin-form-group">
+                    <label>Expenses</label>
+                    <input
+                      className="admin-input"
+                      type="number"
+                      value={editingAddOn.expenses}
+                      onChange={(e) => {
+                        const v = parseFloat(e.currentTarget.value);
+                        setEditingAddOn({
+                          ...editingAddOn,
+                          expenses: Number.isNaN(v) ? 0 : v,
+                        });
+                      }}
+                      disabled={savingEdit}
+                    />
+                  </div>
+                </div>
+
+                <div className="admin-modal-actions">
                   <button
-                    className="admin-action-btn admin-action-btn--soft"
-                    onClick={() => {
-                      onPickImage(null);
-                      setRemoveImage(true);
-                    }}
+                    className="admin-action-btn admin-action-btn--ghost"
+                    onClick={() => setEditingAddOn(null)}
                     disabled={savingEdit}
                     type="button"
                   >
-                    Remove Image
+                    Close
                   </button>
-
-                  {newImageFile ? (
-                    <div className="admin-helper-text">Selected: {newImageFile.name}</div>
-                  ) : null}
-
-                  {removeImage && !newImageFile ? (
-                    <div className="admin-helper-text">Image will be removed.</div>
-                  ) : null}
-                </div>
-              </div>
-
-              <div className="admin-form-grid">
-                <div className="admin-form-group">
-                  <label>Name *</label>
-                  <input
-                    className="admin-input"
-                    value={editingAddOn.name}
-                    onChange={(e) =>
-                      setEditingAddOn({ ...editingAddOn, name: e.currentTarget.value })
-                    }
+                  <button
+                    className="admin-action-btn admin-action-btn--primary"
+                    onClick={() => void handleSaveEdit()}
                     disabled={savingEdit}
-                  />
+                    type="button"
+                  >
+                    {savingEdit ? "Saving..." : "Save"}
+                  </button>
                 </div>
-
-                <div className="admin-form-group">
-                  <label>Category *</label>
-                  <input
-                    className="admin-input"
-                    value={editingAddOn.category}
-                    onChange={(e) =>
-                      setEditingAddOn({
-                        ...editingAddOn,
-                        category: e.currentTarget.value,
-                      })
-                    }
-                    disabled={savingEdit}
-                  />
-                </div>
-
-                <div className="admin-form-group">
-                  <label>Size</label>
-                  <input
-                    className="admin-input"
-                    value={editingAddOn.size ?? ""}
-                    placeholder='e.g. "Small", "16oz"'
-                    onChange={(e) =>
-                      setEditingAddOn({ ...editingAddOn, size: e.currentTarget.value })
-                    }
-                    disabled={savingEdit}
-                  />
-                </div>
-
-                <div className="admin-form-group">
-                  <label>Price</label>
-                  <input
-                    className="admin-input"
-                    type="number"
-                    value={editingAddOn.price}
-                    onChange={(e) => {
-                      const v = parseFloat(e.currentTarget.value);
-                      setEditingAddOn({
-                        ...editingAddOn,
-                        price: Number.isNaN(v) ? 0 : v,
-                      });
-                    }}
-                    disabled={savingEdit}
-                  />
-                </div>
-
-                <div className="admin-form-group">
-                  <label>Sold</label>
-                  <input
-                    className="admin-input"
-                    type="number"
-                    value={editingAddOn.sold}
-                    onChange={(e) => {
-                      const v = parseInt(e.currentTarget.value, 10);
-                      setEditingAddOn({
-                        ...editingAddOn,
-                        sold: Number.isNaN(v) ? 0 : v,
-                      });
-                    }}
-                    disabled={savingEdit}
-                  />
-                </div>
-
-                <div className="admin-form-group">
-                  <label>Expenses</label>
-                  <input
-                    className="admin-input"
-                    type="number"
-                    value={editingAddOn.expenses}
-                    onChange={(e) => {
-                      const v = parseFloat(e.currentTarget.value);
-                      setEditingAddOn({
-                        ...editingAddOn,
-                        expenses: Number.isNaN(v) ? 0 : v,
-                      });
-                    }}
-                    disabled={savingEdit}
-                  />
-                </div>
-              </div>
-
-              <div className="admin-modal-actions">
-                <button
-                  className="admin-action-btn admin-action-btn--ghost"
-                  onClick={() => setEditingAddOn(null)}
-                  disabled={savingEdit}
-                  type="button"
-                >
-                  Close
-                </button>
-                <button
-                  className="admin-action-btn admin-action-btn--primary"
-                  onClick={() => void handleSaveEdit()}
-                  disabled={savingEdit}
-                  type="button"
-                >
-                  {savingEdit ? "Saving..." : "Save"}
-                </button>
               </div>
             </div>
-          </div>
+          </ModalPortal>
         )}
 
         {restockingAddOn && (
-          <div
-            className="admin-modal-overlay"
-            onClick={() => (savingRestock ? null : setRestockingAddOn(null))}
-          >
-            <div className="admin-modal-card" onClick={(e) => e.stopPropagation()}>
-              <h3 className="admin-modal-title">Add Stocks</h3>
-              <p className="admin-modal-subtitle">
-                {restockingAddOn.name} • Current Restock:{" "}
-                <b>{toNum(restockingAddOn.restocked)}</b>
-              </p>
+          <ModalPortal>
+            <div
+              className="admin-modal-overlay"
+              onClick={() => (savingRestock ? null : setRestockingAddOn(null))}
+            >
+              <div className="admin-modal-card" onClick={(e) => e.stopPropagation()}>
+                <h3 className="admin-modal-title">Add Stocks</h3>
+                <p className="admin-modal-subtitle">
+                  {restockingAddOn.name} • Current Restock:{" "}
+                  <b>{toNum(restockingAddOn.restocked)}</b>
+                </p>
 
-              <div className="admin-form-grid admin-form-grid--single">
-                <div className="admin-form-group">
-                  <label>Quantity to add *</label>
-                  <input
-                    className="admin-input"
-                    type="number"
-                    min="1"
-                    step="1"
-                    value={restockQty}
-                    onChange={(e) => setRestockQty(e.currentTarget.value)}
-                    disabled={savingRestock}
-                    placeholder="e.g. 10"
-                  />
+                <div className="admin-form-grid admin-form-grid--single">
+                  <div className="admin-form-group">
+                    <label>Quantity to add *</label>
+                    <input
+                      className="admin-input"
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={restockQty}
+                      onChange={(e) => setRestockQty(e.currentTarget.value)}
+                      disabled={savingRestock}
+                      placeholder="e.g. 10"
+                    />
+                  </div>
+
+                  <div className="admin-form-group">
+                    <label>Note (optional)</label>
+                    <textarea
+                      className="admin-textarea"
+                      value={restockNote}
+                      onChange={(e) => setRestockNote(e.currentTarget.value)}
+                      placeholder="e.g. supplier restock / new batch"
+                      disabled={savingRestock}
+                    />
+                  </div>
                 </div>
 
-                <div className="admin-form-group">
-                  <label>Note (optional)</label>
-                  <textarea
-                    className="admin-textarea"
-                    value={restockNote}
-                    onChange={(e) => setRestockNote(e.currentTarget.value)}
-                    placeholder="e.g. supplier restock / new batch"
+                <div className="admin-modal-actions">
+                  <button
+                    className="admin-action-btn admin-action-btn--ghost"
+                    onClick={() => setRestockingAddOn(null)}
                     disabled={savingRestock}
-                  />
+                    type="button"
+                  >
+                    Close
+                  </button>
+                  <button
+                    className="admin-action-btn admin-action-btn--primary"
+                    onClick={() => void submitRestock()}
+                    disabled={savingRestock}
+                    type="button"
+                  >
+                    {savingRestock ? "Saving..." : "Confirm Restock"}
+                  </button>
                 </div>
-              </div>
-
-              <div className="admin-modal-actions">
-                <button
-                  className="admin-action-btn admin-action-btn--ghost"
-                  onClick={() => setRestockingAddOn(null)}
-                  disabled={savingRestock}
-                  type="button"
-                >
-                  Close
-                </button>
-                <button
-                  className="admin-action-btn admin-action-btn--primary"
-                  onClick={() => void submitRestock()}
-                  disabled={savingRestock}
-                  type="button"
-                >
-                  {savingRestock ? "Saving..." : "Confirm Restock"}
-                </button>
               </div>
             </div>
-          </div>
+          </ModalPortal>
         )}
 
         {historyAddOn && (
-          <div
-            className="admin-modal-overlay"
-            onClick={() => (historyLoading ? null : setHistoryAddOn(null))}
-          >
+          <ModalPortal>
             <div
-              className="admin-modal-card admin-modal-card--wide"
-              onClick={(e) => e.stopPropagation()}
+              className="admin-modal-overlay"
+              onClick={() => (historyLoading ? null : setHistoryAddOn(null))}
             >
-              <h3 className="admin-modal-title">Adjustment History</h3>
-              <p className="admin-modal-subtitle">{historyAddOn.name}</p>
+              <div
+                className="admin-modal-card admin-modal-card--wide"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <h3 className="admin-modal-title">Adjustment History</h3>
+                <p className="admin-modal-subtitle">{historyAddOn.name}</p>
 
-              <div className="admin-history-meta">
-                Current Stock: <b>{historyAddOn.stocks}</b> • Overall:{" "}
-                <b>{money2(historyAddOn.overall_sales)}</b>
-              </div>
-
-              {historyLoading ? (
-                <div className="admin-state-card">Loading history...</div>
-              ) : historyRows.length === 0 ? (
-                <div className="admin-state-card">No adjustment records.</div>
-              ) : (
-                <div className="admin-table-wrap admin-table-wrap--modal">
-                  <table className="admin-table">
-                    <thead>
-                      <tr>
-                        <th>Date</th>
-                        <th>Type</th>
-                        <th>Qty</th>
-                        <th>Amount</th>
-                        <th>By</th>
-                        <th>Reason</th>
-                        <th>Status</th>
-                        <th>Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {historyRows.map((r) => (
-                        <tr key={r.id}>
-                          <td>{formatPH(r.created_at)}</td>
-                          <td className="is-strong">{typeLabel(r.expense_type)}</td>
-                          <td className="is-strong">{toNum(r.quantity)}</td>
-                          <td className="is-strong">{money2(toNum(r.expense_amount))}</td>
-                          <td className="is-strong">{r.full_name}</td>
-                          <td>{r.description}</td>
-                          <td className="is-strong">{r.voided ? "VOIDED" : "ACTIVE"}</td>
-                          <td>
-                            {!r.voided ? (
-                              <button
-                                className="admin-action-btn admin-action-btn--danger"
-                                onClick={() => confirmVoid(r)}
-                                disabled={voiding}
-                                type="button"
-                              >
-                                Void
-                              </button>
-                            ) : (
-                              <span className="admin-helper-text">—</span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className="admin-history-meta">
+                  Current Stock: <b>{historyAddOn.stocks}</b> • Overall:{" "}
+                  <b>{money2(historyAddOn.overall_sales)}</b>
                 </div>
-              )}
 
-              <div className="admin-modal-actions">
-                <button
-                  className="admin-action-btn admin-action-btn--ghost"
-                  onClick={() => setHistoryAddOn(null)}
-                  disabled={historyLoading}
-                  type="button"
-                >
-                  Close
-                </button>
-                <button
-                  className="admin-action-btn admin-action-btn--primary"
-                  onClick={() => void refreshHistory()}
-                  disabled={historyLoading}
-                  type="button"
-                >
-                  Refresh
-                </button>
+                {historyLoading ? (
+                  <div className="admin-state-card">Loading history...</div>
+                ) : historyRows.length === 0 ? (
+                  <div className="admin-state-card">No adjustment records.</div>
+                ) : (
+                  <div className="admin-table-wrap admin-table-wrap--modal">
+                    <table className="admin-table">
+                      <thead>
+                        <tr>
+                          <th>Date</th>
+                          <th>Type</th>
+                          <th>Qty</th>
+                          <th>Amount</th>
+                          <th>By</th>
+                          <th>Reason</th>
+                          <th>Status</th>
+                          <th>Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {historyRows.map((r) => (
+                          <tr key={r.id}>
+                            <td>{formatPH(r.created_at)}</td>
+                            <td className="is-strong">{typeLabel(r.expense_type)}</td>
+                            <td className="is-strong">{toNum(r.quantity)}</td>
+                            <td className="is-strong">{money2(toNum(r.expense_amount))}</td>
+                            <td className="is-strong">{r.full_name}</td>
+                            <td>{r.description}</td>
+                            <td className="is-strong">{r.voided ? "VOIDED" : "ACTIVE"}</td>
+                            <td>
+                              {!r.voided ? (
+                                <button
+                                  className="admin-action-btn admin-action-btn--danger"
+                                  onClick={() => confirmVoid(r)}
+                                  disabled={voiding}
+                                  type="button"
+                                >
+                                  Void
+                                </button>
+                              ) : (
+                                <span className="admin-helper-text">—</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                <div className="admin-modal-actions">
+                  <button
+                    className="admin-action-btn admin-action-btn--ghost"
+                    onClick={() => setHistoryAddOn(null)}
+                    disabled={historyLoading}
+                    type="button"
+                  >
+                    Close
+                  </button>
+                  <button
+                    className="admin-action-btn admin-action-btn--primary"
+                    onClick={() => void refreshHistory()}
+                    disabled={historyLoading}
+                    type="button"
+                  >
+                    Refresh
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
+          </ModalPortal>
         )}
 
         {deleteTarget && (
-          <div
-            className="admin-modal-overlay"
-            onClick={() => (deleting ? null : setDeleteTarget(null))}
-          >
-            <div className="admin-modal-card" onClick={(e) => e.stopPropagation()}>
-              <h3 className="admin-modal-title">Delete Item</h3>
-              <p className="admin-modal-subtitle">
-                Are you sure you want to delete <b>{deleteTarget.name}</b>?
-              </p>
+          <ModalPortal>
+            <div
+              className="admin-modal-overlay"
+              onClick={() => (deleting ? null : setDeleteTarget(null))}
+            >
+              <div className="admin-modal-card" onClick={(e) => e.stopPropagation()}>
+                <h3 className="admin-modal-title">Delete Item</h3>
+                <p className="admin-modal-subtitle">
+                  Are you sure you want to delete <b>{deleteTarget.name}</b>?
+                </p>
 
-              <div className="admin-confirm-box">
-                <div>
-                  Category: <b>{deleteTarget.category}</b>
+                <div className="admin-confirm-box">
+                  <div>
+                    Category: <b>{deleteTarget.category}</b>
+                  </div>
+                  <div>
+                    Stocks: <b>{toNum(deleteTarget.stocks)}</b> • Sold:{" "}
+                    <b>{toNum(deleteTarget.sold)}</b>
+                  </div>
+                  <div>
+                    Image: <b>{deleteTarget.image_url ? "will be deleted" : "none"}</b>
+                  </div>
                 </div>
-                <div>
-                  Stocks: <b>{toNum(deleteTarget.stocks)}</b> • Sold:{" "}
-                  <b>{toNum(deleteTarget.sold)}</b>
-                </div>
-                <div>
-                  Image: <b>{deleteTarget.image_url ? "will be deleted" : "none"}</b>
-                </div>
-              </div>
 
-              <div className="admin-modal-actions">
-                <button
-                  className="admin-action-btn admin-action-btn--ghost"
-                  onClick={() => setDeleteTarget(null)}
-                  disabled={deleting}
-                  type="button"
-                >
-                  Cancel
-                </button>
-                <button
-                  className="admin-action-btn admin-action-btn--danger"
-                  onClick={() => void doDelete()}
-                  disabled={deleting}
-                  type="button"
-                >
-                  {deleting ? "Deleting..." : "Delete"}
-                </button>
+                <div className="admin-modal-actions">
+                  <button
+                    className="admin-action-btn admin-action-btn--ghost"
+                    onClick={() => setDeleteTarget(null)}
+                    disabled={deleting}
+                    type="button"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="admin-action-btn admin-action-btn--danger"
+                    onClick={() => void doDelete()}
+                    disabled={deleting}
+                    type="button"
+                  >
+                    {deleting ? "Deleting..." : "Delete"}
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
+          </ModalPortal>
         )}
 
         {voidTarget && (
-          <div
-            className="admin-modal-overlay"
-            onClick={() => (voiding ? null : setVoidTarget(null))}
-          >
-            <div className="admin-modal-card" onClick={(e) => e.stopPropagation()}>
-              <h3 className="admin-modal-title">Void Adjustment</h3>
-              <p className="admin-modal-subtitle">
-                Are you sure you want to void this adjustment?
-              </p>
+          <ModalPortal>
+            <div
+              className="admin-modal-overlay"
+              onClick={() => (voiding ? null : setVoidTarget(null))}
+            >
+              <div className="admin-modal-card" onClick={(e) => e.stopPropagation()}>
+                <h3 className="admin-modal-title">Void Adjustment</h3>
+                <p className="admin-modal-subtitle">
+                  Are you sure you want to void this adjustment?
+                </p>
 
-              <div className="admin-confirm-box">
-                <div>
-                  Date: <b>{formatPH(voidTarget.created_at)}</b>
+                <div className="admin-confirm-box">
+                  <div>
+                    Date: <b>{formatPH(voidTarget.created_at)}</b>
+                  </div>
+                  <div>
+                    Type: <b>{typeLabel(voidTarget.expense_type)}</b>
+                  </div>
+                  <div>
+                    Qty: <b>{toNum(voidTarget.quantity)}</b>
+                  </div>
+                  <div>
+                    Amount: <b>{money2(toNum(voidTarget.expense_amount))}</b>
+                  </div>
+                  <div>
+                    By: <b>{voidTarget.full_name}</b>
+                  </div>
                 </div>
-                <div>
-                  Type: <b>{typeLabel(voidTarget.expense_type)}</b>
-                </div>
-                <div>
-                  Qty: <b>{toNum(voidTarget.quantity)}</b>
-                </div>
-                <div>
-                  Amount: <b>{money2(toNum(voidTarget.expense_amount))}</b>
-                </div>
-                <div>
-                  By: <b>{voidTarget.full_name}</b>
-                </div>
-              </div>
 
-              <div className="admin-modal-actions">
-                <button
-                  className="admin-action-btn admin-action-btn--ghost"
-                  onClick={() => setVoidTarget(null)}
-                  disabled={voiding}
-                  type="button"
-                >
-                  Cancel
-                </button>
-                <button
-                  className="admin-action-btn admin-action-btn--danger"
-                  onClick={() => void doVoid()}
-                  disabled={voiding}
-                  type="button"
-                >
-                  {voiding ? "Voiding..." : "Void"}
-                </button>
+                <div className="admin-modal-actions">
+                  <button
+                    className="admin-action-btn admin-action-btn--ghost"
+                    onClick={() => setVoidTarget(null)}
+                    disabled={voiding}
+                    type="button"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="admin-action-btn admin-action-btn--danger"
+                    onClick={() => void doVoid()}
+                    disabled={voiding}
+                    type="button"
+                  >
+                    {voiding ? "Voiding..." : "Void"}
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
+          </ModalPortal>
         )}
       </div>
     </div>
