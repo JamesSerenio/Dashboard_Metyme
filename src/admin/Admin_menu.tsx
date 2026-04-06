@@ -5,6 +5,7 @@ import "../styles/admin_menu.css";
 
 import Admin_Dashboard from "./Admin_Dashboard";
 import Admin_Add_Ons from "./Admin_Add_Ons";
+import Admin_Item_Lists from "./Admin_Item_Lists";
 
 import dashboardIcon from "../assets/graph.png";
 import addOnsIcon from "../assets/ons.png";
@@ -25,9 +26,9 @@ const Admin_menu: React.FC = () => {
   const navigate = useNavigate();
 
   const [active, setActive] = useState<MenuKey>("dashboard");
-  const [collapsed, setCollapsed] = useState(false);
-  const [loggingOut, setLoggingOut] = useState(false);
-  const [mounted, setMounted] = useState(false);
+  const [collapsed, setCollapsed] = useState<boolean>(false);
+  const [loggingOut, setLoggingOut] = useState<boolean>(false);
+  const [mounted, setMounted] = useState<boolean>(false);
 
   useEffect(() => {
     const role = (localStorage.getItem("role") || "").toLowerCase();
@@ -41,7 +42,7 @@ const Admin_menu: React.FC = () => {
     return () => window.clearTimeout(id);
   }, [navigate]);
 
-  const handleLogout = async () => {
+  const handleLogout = async (): Promise<void> => {
     if (loggingOut) return;
 
     setLoggingOut(true);
@@ -61,7 +62,7 @@ const Admin_menu: React.FC = () => {
     () => [
       { name: "Dashboard", key: "dashboard", icon: dashboardIcon },
       { name: "Add Ons", key: "addons", icon: addOnsIcon },
-      { name: "Items", key: "items", icon: itemIcon },
+      { name: "Item Lists", key: "items", icon: itemIcon },
       { name: "Seat Table", key: "seat", icon: seatIcon },
       { name: "Sales", key: "sales", icon: salesIcon },
     ],
@@ -70,7 +71,7 @@ const Admin_menu: React.FC = () => {
 
   const activeMenu = menuItems.find((m) => m.key === active);
 
-  const renderContent = () => {
+  const renderContent = (): React.ReactNode => {
     switch (active) {
       case "dashboard":
         return <Admin_Dashboard />;
@@ -79,6 +80,8 @@ const Admin_menu: React.FC = () => {
         return <Admin_Add_Ons />;
 
       case "items":
+        return <Admin_Item_Lists />;
+
       case "seat":
       case "sales":
       default:
@@ -151,10 +154,11 @@ const Admin_menu: React.FC = () => {
           <button
             type="button"
             className="admin-logout-btn"
-            onClick={handleLogout}
+            onClick={() => void handleLogout()}
+            disabled={loggingOut}
           >
             <span className="admin-logout-dot" />
-            {collapsed ? "" : "Logout"}
+            {collapsed ? "" : loggingOut ? "Logging out..." : "Logout"}
           </button>
         </div>
       </aside>
