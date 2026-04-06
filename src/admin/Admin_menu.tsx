@@ -1,20 +1,63 @@
+// src/admin/Admin_menu.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../utils/supabaseClient";
 import "../styles/admin_menu.css";
 
+/* ================= PAGES ================= */
 import Admin_Dashboard from "./Admin_Dashboard";
 import Admin_Add_Ons from "./Admin_Add_Ons";
 import Admin_Item_Lists from "./Admin_Item_Lists";
+import Admin_Restock_Record from "./Admin_Restock_Record";
+import Admin_Staff_Expenses_Expired from "./Admin_Staff_Expenses&Expired";
+import Admin_Sales_Report from "./Admin_Sales_Report";
+import Admin_Customer_Add_ons from "./Admin_Customer_Add_ons";
+import Admin_customer_list from "./Admin_customer_list";
+import Admin_customer_reservation from "./Admin_customer_reservation";
+import Admin_Customer_Cancelled from "./Admin_Customer_Cancelled";
+import Staff_Consignment_Record from "./Admin_Staff_Consignment_Record";
+import Customer_Consignment_Record from "./Admin_Customer_Consignment_Record";
+import Admin_Consignment_Approval from "./Admin_Consignment_Approval";
+import Admin_Seat_Table from "./Admin_Seat_Table";
+import Admin_Packages from "./Admin_Packages";
+import Admin_Customer_Discount_List from "./Admin_Customer_Discount_List";
 
+/* ================= ASSETS ================= */
 import dashboardIcon from "../assets/graph.png";
 import addOnsIcon from "../assets/ons.png";
 import itemIcon from "../assets/item.png";
+import customerListIcon from "../assets/list.png";
+import reservationIcon from "../assets/reserve.png";
+import promotionIcon from "../assets/promotion.png";
+import discountIcon from "../assets/discount.png";
 import seatIcon from "../assets/seat.png";
+import expenseIcon from "../assets/expense.png";
+import hamburgerIcon from "../assets/hamburger.png";
 import salesIcon from "../assets/sales.png";
+import restockIcon from "../assets/restock.png";
+import cancelledIcon from "../assets/cancelled.png";
 import studyHubLogo from "../assets/study_hub.png";
+import staffConsignmentIcon from "../assets/staff_consignment.png";
+import customerConsignmentIcon from "../assets/consignment_record.png";
+import approvedIcon from "../assets/approved.png";
 
-type MenuKey = "dashboard" | "addons" | "items" | "seat" | "sales";
+type MenuKey =
+  | "dashboard"
+  | "add_ons"
+  | "item_lists"
+  | "restock_records"
+  | "staff_expenses"
+  | "sales_report"
+  | "customer_add_ons"
+  | "customer_list"
+  | "customer_reservation"
+  | "customer_cancelled"
+  | "staff_consignment_record"
+  | "customer_consignment_record"
+  | "consignment_approval"
+  | "seat_table"
+  | "packages"
+  | "discount_records";
 
 type MenuItem = {
   name: string;
@@ -61,10 +104,53 @@ const Admin_menu: React.FC = () => {
   const menuItems = useMemo<MenuItem[]>(
     () => [
       { name: "Dashboard", key: "dashboard", icon: dashboardIcon },
-      { name: "Add Ons", key: "addons", icon: addOnsIcon },
-      { name: "Item Lists", key: "items", icon: itemIcon },
-      { name: "Seat Table", key: "seat", icon: seatIcon },
-      { name: "Sales", key: "sales", icon: salesIcon },
+      { name: "Admin Add Ons", key: "add_ons", icon: addOnsIcon },
+      { name: "Item Lists", key: "item_lists", icon: itemIcon },
+      { name: "Restock Records", key: "restock_records", icon: restockIcon },
+      {
+        name: "Staff Expenses & Cash outs",
+        key: "staff_expenses",
+        icon: expenseIcon,
+      },
+      { name: "Sales Report", key: "sales_report", icon: salesIcon },
+      {
+        name: "Customer Add-Ons",
+        key: "customer_add_ons",
+        icon: hamburgerIcon,
+      },
+      { name: "Customer List", key: "customer_list", icon: customerListIcon },
+      {
+        name: "Customer Reservations",
+        key: "customer_reservation",
+        icon: reservationIcon,
+      },
+      {
+        name: "Cancelled Records",
+        key: "customer_cancelled",
+        icon: cancelledIcon,
+      },
+      {
+        name: "Consignment Record",
+        key: "staff_consignment_record",
+        icon: staffConsignmentIcon,
+      },
+      {
+        name: "Customer Consignment Record",
+        key: "customer_consignment_record",
+        icon: customerConsignmentIcon,
+      },
+      {
+        name: "Consignment Approval",
+        key: "consignment_approval",
+        icon: approvedIcon,
+      },
+      { name: "Seat Table", key: "seat_table", icon: seatIcon },
+      { name: "Promotions", key: "packages", icon: promotionIcon },
+      {
+        name: "Memberships",
+        key: "discount_records",
+        icon: discountIcon,
+      },
     ],
     []
   );
@@ -76,18 +162,55 @@ const Admin_menu: React.FC = () => {
       case "dashboard":
         return <Admin_Dashboard />;
 
-      case "addons":
+      case "add_ons":
         return <Admin_Add_Ons />;
 
-      case "items":
+      case "item_lists":
         return <Admin_Item_Lists />;
 
-      case "seat":
-      case "sales":
+      case "restock_records":
+        return <Admin_Restock_Record />;
+
+      case "staff_expenses":
+        return <Admin_Staff_Expenses_Expired />;
+
+      case "sales_report":
+        return <Admin_Sales_Report />;
+
+      case "customer_add_ons":
+        return <Admin_Customer_Add_ons />;
+
+      case "customer_list":
+        return <Admin_customer_list />;
+
+      case "customer_reservation":
+        return <Admin_customer_reservation />;
+
+      case "customer_cancelled":
+        return <Admin_Customer_Cancelled />;
+
+      case "staff_consignment_record":
+        return <Staff_Consignment_Record />;
+
+      case "customer_consignment_record":
+        return <Customer_Consignment_Record />;
+
+      case "consignment_approval":
+        return <Admin_Consignment_Approval />;
+
+      case "seat_table":
+        return <Admin_Seat_Table />;
+
+      case "packages":
+        return <Admin_Packages />;
+
+      case "discount_records":
+        return <Admin_Customer_Discount_List />;
+
       default:
         return (
           <div className="admin-content-box">
-            <h3>{activeMenu?.name}</h3>
+            <h3>{activeMenu?.name ?? "Admin Panel"}</h3>
           </div>
         );
     }
@@ -120,8 +243,8 @@ const Admin_menu: React.FC = () => {
                 </div>
 
                 <div className="admin-brand-copy">
-                  <span className="admin-brand-badge">ADMIN PORTAL</span>
-                  <h2>MeTyme Lounge</h2>
+                  <span className="admin-brand-badge">ADMIN PANEL</span>
+                  <h2>Me Tyme Lounge</h2>
                 </div>
               </div>
             )}
@@ -135,6 +258,7 @@ const Admin_menu: React.FC = () => {
                 className={`admin-menu-item ${active === item.key ? "active" : ""}`}
                 onClick={() => setActive(item.key)}
                 style={{ animationDelay: `${0.08 + i * 0.05}s` }}
+                title={collapsed ? item.name : undefined}
               >
                 <span className="admin-menu-icon-wrap">
                   <img
@@ -156,6 +280,7 @@ const Admin_menu: React.FC = () => {
             className="admin-logout-btn"
             onClick={() => void handleLogout()}
             disabled={loggingOut}
+            title="Logout"
           >
             <span className="admin-logout-dot" />
             {collapsed ? "" : loggingOut ? "Logging out..." : "Logout"}
@@ -163,7 +288,12 @@ const Admin_menu: React.FC = () => {
         </div>
       </aside>
 
-      <main className="admin-main">{renderContent()}</main>
+      <main className="admin-main">
+        <div className="admin-topbar">
+        </div>
+
+        <div className="admin-content">{renderContent()}</div>
+      </main>
     </div>
   );
 };
