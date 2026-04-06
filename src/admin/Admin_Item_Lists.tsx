@@ -12,7 +12,6 @@ interface AddOn {
   category: string;
   name: string;
   size: string | null;
-
   price: number;
   restocked: number;
   sold: number;
@@ -21,7 +20,6 @@ interface AddOn {
   overall_sales: number;
   expected_sales: number;
   image_url: string | null;
-
   expired: number;
   inventory_loss: number;
   bilin: number;
@@ -31,16 +29,13 @@ interface AddOnExpenseRow {
   id: string;
   created_at: string;
   add_on_id: string;
-
   full_name: string;
   category: string;
   product_name: string;
-
   quantity: number;
   expense_type: ExpenseType;
   expense_amount: number | string;
   description: string;
-
   voided: boolean;
   voided_at: string | null;
 }
@@ -268,6 +263,17 @@ const Admin_Item_Lists: React.FC = () => {
     });
   }, [sortedAddOns, search]);
 
+  const totalStocks = useMemo(
+    () => filteredAddOns.reduce((sum, item) => sum + toNum(item.stocks), 0),
+    [filteredAddOns],
+  );
+
+  const totalExpected = useMemo(
+    () =>
+      filteredAddOns.reduce((sum, item) => sum + toNum(item.expected_sales), 0),
+    [filteredAddOns],
+  );
+
   const toggleSortOrder = (): void =>
     setSortOrder((p) => (p === "asc" ? "desc" : "asc"));
 
@@ -279,7 +285,9 @@ const Admin_Item_Lists: React.FC = () => {
     setNewImageFile(null);
     setRemoveImage(false);
 
-    if (newImagePreview.startsWith("blob:")) URL.revokeObjectURL(newImagePreview);
+    if (newImagePreview.startsWith("blob:")) {
+      URL.revokeObjectURL(newImagePreview);
+    }
     setNewImagePreview("");
   };
 
@@ -287,7 +295,9 @@ const Admin_Item_Lists: React.FC = () => {
     setNewImageFile(file);
     setRemoveImage(false);
 
-    if (newImagePreview.startsWith("blob:")) URL.revokeObjectURL(newImagePreview);
+    if (newImagePreview.startsWith("blob:")) {
+      URL.revokeObjectURL(newImagePreview);
+    }
     setNewImagePreview(file ? URL.createObjectURL(file) : "");
   };
 
@@ -388,7 +398,9 @@ const Admin_Item_Lists: React.FC = () => {
       setNewImageFile(null);
       setRemoveImage(false);
 
-      if (newImagePreview.startsWith("blob:")) URL.revokeObjectURL(newImagePreview);
+      if (newImagePreview.startsWith("blob:")) {
+        URL.revokeObjectURL(newImagePreview);
+      }
       setNewImagePreview("");
 
       void fetchAddOns();
@@ -778,18 +790,18 @@ const Admin_Item_Lists: React.FC = () => {
   return (
     <div className="admin-items-page">
       <div className="admin-items-shell">
-        <div className="admin-items-hero">
+        <section className="admin-items-hero">
           <div className="admin-items-badge">
             <span>✦</span>
             <span>Item Inventory</span>
           </div>
 
-          <div className="admin-items-hero-row">
-            <div>
+          <div className="admin-items-hero-main">
+            <div className="admin-items-copy">
               <h1 className="admin-items-title">Admin Item Lists</h1>
               <p className="admin-items-subtitle">
                 Manage stocks, pricing, images, and adjustment history with a
-                premium inventory workspace.
+                polished premium inventory workspace.
               </p>
             </div>
 
@@ -812,42 +824,56 @@ const Admin_Item_Lists: React.FC = () => {
               </button>
             </div>
           </div>
-        </div>
+        </section>
 
-        <div className="admin-items-toolbar">
-          <div className="admin-items-toolbar-left">
-            <div className="admin-summary-card">
-              <span className="admin-summary-label">Sorted By</span>
-              <strong>{sortLabel}</strong>
+        <section className="admin-items-toolbar">
+          <div className="admin-toolbar-top">
+            <div className="admin-toolbar-stats">
+              <div className="admin-summary-card">
+                <span className="admin-summary-label">Sorted By</span>
+                <strong>{sortLabel}</strong>
+              </div>
+
+              <div className="admin-summary-card">
+                <span className="admin-summary-label">Rows</span>
+                <strong>{filteredAddOns.length}</strong>
+              </div>
+
+              <div className="admin-summary-card">
+                <span className="admin-summary-label">Stocks</span>
+                <strong>{totalStocks}</strong>
+              </div>
+
+              <div className="admin-summary-card">
+                <span className="admin-summary-label">Expected</span>
+                <strong>{money2(totalExpected)}</strong>
+              </div>
             </div>
 
-            <div className="admin-summary-card">
-              <span className="admin-summary-label">Rows</span>
-              <strong>{filteredAddOns.length}</strong>
+            <div className="admin-toolbar-search">
+              <div className="admin-search-box">
+                <span className="admin-search-icon">🔎</span>
+                <input
+                  className="admin-search-input"
+                  type="text"
+                  value={search}
+                  onChange={(e) => setSearch(String(e.currentTarget.value ?? ""))}
+                  placeholder="Search name, category, or size..."
+                />
+                {search.trim() && (
+                  <button
+                    className="admin-search-clear"
+                    type="button"
+                    onClick={() => setSearch("")}
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
-          <div className="admin-items-toolbar-right">
-            <div className="admin-search-box">
-              <span className="admin-search-icon">🔎</span>
-              <input
-                className="admin-search-input"
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(String(e.currentTarget.value ?? ""))}
-                placeholder="Search name, category, or size..."
-              />
-              {search.trim() && (
-                <button
-                  className="admin-search-clear"
-                  type="button"
-                  onClick={() => setSearch("")}
-                >
-                  Clear
-                </button>
-              )}
-            </div>
-
+          <div className="admin-toolbar-bottom">
             <div className="admin-filter-actions">
               <button
                 className={`admin-chip-btn ${
@@ -878,14 +904,23 @@ const Admin_Item_Lists: React.FC = () => {
               </button>
             </div>
           </div>
-        </div>
+        </section>
 
         {loading ? (
           <div className="admin-state-card">Loading add-ons...</div>
         ) : filteredAddOns.length === 0 ? (
           <div className="admin-state-card">No add-ons found.</div>
         ) : (
-          <div className="admin-table-card">
+          <section className="admin-table-card">
+            <div className="admin-table-card-head">
+              <div>
+                <div className="admin-table-title">Inventory Table</div>
+                <div className="admin-table-subtitle">
+                  Premium overview of item stocks, sales, losses, and actions
+                </div>
+              </div>
+            </div>
+
             <div className="admin-table-wrap">
               <table className="admin-table">
                 <thead>
@@ -904,7 +939,7 @@ const Admin_Item_Lists: React.FC = () => {
                     <th>Expenses</th>
                     <th>Overall</th>
                     <th>Expected</th>
-                    <th>Actions</th>
+                    <th className="admin-actions-head">Actions</th>
                   </tr>
                 </thead>
 
@@ -924,7 +959,7 @@ const Admin_Item_Lists: React.FC = () => {
                         )}
                       </td>
 
-                      <td className="is-strong">{a.name}</td>
+                      <td className="is-strong admin-name-cell">{a.name}</td>
                       <td className="is-strong">{a.category}</td>
                       <td>{normSize(a.size) ?? "—"}</td>
                       <td className="is-strong">{money2(toNum(a.price))}</td>
@@ -938,7 +973,7 @@ const Admin_Item_Lists: React.FC = () => {
                       <td className="is-strong">{money2(toNum(a.overall_sales))}</td>
                       <td className="is-strong">{money2(toNum(a.expected_sales))}</td>
 
-                      <td>
+                      <td className="admin-actions-cell">
                         <div className="admin-row-actions">
                           <button
                             className="admin-action-btn admin-action-btn--soft"
@@ -975,7 +1010,7 @@ const Admin_Item_Lists: React.FC = () => {
                 </tbody>
               </table>
             </div>
-          </div>
+          </section>
         )}
 
         {showToast && <div className="admin-toast">{toastMessage}</div>}
