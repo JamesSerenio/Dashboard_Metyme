@@ -130,132 +130,141 @@ const Login: React.FC = () => {
 
   const leafItems = useMemo(
     () => [
-      "leaf-a",
-      "leaf-b",
-      "leaf-c",
-      "leaf-d",
-      "leaf-e",
-      "leaf-f",
-      "leaf-g",
-      "leaf-h",
+      "leaf-top-left",
+      "leaf-top-right",
+      "leaf-bottom-left",
+      "leaf-bottom-right",
     ],
     [],
   );
 
   return (
     <div className="login-page">
-      <div className="login-bg-glow login-bg-glow-1" />
-      <div className="login-bg-glow login-bg-glow-2" />
-      <div className="login-grid" />
-      <div className="login-noise" />
-
-      {leafItems.map((className, index) => (
-        <div
-          key={className}
-          className={`login-leaf ${className} ${mounted ? "is-mounted" : ""}`}
-          aria-hidden="true"
-        >
-          <img
-            src={leaves}
-            alt=""
-            className="login-leaf-img"
-            style={{ animationDelay: `${index * 0.55}s` }}
-          />
-        </div>
-      ))}
-
       <div className="login-shell">
-        <div className={`login-card ${mounted ? "is-mounted" : ""}`}>
-          <div className="login-card-shine" />
-
-          <div className="login-brand">
-            <div className="login-logo-wrap">
-              <img src={studyHubLogo} alt="Study Hub" className="login-logo" />
-            </div>
-
-            <div className="login-brand-copy">
-              <span className="login-badge">PREMIUM ACCESS</span>
-              <h1 className="login-title">Welcome Back</h1>
-              <p className="login-subtitle">
-                Sign in to continue to your Study Hub dashboard.
-              </p>
-            </div>
-          </div>
-
-          <form className="login-form" onSubmit={handleSubmit}>
-            <div className="login-field">
-              <label htmlFor="email" className="login-label">
-                Email Address
-              </label>
-
-              <div className="login-input-wrap">
-                <span className="login-input-icon" aria-hidden="true">
-                  @
-                </span>
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  inputMode="email"
-                  autoComplete="email"
-                  placeholder="Enter your email"
-                  className="login-input"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="login-field">
-              <label htmlFor="password" className="login-label">
-                Password
-              </label>
-
-              <div className="login-input-wrap">
-                <span className="login-input-icon" aria-hidden="true">
-                  •
-                </span>
-                <input
-                  id="password"
-                  name="password"
-                  type={showPassword ? "text" : "password"}
-                  autoComplete="current-password"
-                  placeholder="Enter your password"
-                  className="login-input login-input-password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-
-                <button
-                  type="button"
-                  className="login-password-toggle"
-                  onClick={() => setShowPassword((prev) => !prev)}
-                >
-                  {showPassword ? "Hide" : "Show"}
-                </button>
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              className={`login-button ${isLoading ? "is-loading" : ""}`}
-              disabled={isLoading}
+        <div className={`login-card-wrap ${mounted ? "is-mounted" : ""}`}>
+          {leafItems.map((className, index) => (
+            <div
+              key={className}
+              className={`leaf ${className}`}
+              aria-hidden="true"
             >
-              <span className="login-button-text">
-                {isLoading ? "Logging in..." : "Login"}
-              </span>
-              <span className="login-button-glow" />
-            </button>
-          </form>
+              <img
+                src={leaves}
+                alt=""
+                className="leaf-img"
+                style={{ animationDelay: `${index * 0.45}s` }}
+              />
+            </div>
+          ))}
 
-          <div className="login-footer-text">
-            Secure access for staff, admin, and customer accounts.
+          <div className={`login-card ${mounted ? "is-mounted" : ""}`}>
+            <div className="login-top-bar">
+              <div className="login-top-left">
+                <div className="login-logo-wrap">
+                  <img
+                    src={studyHubLogo}
+                    alt="Study Hub"
+                    className="login-logo"
+                  />
+                </div>
+
+                <div className="login-brand-copy">
+                  <h1 className="login-title">Welcome Back</h1>
+                  <p className="login-subtitle">
+                    Sign in to continue to your MeTyme dashboard.
+                  </p>
+                </div>
+              </div>
+
+              <div className="login-status-pill">
+                <span className="status-dot" />
+                Ready to login
+              </div>
+            </div>
+
+            <div className="login-center-copy">
+              <div className="login-hero-card">
+                <h2>Start Your Premium Access</h2>
+                <p>
+                  Secure sign in for staff, admin, and customer accounts with a
+                  clean and peaceful experience.
+                </p>
+              </div>
+            </div>
+
+            <form className="login-form" onSubmit={handleSubmit}>
+              <div className="login-field">
+                <label htmlFor="email" className="login-label">
+                  Email Address
+                </label>
+
+                <div className="login-input-wrap">
+                  <span className="login-input-icon" aria-hidden="true">
+                    @
+                  </span>
+                  <input
+                    id="email"
+                    name="email"
+                    type="email"
+                    inputMode="email"
+                    autoComplete="email"
+                    placeholder="Enter your email"
+                    className="login-input"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="login-field">
+                <label htmlFor="password" className="login-label">
+                  Password
+                </label>
+
+                <div className="login-input-wrap">
+                  <span className="login-input-icon" aria-hidden="true">
+                    •
+                  </span>
+                  <input
+                    id="password"
+                    name="password"
+                    type={showPassword ? "text" : "password"}
+                    autoComplete="current-password"
+                    placeholder="Enter your password"
+                    className="login-input login-input-password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
+
+                  <button
+                    type="button"
+                    className="login-password-toggle"
+                    onClick={() => setShowPassword((prev) => !prev)}
+                  >
+                    {showPassword ? "Hide" : "Show"}
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                className={`login-button ${isLoading ? "is-loading" : ""}`}
+                disabled={isLoading}
+              >
+                <span className="login-button-text">
+                  {isLoading ? "Logging in..." : "Login"}
+                </span>
+                <span className="login-button-glow" />
+              </button>
+            </form>
           </div>
         </div>
       </div>
 
       <div
-        className={`login-toast ${showToast ? "show" : ""} ${toastType === "success" ? "success" : "error"}`}
+        className={`login-toast ${showToast ? "show" : ""} ${
+          toastType === "success" ? "success" : "error"
+        }`}
         role="status"
         aria-live="polite"
       >
