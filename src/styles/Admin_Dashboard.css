@@ -1,0 +1,436 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+.admin-dashboard-page {
+  width: 100%;
+}
+
+.admin-dashboard-wrap {
+  width: 100%;
+  display: grid;
+  gap: 20px;
+}
+
+.admin-dash-headline {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 8px 2px 4px;
+}
+
+.admin-dash-badge {
+  display: inline-block;
+  margin-bottom: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #5f5548;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(138, 124, 103, 0.16);
+}
+
+.admin-dash-headline h2 {
+  margin: 0;
+  font-size: clamp(28px, 3vw, 40px);
+  line-height: 1;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  color: #121212;
+}
+
+.admin-dash-headline p {
+  margin: 10px 0 0;
+  color: #645c51;
+  font-size: 15px;
+  line-height: 1.7;
+  font-weight: 600;
+  max-width: 560px;
+}
+
+.admin-dash-date-btn {
+  min-height: 52px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: linear-gradient(135deg, #111111 0%, #000000 100%);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 800;
+  box-shadow: 0 14px 24px rgba(0, 0, 0, 0.16);
+  cursor: pointer;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.admin-dash-date-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 18px 30px rgba(0, 0, 0, 0.22);
+}
+
+.admin-dash-date-btn img {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+}
+
+.admin-dash-totals-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.admin-dash-total-card {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 16px;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 16px 34px rgba(92, 76, 56, 0.1);
+  border: 1px solid rgba(120, 106, 88, 0.08);
+  backdrop-filter: blur(10px);
+  transition:
+    transform 0.22s ease,
+    box-shadow 0.22s ease;
+}
+
+.admin-dash-total-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 22px 40px rgba(92, 76, 56, 0.14);
+}
+
+.admin-dash-total-card--walkin {
+  border-left: 6px solid #2f3b2f;
+}
+
+.admin-dash-total-card--reserve {
+  border-left: 6px solid #6a3fb5;
+}
+
+.admin-dash-total-card--promo {
+  border-left: 6px solid #c04b1a;
+}
+
+.admin-dash-total-card--all {
+  border-left: 6px solid #0f5a4a;
+}
+
+.admin-dash-total-icon {
+  width: 46px;
+  height: 46px;
+  flex: 0 0 46px;
+  object-fit: contain;
+}
+
+.admin-dash-total-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.admin-dash-total-label {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(0, 0, 0, 0.64);
+}
+
+.admin-dash-total-value {
+  margin-top: 6px;
+  font-size: 30px;
+  line-height: 1;
+  font-weight: 900;
+  color: #121212;
+}
+
+.admin-dash-total-percent {
+  margin-left: auto;
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.admin-dash-total-percent strong {
+  font-size: 20px;
+  line-height: 1;
+  font-weight: 900;
+  color: #111111;
+}
+
+.admin-dash-total-percent span {
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(0, 0, 0, 0.55);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.admin-dash-charts-grid {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 18px;
+}
+
+.admin-dash-chart-card {
+  padding: 22px;
+  border-radius: 26px;
+  background: linear-gradient(
+    180deg,
+    rgba(236, 226, 210, 0.88) 0%,
+    rgba(245, 238, 228, 0.84) 100%
+  );
+  box-shadow: 0 22px 44px rgba(92, 76, 56, 0.1);
+  border: 1px solid rgba(124, 111, 95, 0.08);
+}
+
+.admin-dash-chart-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.admin-dash-chart-title {
+  font-size: 18px;
+  font-weight: 900;
+  color: #121212;
+}
+
+.admin-dash-chart-sub {
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 800;
+  color: rgba(0, 0, 0, 0.6);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.admin-dash-line-wrap {
+  width: 100%;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.45);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  padding: 10px;
+}
+
+.admin-dash-chart-body {
+  position: relative;
+  width: 100%;
+}
+
+.admin-dash-chart-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  pointer-events: none;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+}
+
+.admin-dash-chart-center-label {
+  font-size: 12px;
+  font-weight: 900;
+  color: rgba(0, 0, 0, 0.58);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.admin-dash-chart-center-value {
+  margin-top: 4px;
+  font-size: 30px;
+  line-height: 1;
+  font-weight: 1000;
+  color: #121212;
+}
+
+.admin-dash-chart-empty {
+  min-height: 300px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.42);
+  font-weight: 800;
+  color: rgba(0, 0, 0, 0.58);
+  text-align: center;
+  padding: 16px;
+}
+
+.admin-dash-chart-loading {
+  min-height: 300px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.42);
+  color: rgba(0, 0, 0, 0.65);
+  font-weight: 800;
+}
+
+.admin-dash-loader {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(0, 0, 0, 0.18);
+  border-top-color: #111111;
+  border-radius: 999px;
+  animation: adminDashSpin 0.8s linear infinite;
+}
+
+.admin-dash-calendar-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background: rgba(0, 0, 0, 0.42);
+  display: grid;
+  place-items: center;
+  padding: 18px;
+}
+
+.admin-dash-calendar-card {
+  width: min(100%, 420px);
+  border-radius: 24px;
+  background: linear-gradient(
+    180deg,
+    rgba(236, 226, 210, 0.96) 0%,
+    rgba(245, 238, 228, 0.94) 100%
+  );
+  box-shadow: 0 24px 50px rgba(0, 0, 0, 0.18);
+  padding: 22px;
+  border: 1px solid rgba(124, 111, 95, 0.08);
+  animation: adminDashPopIn 0.22s ease;
+}
+
+.admin-dash-calendar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.admin-dash-calendar-head h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 900;
+  color: #121212;
+}
+
+.admin-dash-calendar-close {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.08);
+  color: #121212;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.admin-dash-calendar-input {
+  width: 100%;
+  min-height: 54px;
+  border-radius: 14px;
+  border: 1px solid rgba(124, 111, 95, 0.18);
+  padding: 0 14px;
+  font-size: 14px;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.7);
+  color: #121212;
+  outline: none;
+}
+
+.admin-dash-calendar-actions {
+  margin-top: 16px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.admin-dash-calendar-btn {
+  min-height: 42px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.admin-dash-calendar-btn.secondary {
+  background: rgba(0, 0, 0, 0.08);
+  color: #111111;
+}
+
+.admin-dash-calendar-btn.primary {
+  background: #111111;
+  color: #ffffff;
+}
+
+@keyframes adminDashSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes adminDashPopIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@media (max-width: 1280px) {
+  .admin-dash-totals-row {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .admin-dash-charts-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 680px) {
+  .admin-dash-headline {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .admin-dash-totals-row {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-dash-total-card {
+    padding: 16px 14px;
+  }
+
+  .admin-dash-chart-card {
+    padding: 18px;
+  }
+
+  .admin-dash-headline h2 {
+    font-size: 26px;
+  }
+}
