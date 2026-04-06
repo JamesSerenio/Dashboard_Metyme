@@ -260,6 +260,7 @@ const Admin_menu: React.FC = () => {
                 style={{ animationDelay: `${0.08 + i * 0.05}s` }}
                 title={collapsed ? item.name : undefined}
               >
+                <span className="admin-menu-hover-line" />
                 <span className="admin-menu-icon-wrap">
                   <img
                     src={item.icon}
@@ -289,9 +290,6 @@ const Admin_menu: React.FC = () => {
       </aside>
 
       <main className="admin-main">
-        <div className="admin-topbar">
-        </div>
-
         <div className="admin-content">{renderContent()}</div>
       </main>
     </div>

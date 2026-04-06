@@ -17,8 +17,35 @@
   --admin-muted: #645c51;
   --admin-black: #000000;
   --admin-white: #ffffff;
-  --admin-green: #3da648;
-  --admin-green-dark: #2e8c38;
+
+  --admin-gold: #b88a44;
+  --admin-gold-2: #d7b47a;
+  --admin-gold-3: #f1ddba;
+  --admin-brown: #7b5a2f;
+  --admin-brown-soft: #9a7a4c;
+  --admin-cream: #f7efe1;
+  --admin-cream-2: #efe3cf;
+
+  --admin-line: linear-gradient(180deg, #b88943 0%, #e1be84 55%, #f6e4bf 100%);
+  --admin-line-shadow: rgba(184, 137, 67, 0.34);
+
+  --admin-hover-bg: linear-gradient(
+    135deg,
+    rgba(255, 249, 239, 0.98) 0%,
+    rgba(246, 237, 221, 0.98) 48%,
+    rgba(236, 223, 198, 0.98) 100%
+  );
+
+  --admin-active-bg: linear-gradient(
+    135deg,
+    rgba(255, 247, 231, 0.99) 0%,
+    rgba(241, 229, 206, 0.99) 50%,
+    rgba(231, 213, 179, 0.99) 100%
+  );
+
+  --admin-hover-glow: 0 14px 30px rgba(150, 114, 63, 0.16);
+  --admin-active-glow: 0 18px 34px rgba(150, 114, 63, 0.22);
+
   --admin-sidebar-width: 290px;
   --admin-sidebar-collapsed-width: 96px;
 }
@@ -192,15 +219,18 @@ body {
 }
 
 .admin-menu-item {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
   width: 100%;
-  border: 0;
+  border: 1px solid rgba(122, 111, 96, 0.08);
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.42);
   display: flex;
   align-items: center;
   gap: 14px;
   min-height: 60px;
-  padding: 0 16px;
+  padding: 0 16px 0 20px;
   cursor: pointer;
   color: var(--admin-text);
   box-shadow: 0 8px 18px rgba(92, 76, 56, 0.05);
@@ -208,35 +238,123 @@ body {
     transform 0.22s ease,
     box-shadow 0.22s ease,
     background 0.22s ease,
-    border-color 0.22s ease;
-  border: 1px solid rgba(122, 111, 96, 0.08);
+    border-color 0.22s ease,
+    filter 0.22s ease;
   opacity: 0;
   transform: translateX(-10px);
   animation: adminMenuItemIn 0.45s ease forwards;
 }
 
+.admin-menu-hover-line {
+  position: absolute;
+  left: 0;
+  top: 10px;
+  bottom: 10px;
+  width: 4px;
+  border-radius: 999px;
+  background: var(--admin-line);
+  box-shadow: 0 0 0 0 var(--admin-line-shadow);
+  transform: scaleY(0.22);
+  opacity: 0;
+  transition:
+    opacity 0.26s ease,
+    transform 0.26s ease,
+    box-shadow 0.26s ease;
+  z-index: 2;
+}
+
+.admin-menu-item::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--admin-hover-bg);
+  opacity: 0;
+  transition: opacity 0.24s ease;
+  z-index: 0;
+}
+
+.admin-menu-item::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(184, 137, 67, 0.16) 0%,
+      rgba(241, 221, 186, 0.16) 36%,
+      rgba(255, 255, 255, 0) 72%
+    );
+  opacity: 0;
+  transition: opacity 0.24s ease;
+  pointer-events: none;
+  z-index: 1;
+}
+
 .admin-menu-item:hover {
-  transform: translateY(-1px);
-  background: rgba(255, 255, 255, 0.7);
-  box-shadow: 0 12px 22px rgba(92, 76, 56, 0.08);
+  transform: translateY(-1px) translateX(4px);
+  background: rgba(255, 250, 242, 0.95);
+  box-shadow: var(--admin-hover-glow);
+  border-color: rgba(184, 137, 67, 0.22);
+  filter: saturate(1.03);
+}
+
+.admin-menu-item:hover::before {
+  opacity: 1;
+}
+
+.admin-menu-item:hover::after {
+  opacity: 1;
+}
+
+.admin-menu-item:hover .admin-menu-hover-line {
+  opacity: 1;
+  transform: scaleY(1);
+  box-shadow: 0 0 18px 2px var(--admin-line-shadow);
 }
 
 .admin-menu-item.active {
-  background: linear-gradient(
-    135deg,
-    rgba(255, 255, 255, 0.92) 0%,
-    rgba(247, 242, 235, 0.9) 100%
-  );
-  box-shadow: 0 16px 30px rgba(92, 76, 56, 0.1);
-  transform: translateX(4px);
+  transform: translateX(6px);
+  background: rgba(255, 248, 236, 0.98);
+  box-shadow: var(--admin-active-glow);
+  border-color: rgba(184, 137, 67, 0.24);
+}
+
+.admin-menu-item.active::before {
+  opacity: 1;
+  background: var(--admin-active-bg);
+}
+
+.admin-menu-item.active::after {
+  opacity: 1;
+}
+
+.admin-menu-item.active .admin-menu-hover-line {
+  opacity: 1;
+  transform: scaleY(1);
+  box-shadow: 0 0 18px 2px rgba(184, 137, 67, 0.34);
+}
+
+.admin-menu-item:active {
+  transform: translateX(4px) scale(0.992);
 }
 
 .admin-menu-icon-wrap {
+  position: relative;
+  z-index: 3;
   width: 34px;
   height: 34px;
   flex: 0 0 34px;
   display: grid;
   place-items: center;
+  transition:
+    transform 0.22s ease,
+    filter 0.22s ease;
+}
+
+.admin-menu-item:hover .admin-menu-icon-wrap,
+.admin-menu-item.active .admin-menu-icon-wrap {
+  transform: scale(1.06);
+  filter: drop-shadow(0 4px 10px rgba(184, 137, 67, 0.16));
 }
 
 .admin-menu-icon {
@@ -246,9 +364,22 @@ body {
 }
 
 .admin-menu-title {
+  position: relative;
+  z-index: 3;
   font-size: 15px;
   font-weight: 800;
   color: #181818;
+  transition:
+    transform 0.22s ease,
+    color 0.22s ease,
+    letter-spacing 0.22s ease;
+}
+
+.admin-menu-item:hover .admin-menu-title,
+.admin-menu-item.active .admin-menu-title {
+  transform: translateX(2px);
+  color: #24180e;
+  letter-spacing: 0.01em;
 }
 
 .admin-sidebar.collapsed .admin-brand,
@@ -259,6 +390,10 @@ body {
 .admin-sidebar.collapsed .admin-menu-item {
   justify-content: center;
   padding: 0;
+}
+
+.admin-sidebar.collapsed .admin-menu-hover-line {
+  left: 6px;
 }
 
 .admin-logout-btn {
@@ -319,8 +454,29 @@ body {
   margin-left: var(--admin-sidebar-collapsed-width);
 }
 
+.admin-topbar {
+  margin-bottom: 18px;
+  padding: 18px 22px;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.74);
+  box-shadow: 0 10px 28px rgba(92, 76, 56, 0.08);
+  border: 1px solid rgba(122, 111, 96, 0.08);
+  animation: adminFadeInUp 0.4s ease both;
+}
+
+.admin-topbar-title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+}
+
+.admin-content {
+  animation: adminFadeInUp 0.45s ease both;
+}
+
 .admin-content-box {
-  min-height: calc(100vh - 58px);
+  min-height: calc(100vh - 140px);
   border-radius: 24px;
   background: rgba(255, 255, 255, 0.34);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
@@ -359,6 +515,10 @@ body {
   .admin-menu-item {
     justify-content: center;
     padding: 0;
+  }
+
+  .admin-menu-hover-line {
+    left: 6px;
   }
 
   .admin-logout-btn {
@@ -414,7 +574,11 @@ body {
 
   .admin-menu-item {
     justify-content: flex-start;
-    padding: 0 14px;
+    padding: 0 14px 0 18px;
+  }
+
+  .admin-menu-hover-line {
+    left: 0;
   }
 
   .admin-logout-btn {
