@@ -15,7 +15,6 @@ const Login: React.FC = () => {
   const [email, setEmail] = useState<string>("");
   const [password, setPassword] = useState<string>("");
   const [showPassword, setShowPassword] = useState<boolean>(false);
-
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
   const [toastMsg, setToastMsg] = useState<string>("");
@@ -108,9 +107,13 @@ const Login: React.FC = () => {
       showSuccess("Login successful!");
 
       window.setTimeout(() => {
-        if (role === "staff") navigate("/staff-menu", { replace: true });
-        else if (role === "admin") navigate("/admin-menu", { replace: true });
-        else navigate("/home", { replace: true });
+        if (role === "staff") {
+          navigate("/staff-menu", { replace: true });
+        } else if (role === "admin") {
+          navigate("/admin-menu", { replace: true });
+        } else {
+          navigate("/home", { replace: true });
+        }
       }, 700);
     } catch (err) {
       const message =
@@ -143,11 +146,7 @@ const Login: React.FC = () => {
       <div className="login-shell">
         <div className={`login-card-wrap ${mounted ? "is-mounted" : ""}`}>
           {leafItems.map((className, index) => (
-            <div
-              key={className}
-              className={`leaf ${className}`}
-              aria-hidden="true"
-            >
+            <div key={className} className={`leaf ${className}`} aria-hidden="true">
               <img
                 src={leaves}
                 alt=""
@@ -158,8 +157,8 @@ const Login: React.FC = () => {
           ))}
 
           <div className={`login-card ${mounted ? "is-mounted" : ""}`}>
-            <div className="login-top-bar">
-              <div className="login-top-left">
+            <div className="login-header">
+              <div className="login-brand">
                 <div className="login-logo-wrap">
                   <img
                     src={studyHubLogo}
@@ -169,28 +168,17 @@ const Login: React.FC = () => {
                 </div>
 
                 <div className="login-brand-copy">
+                  <span className="login-badge">MeTyme Lounge</span>
                   <h1 className="login-title">Welcome Back</h1>
                   <p className="login-subtitle">
-                    Sign in to continue to your MeTyme dashboard.
+                    Secure sign in for staff and admin access to the MeTyme
+                    Lounge management system.
                   </p>
                 </div>
               </div>
-
-              <div className="login-status-pill">
-                <span className="status-dot" />
-                Ready to login
-              </div>
             </div>
 
-            <div className="login-center-copy">
-              <div className="login-hero-card">
-                <h2>Start Your Premium Access</h2>
-                <p>
-                  Secure sign in for staff, admin, and customer accounts with a
-                  clean and peaceful experience.
-                </p>
-              </div>
-            </div>
+            <div className="login-divider" />
 
             <form className="login-form" onSubmit={handleSubmit}>
               <div className="login-field">
@@ -202,6 +190,7 @@ const Login: React.FC = () => {
                   <span className="login-input-icon" aria-hidden="true">
                     @
                   </span>
+
                   <input
                     id="email"
                     name="email"
@@ -225,6 +214,7 @@ const Login: React.FC = () => {
                   <span className="login-input-icon" aria-hidden="true">
                     •
                   </span>
+
                   <input
                     id="password"
                     name="password"
@@ -252,7 +242,7 @@ const Login: React.FC = () => {
                 disabled={isLoading}
               >
                 <span className="login-button-text">
-                  {isLoading ? "Logging in..." : "Login"}
+                  {isLoading ? "Logging in..." : "LOGIN"}
                 </span>
                 <span className="login-button-glow" />
               </button>
