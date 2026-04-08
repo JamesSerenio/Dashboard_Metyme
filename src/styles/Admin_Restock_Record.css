@@ -75,7 +75,7 @@
 
 .admin-restock-main-title {
   margin: 0;
-  font-size: clamp(52px, 5vw, 82px);
+  font-size: clamp(52px, 5vw, 60px);
   line-height: 0.95;
   font-weight: 1000;
   letter-spacing: -2.2px;
