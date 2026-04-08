@@ -930,7 +930,6 @@ const Admin_Restock_Record: React.FC = () => {
         <div className="restock-panel">
           <div className="restock-panel-header">
             <div className="restock-panel-title-wrap">
-              <h2 className="restock-panel-title">Admin Restock Record</h2>
               <div className="restock-panel-subtitle">
                 Source: <strong>{sourceLabel}</strong> • Showing records for:{" "}
                 <strong>{activeDateLabel}</strong>{" "}
