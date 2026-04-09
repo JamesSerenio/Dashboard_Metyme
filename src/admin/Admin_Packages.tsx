@@ -1,559 +1,855 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { supabase } from "../utils/supabaseClient";
-import { motion, AnimatePresence } from "framer-motion";
-import {
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  Tooltip,
-  Legend,
-  LineChart,
-  Line,
-  CartesianGrid,
-  XAxis,
-  YAxis,
-} from "recharts";
-import "../styles/admin_dashboard.css";
+import "../styles/Admin_Packages.css";
 
-import iconWalkin from "../assets/list.png";
-import iconReserve from "../assets/reserve.png";
-import iconPromo from "../assets/discount.png";
-import iconAll from "../assets/all.png";
-import iconCalendar from "../assets/calendar.png";
+type PackageArea = "common_area" | "conference_room";
+type DurationUnit = "hour" | "day" | "month" | "year";
 
-type Totals = {
-  walkin: number;
-  reservation: number;
-  promo: number;
-  all: number;
+interface PackageRow {
+  id: string;
+  created_at: string;
+  admin_id: string;
+  area: PackageArea;
+  title: string;
+  description: string | null;
+  amenities: string | null;
+  is_active: boolean;
+}
+
+interface PackageOptionRow {
+  id: string;
+  created_at: string;
+  package_id: string;
+  option_name: string;
+  duration_value: number;
+  duration_unit: DurationUnit;
+  price: number | string;
+  promo_max_attempts: number | string | null;
+  promo_validity_days: number | string | null;
+}
+
+const toNum = (v: number | string | null | undefined): number => {
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  if (typeof v === "string") {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  }
+  return 0;
 };
 
-type PieName = "Walk-in" | "Reservation" | "Promo";
-
-type PieRow = {
-  name: PieName;
-  value: number;
+const clampInt = (n: number, min: number, max: number): number => {
+  const x = Math.floor(Number.isFinite(n) ? n : 0);
+  return Math.min(max, Math.max(min, x));
 };
 
-type LineRow = {
-  day: string;
-  total: number;
+const formatArea = (a: PackageArea) =>
+  a === "common_area" ? "Common Area" : "Conference Room";
+
+const formatDuration = (v: number, u: DurationUnit) => {
+  const unit =
+    u === "hour"
+      ? v === 1
+        ? "hour"
+        : "hours"
+      : u === "day"
+      ? v === 1
+        ? "day"
+        : "days"
+      : u === "month"
+      ? v === 1
+        ? "month"
+        : "months"
+      : v === 1
+      ? "year"
+      : "years";
+
+  return `${v} ${unit}`;
 };
 
-const PIE_COLORS: Record<PieName, string> = {
-  "Walk-in": "#2f3b2f",
-  Reservation: "#6a3fb5",
-  Promo: "#c04b1a",
-};
-
-const pad2 = (n: number): string => String(n).padStart(2, "0");
-
-const toYYYYMMDD = (d: Date): string => {
-  const y = d.getFullYear();
-  const m = pad2(d.getMonth() + 1);
-  const day = pad2(d.getDate());
-  return `${y}-${m}-${day}`;
-};
-
-const formatPretty = (yyyyMmDd: string): string => {
-  const [y, m, d] = yyyyMmDd.split("-").map(Number);
-  const dt = new Date(y, m - 1, d);
-  return dt.toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "2-digit",
-  });
-};
-
-const formatShort = (yyyyMmDd: string): string => {
-  const [y, m, d] = yyyyMmDd.split("-").map(Number);
-  const dt = new Date(y, m - 1, d);
-  return dt.toLocaleDateString("en-US", {
-    month: "short",
-    day: "2-digit",
-  });
-};
-
-const addDaysYYYYMMDD = (yyyyMmDd: string, delta: number): string => {
-  const [y, m, d] = yyyyMmDd.split("-").map(Number);
-  const dt = new Date(y, m - 1, d);
-  dt.setDate(dt.getDate() + delta);
-  return toYYYYMMDD(dt);
-};
-
-const pct = (part: number, total: number): number => {
-  if (!Number.isFinite(part) || !Number.isFinite(total) || total <= 0) return 0;
-  return (part / total) * 100;
-};
-
-const formatPct = (n: number): string => {
-  if (!Number.isFinite(n)) return "0%";
-  const rounded1 = Math.round(n * 10) / 10;
-  const isInt = Math.abs(rounded1 - Math.round(rounded1)) < 1e-9;
-  return `${isInt ? Math.round(rounded1) : rounded1}%`;
-};
-
-const cardSpring = {
-  type: "spring" as const,
-  stiffness: 180,
-  damping: 18,
-  mass: 0.9,
-};
-
-const numberSpring = {
-  type: "spring" as const,
-  stiffness: 260,
-  damping: 20,
-  mass: 0.6,
-};
-
-const Admin_Dashboard: React.FC = () => {
-  const todayYYYYMMDD = useMemo(() => toYYYYMMDD(new Date()), []);
-
-  const [selectedDate, setSelectedDate] = useState<string>(todayYYYYMMDD);
-  const [openCalendar, setOpenCalendar] = useState<boolean>(false);
-
-  const [totals, setTotals] = useState<Totals>({
-    walkin: 0,
-    reservation: 0,
-    promo: 0,
-    all: 0,
-  });
-
-  const [pulseKey, setPulseKey] = useState<number>(0);
-  const [weekSeries, setWeekSeries] = useState<LineRow[]>([]);
-  const [weekLoading, setWeekLoading] = useState<boolean>(false);
-
-  const prettyDate = useMemo(() => formatPretty(selectedDate), [selectedDate]);
-  const weekStart = useMemo(
-    () => addDaysYYYYMMDD(selectedDate, -6),
-    [selectedDate],
-  );
-
-  const weekRangeLabel = useMemo(() => {
-    return `${formatPretty(weekStart)} – ${formatPretty(selectedDate)}`;
-  }, [weekStart, selectedDate]);
-
-  const fetchTotalsForDate = async (dateYYYYMMDD: string): Promise<Totals> => {
-    const walkinQ = supabase
-      .from("customer_sessions")
-      .select("id", { count: "exact", head: true })
-      .eq("date", dateYYYYMMDD)
-      .eq("reservation", "no");
-
-    const reservationQ = supabase
-      .from("customer_sessions")
-      .select("id", { count: "exact", head: true })
-      .eq("date", dateYYYYMMDD)
-      .eq("reservation", "yes");
-
-    const startOfDay = new Date(`${dateYYYYMMDD}T00:00:00`);
-    const endOfDay = new Date(`${dateYYYYMMDD}T23:59:59`);
-
-    const promoQ = supabase
-      .from("promo_bookings")
-      .select("id", { count: "exact", head: true })
-      .gte("start_at", startOfDay.toISOString())
-      .lte("start_at", endOfDay.toISOString());
-
-    const [walkinRes, reservationRes, promoRes] = await Promise.all([
-      walkinQ,
-      reservationQ,
-      promoQ,
-    ]);
-
-    const walkin = walkinRes.count ?? 0;
-    const reservation = reservationRes.count ?? 0;
-    const promo = promoRes.count ?? 0;
-
-    return {
-      walkin,
-      reservation,
-      promo,
-      all: walkin + reservation + promo,
-    };
-  };
-
+const Modal: React.FC<{
+  open: boolean;
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+  size?: "md" | "lg";
+}> = ({ open, title, onClose, children, size = "md" }) => {
   useEffect(() => {
-    let alive = true;
+    if (!open) return;
 
-    const run = async (): Promise<void> => {
-      const t = await fetchTotalsForDate(selectedDate);
-      if (!alive) return;
+    const prevBodyOverflow = document.body.style.overflow;
+    const prevHtmlOverflow = document.documentElement.style.overflow;
 
-      setTotals(t);
-      setPulseKey((k) => k + 1);
-
-      setWeekLoading(true);
-
-      try {
-        const days: string[] = Array.from({ length: 7 }, (_, i) =>
-          addDaysYYYYMMDD(selectedDate, i - 6),
-        );
-
-        const results = await Promise.all(
-          days.map(async (d) => {
-            const tt = await fetchTotalsForDate(d);
-            return {
-              day: formatShort(d),
-              total: tt.all,
-            };
-          }),
-        );
-
-        if (!alive) return;
-        setWeekSeries(results);
-      } finally {
-        if (alive) setWeekLoading(false);
-      }
-    };
-
-    void run();
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
 
     return () => {
-      alive = false;
+      document.body.style.overflow = prevBodyOverflow;
+      document.documentElement.style.overflow = prevHtmlOverflow;
     };
-  }, [selectedDate]);
+  }, [open]);
 
-  const pieData: PieRow[] = useMemo(
-    () => [
-      { name: "Walk-in", value: totals.walkin },
-      { name: "Reservation", value: totals.reservation },
-      { name: "Promo", value: totals.promo },
-    ],
-    [totals.walkin, totals.reservation, totals.promo],
-  );
+  if (!open) return null;
 
-  const pieTotal = useMemo(
-    () => totals.walkin + totals.reservation + totals.promo,
-    [totals.walkin, totals.reservation, totals.promo],
-  );
-
-  const walkinPct = useMemo(
-    () => formatPct(pct(totals.walkin, totals.all)),
-    [totals.walkin, totals.all],
-  );
-  const reservePct = useMemo(
-    () => formatPct(pct(totals.reservation, totals.all)),
-    [totals.reservation, totals.all],
-  );
-  const promoPct = useMemo(
-    () => formatPct(pct(totals.promo, totals.all)),
-    [totals.promo, totals.all],
-  );
-
-  return (
-    <div className="admin-dashboard-page">
-      <div className="admin-dashboard-wrap">
-        <div className="admin-dash-headline">
-          <div>
-            <span className="admin-dash-badge">Metyme Lounge Performance</span>
-            <h2>Admin Dashboard</h2>
-            <p>Monitor walk-ins, reservations, promos, and weekly activity.</p>
-          </div>
-
-          <button
-            type="button"
-            className="admin-dash-date-btn"
-            onClick={() => setOpenCalendar(true)}
-          >
-            <img src={iconCalendar} alt="Calendar" />
-            <span>{prettyDate}</span>
+  return createPortal(
+    <div className="adpkg-modal-overlay" onClick={onClose}>
+      <div
+        className={`adpkg-modal-card ${size === "lg" ? "adpkg-modal-lg" : "adpkg-modal-md"}`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="adpkg-modal-head">
+          <h3>{title}</h3>
+          <button className="adpkg-modal-close" onClick={onClose} type="button">
+            ×
           </button>
         </div>
 
-        <div className="admin-dash-totals-row">
-          <motion.div
-            className="admin-dash-total-card admin-dash-total-card--walkin"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={cardSpring}
-          >
-            <img className="admin-dash-total-icon" src={iconWalkin} alt="Walk-in" />
-
-            <div className="admin-dash-total-meta">
-              <div className="admin-dash-total-label">Walk-in</div>
-              <AnimatePresence mode="popLayout">
-                <motion.div
-                  key={`walkin-${pulseKey}-${totals.walkin}`}
-                  className="admin-dash-total-value"
-                  initial={{ scale: 0.92, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.92, opacity: 0 }}
-                  transition={numberSpring}
-                >
-                  {totals.walkin}
-                </motion.div>
-              </AnimatePresence>
-            </div>
-
-            <div className="admin-dash-total-percent">
-              <strong>{walkinPct}</strong>
-              <span>of total</span>
-            </div>
-          </motion.div>
-
-          <motion.div
-            className="admin-dash-total-card admin-dash-total-card--reserve"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ ...cardSpring, delay: 0.03 }}
-          >
-            <img
-              className="admin-dash-total-icon"
-              src={iconReserve}
-              alt="Reservation"
-            />
-
-            <div className="admin-dash-total-meta">
-              <div className="admin-dash-total-label">Reservation</div>
-              <AnimatePresence mode="popLayout">
-                <motion.div
-                  key={`reserve-${pulseKey}-${totals.reservation}`}
-                  className="admin-dash-total-value"
-                  initial={{ scale: 0.92, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.92, opacity: 0 }}
-                  transition={numberSpring}
-                >
-                  {totals.reservation}
-                </motion.div>
-              </AnimatePresence>
-            </div>
-
-            <div className="admin-dash-total-percent">
-              <strong>{reservePct}</strong>
-              <span>of total</span>
-            </div>
-          </motion.div>
-
-          <motion.div
-            className="admin-dash-total-card admin-dash-total-card--promo"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ ...cardSpring, delay: 0.06 }}
-          >
-            <img className="admin-dash-total-icon" src={iconPromo} alt="Promo" />
-
-            <div className="admin-dash-total-meta">
-              <div className="admin-dash-total-label">Promo</div>
-              <AnimatePresence mode="popLayout">
-                <motion.div
-                  key={`promo-${pulseKey}-${totals.promo}`}
-                  className="admin-dash-total-value"
-                  initial={{ scale: 0.92, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.92, opacity: 0 }}
-                  transition={numberSpring}
-                >
-                  {totals.promo}
-                </motion.div>
-              </AnimatePresence>
-            </div>
-
-            <div className="admin-dash-total-percent">
-              <strong>{promoPct}</strong>
-              <span>of total</span>
-            </div>
-          </motion.div>
-
-          <motion.div
-            className="admin-dash-total-card admin-dash-total-card--all"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ ...cardSpring, delay: 0.09 }}
-          >
-            <img className="admin-dash-total-icon" src={iconAll} alt="All" />
-
-            <div className="admin-dash-total-meta">
-              <div className="admin-dash-total-label">Total All</div>
-              <AnimatePresence mode="popLayout">
-                <motion.div
-                  key={`all-${pulseKey}-${totals.all}`}
-                  className="admin-dash-total-value"
-                  initial={{ scale: 0.92, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.92, opacity: 0 }}
-                  transition={numberSpring}
-                >
-                  {totals.all}
-                </motion.div>
-              </AnimatePresence>
-            </div>
-
-            <div className="admin-dash-total-percent">
-              <strong>100%</strong>
-              <span>overview</span>
-            </div>
-          </motion.div>
-        </div>
-
-        <div className="admin-dash-charts-grid">
-          <motion.div
-            className="admin-dash-chart-card"
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ ...cardSpring, delay: 0.12 }}
-          >
-            <div className="admin-dash-chart-head">
-              <div>
-                <div className="admin-dash-chart-title">Total All (7 days)</div>
-                <div className="admin-dash-chart-sub">{weekRangeLabel}</div>
-              </div>
-            </div>
-
-            {weekLoading ? (
-              <div className="admin-dash-chart-loading">
-                <div className="admin-dash-loader" />
-                <div>Loading...</div>
-              </div>
-            ) : (
-              <div className="admin-dash-line-wrap">
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart
-                    data={weekSeries}
-                    margin={{ top: 10, right: 18, left: 0, bottom: 0 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="day" />
-                    <YAxis allowDecimals={false} />
-                    <Tooltip />
-                    <Line
-                      type="monotone"
-                      dataKey="total"
-                      stroke="#0f5a4a"
-                      strokeWidth={3}
-                      dot={{ r: 4 }}
-                      activeDot={{ r: 6 }}
-                      isAnimationActive
-                      animationDuration={700}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-          </motion.div>
-
-          <motion.div
-            className="admin-dash-chart-card"
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ ...cardSpring, delay: 0.16 }}
-          >
-            <div className="admin-dash-chart-head">
-              <div>
-                <div className="admin-dash-chart-title">Breakdown</div>
-                <div className="admin-dash-chart-sub">{prettyDate}</div>
-              </div>
-            </div>
-
-            {pieTotal <= 0 ? (
-              <div className="admin-dash-chart-empty">No data for this date.</div>
-            ) : (
-              <div className="admin-dash-chart-body">
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={pieData}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={68}
-                      outerRadius={104}
-                      paddingAngle={3}
-                      isAnimationActive
-                      animationDuration={700}
-                    >
-                      {pieData.map((entry) => (
-                        <Cell
-                          key={`cell-${entry.name}`}
-                          fill={PIE_COLORS[entry.name]}
-                        />
-                      ))}
-                    </Pie>
-
-                    <Tooltip
-                      formatter={(value: unknown, name: unknown) => {
-                        const v = typeof value === "number" ? value : Number(value);
-                        const label = String(name);
-                        const pv = Number.isFinite(v) ? v : 0;
-                        return [`${pv} (${formatPct(pct(pv, pieTotal))})`, label];
-                      }}
-                    />
-
-                    <Legend verticalAlign="bottom" />
-                  </PieChart>
-                </ResponsiveContainer>
-
-                <div className="admin-dash-chart-center">
-                  <div className="admin-dash-chart-center-label">Total</div>
-                  <AnimatePresence mode="popLayout">
-                    <motion.div
-                      key={`pieTotal-${pulseKey}-${pieTotal}`}
-                      className="admin-dash-chart-center-value"
-                      initial={{ scale: 0.92, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      exit={{ scale: 0.92, opacity: 0 }}
-                      transition={numberSpring}
-                    >
-                      {pieTotal}
-                    </motion.div>
-                  </AnimatePresence>
-                </div>
-              </div>
-            )}
-          </motion.div>
-        </div>
+        <div className="adpkg-modal-body">{children}</div>
       </div>
+    </div>,
+    document.body
+  );
+};
 
-      {openCalendar && (
-        <div className="admin-dash-calendar-overlay" onClick={() => setOpenCalendar(false)}>
-          <div
-            className="admin-dash-calendar-card"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="admin-dash-calendar-head">
-              <h3>Select Date</h3>
-              <button
-                type="button"
-                className="admin-dash-calendar-close"
-                onClick={() => setOpenCalendar(false)}
-              >
-                Close
-              </button>
+const Admin_Packages: React.FC = () => {
+  const [loading, setLoading] = useState(true);
+
+  const [packages, setPackages] = useState<PackageRow[]>([]);
+  const [optionsByPackage, setOptionsByPackage] = useState<Record<string, PackageOptionRow[]>>(
+    {}
+  );
+
+  const [openPackageModal, setOpenPackageModal] = useState(false);
+  const [openOptionsModal, setOpenOptionsModal] = useState(false);
+
+  const [activePackage, setActivePackage] = useState<PackageRow | null>(null);
+
+  const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const [toastOpen, setToastOpen] = useState(false);
+  const [toastMsg, setToastMsg] = useState("");
+
+  const [pkgArea, setPkgArea] = useState<PackageArea>("common_area");
+  const [pkgTitle, setPkgTitle] = useState("");
+  const [pkgDesc, setPkgDesc] = useState("");
+  const [pkgAmenities, setPkgAmenities] = useState("");
+  const [pkgActive, setPkgActive] = useState(true);
+
+  const [editingOption, setEditingOption] = useState<PackageOptionRow | null>(null);
+  const [optName, setOptName] = useState("");
+  const [optDurationValue, setOptDurationValue] = useState<number>(1);
+  const [optDurationUnit, setOptDurationUnit] = useState<DurationUnit>("hour");
+  const [optPrice, setOptPrice] = useState<number>(0);
+  const [optPromoMaxAttempts, setOptPromoMaxAttempts] = useState<number>(7);
+  const [optPromoValidityDays, setOptPromoValidityDays] = useState<number>(14);
+
+  const selectedOptions = useMemo(() => {
+    if (!activePackage) return [];
+    return optionsByPackage[activePackage.id] || [];
+  }, [activePackage, optionsByPackage]);
+
+  useEffect(() => {
+    if (!toastOpen) return;
+    const t = window.setTimeout(() => setToastOpen(false), 2200);
+    return () => window.clearTimeout(t);
+  }, [toastOpen]);
+
+  const showToast = (msg: string) => {
+    setToastMsg(msg);
+    setToastOpen(true);
+  };
+
+  const resetPackageForm = () => {
+    setPkgArea("common_area");
+    setPkgTitle("");
+    setPkgDesc("");
+    setPkgAmenities("");
+    setPkgActive(true);
+  };
+
+  const openCreatePackage = () => {
+    setActivePackage(null);
+    resetPackageForm();
+    setOpenPackageModal(true);
+  };
+
+  const openEditPackage = (p: PackageRow) => {
+    setActivePackage(p);
+    setPkgArea(p.area);
+    setPkgTitle(p.title || "");
+    setPkgDesc(p.description || "");
+    setPkgAmenities(p.amenities || "");
+    setPkgActive(!!p.is_active);
+    setOpenPackageModal(true);
+  };
+
+  const resetOptionForm = () => {
+    setEditingOption(null);
+    setOptName("");
+    setOptDurationValue(1);
+    setOptDurationUnit("hour");
+    setOptPrice(0);
+    setOptPromoMaxAttempts(7);
+    setOptPromoValidityDays(14);
+  };
+
+  const fetchOptionsForPackage = async (packageId: string): Promise<void> => {
+    const { data, error } = await supabase
+      .from("package_options")
+      .select("*")
+      .eq("package_id", packageId)
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      console.error(error);
+      showToast(`Load options failed: ${error.message}`);
+      return;
+    }
+
+    setOptionsByPackage((prev) => ({
+      ...prev,
+      [packageId]: (data as PackageOptionRow[]) || [],
+    }));
+  };
+
+  const openManageOptions = async (p: PackageRow) => {
+    setActivePackage(p);
+    resetOptionForm();
+    setOpenOptionsModal(true);
+
+    if (!optionsByPackage[p.id]) {
+      await fetchOptionsForPackage(p.id);
+    }
+  };
+
+  const openEditOption = (o: PackageOptionRow) => {
+    setEditingOption(o);
+    setOptName(o.option_name);
+    setOptDurationValue(Number(o.duration_value || 1));
+    setOptDurationUnit(o.duration_unit);
+    setOptPrice(toNum(o.price));
+    setOptPromoMaxAttempts(clampInt(toNum(o.promo_max_attempts), 1, 9999));
+    setOptPromoValidityDays(clampInt(toNum(o.promo_validity_days), 1, 3650));
+  };
+
+  const fetchPackages = async (): Promise<void> => {
+    setLoading(true);
+
+    const { data, error } = await supabase
+      .from("packages")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error(error);
+      showToast(`Load failed: ${error.message}`);
+      setPackages([]);
+      setOptionsByPackage({});
+      setLoading(false);
+      return;
+    }
+
+    const rows = (data as PackageRow[]) || [];
+    setPackages(rows);
+
+    const ids = rows.map((r) => r.id);
+
+    if (ids.length) {
+      const { data: optData, error: optErr } = await supabase
+        .from("package_options")
+        .select("*")
+        .in("package_id", ids)
+        .order("created_at", { ascending: true });
+
+      if (optErr) {
+        console.error(optErr);
+        showToast(`Options load failed: ${optErr.message}`);
+        setOptionsByPackage({});
+      } else {
+        const map: Record<string, PackageOptionRow[]> = {};
+        ((optData as PackageOptionRow[]) || []).forEach((o) => {
+          if (!map[o.package_id]) map[o.package_id] = [];
+          map[o.package_id].push(o);
+        });
+        setOptionsByPackage(map);
+      }
+    } else {
+      setOptionsByPackage({});
+    }
+
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    void fetchPackages();
+  }, []);
+
+  const savePackage = async (): Promise<void> => {
+    if (!pkgTitle.trim()) {
+      showToast("Title is required.");
+      return;
+    }
+
+    setSaving(true);
+
+    try {
+      const userRes = await supabase.auth.getUser();
+      const uid = userRes.data.user?.id;
+
+      if (!uid) {
+        showToast("Not logged in.");
+        return;
+      }
+
+      const payload = {
+        admin_id: uid,
+        area: pkgArea,
+        title: pkgTitle.trim(),
+        description: pkgDesc.trim() ? pkgDesc.trim() : null,
+        amenities: pkgAmenities.trim() ? pkgAmenities.trim() : null,
+        is_active: !!pkgActive,
+      };
+
+      if (!activePackage) {
+        const { data, error } = await supabase
+          .from("packages")
+          .insert(payload)
+          .select("*")
+          .single();
+
+        if (error || !data) {
+          showToast(`Create failed: ${error?.message ?? "Unknown error"}`);
+          return;
+        }
+
+        showToast("Package created.");
+      } else {
+        const { data, error } = await supabase
+          .from("packages")
+          .update({
+            area: payload.area,
+            title: payload.title,
+            description: payload.description,
+            amenities: payload.amenities,
+            is_active: payload.is_active,
+          })
+          .eq("id", activePackage.id)
+          .select("*")
+          .single();
+
+        if (error || !data) {
+          showToast(`Update failed: ${error?.message ?? "Unknown error"}`);
+          return;
+        }
+
+        showToast("Package updated.");
+      }
+
+      setOpenPackageModal(false);
+      setActivePackage(null);
+      resetPackageForm();
+      await fetchPackages();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deletePackage = async (p: PackageRow): Promise<void> => {
+    const ok = window.confirm(`Delete package?\n\n${p.title}\n(${p.area})`);
+    if (!ok) return;
+
+    setDeletingId(p.id);
+
+    try {
+      const { error } = await supabase.from("packages").delete().eq("id", p.id);
+
+      if (error) {
+        showToast(`Delete failed: ${error.message}`);
+        return;
+      }
+
+      showToast("Package deleted.");
+
+      setPackages((prev) => prev.filter((x) => x.id !== p.id));
+      setOptionsByPackage((prev) => {
+        const copy = { ...prev };
+        delete copy[p.id];
+        return copy;
+      });
+
+      if (activePackage?.id === p.id) {
+        setActivePackage(null);
+        setOpenOptionsModal(false);
+      }
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const saveOption = async (): Promise<void> => {
+    if (!activePackage) {
+      showToast("No package selected.");
+      return;
+    }
+
+    if (!optName.trim()) {
+      showToast("Option name is required.");
+      return;
+    }
+
+    if (!Number.isFinite(optDurationValue) || optDurationValue <= 0) {
+      showToast("Duration value must be > 0.");
+      return;
+    }
+
+    if (!Number.isFinite(optPrice) || optPrice < 0) {
+      showToast("Price must be >= 0.");
+      return;
+    }
+
+    const promoMaxAttempts = clampInt(optPromoMaxAttempts, 1, 9999);
+    const promoValidityDays = clampInt(optPromoValidityDays, 1, 3650);
+
+    setSaving(true);
+
+    try {
+      const payload = {
+        package_id: activePackage.id,
+        option_name: optName.trim(),
+        duration_value: Math.floor(optDurationValue),
+        duration_unit: optDurationUnit,
+        price: Number(optPrice),
+        promo_max_attempts: promoMaxAttempts,
+        promo_validity_days: promoValidityDays,
+      };
+
+      if (!editingOption) {
+        const { data, error } = await supabase
+          .from("package_options")
+          .insert(payload)
+          .select("*")
+          .single();
+
+        if (error || !data) {
+          showToast(`Add option failed: ${error?.message ?? "Unknown error"}`);
+          return;
+        }
+
+        showToast("Option added.");
+      } else {
+        const { data, error } = await supabase
+          .from("package_options")
+          .update(payload)
+          .eq("id", editingOption.id)
+          .select("*")
+          .single();
+
+        if (error || !data) {
+          showToast(`Update option failed: ${error?.message ?? "Unknown error"}`);
+          return;
+        }
+
+        showToast("Option updated.");
+      }
+
+      resetOptionForm();
+      await fetchOptionsForPackage(activePackage.id);
+      await fetchPackages();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteOption = async (o: PackageOptionRow): Promise<void> => {
+    const ok = window.confirm(`Delete option?\n\n${o.option_name}`);
+    if (!ok) return;
+
+    setDeletingId(o.id);
+
+    try {
+      const { error } = await supabase.from("package_options").delete().eq("id", o.id);
+
+      if (error) {
+        showToast(`Delete option failed: ${error.message}`);
+        return;
+      }
+
+      showToast("Option deleted.");
+
+      if (activePackage) await fetchOptionsForPackage(activePackage.id);
+      await fetchPackages();
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  return (
+    <div className="adpkg-page">
+      <div className="customer-lists-container adminpkg adminpkg__wrap">
+        <div className="customer-topbar adminpkg__topbar">
+          <div className="customer-topbar-left">
+            <h2 className="customer-lists-title">Packages</h2>
+            <div className="customer-subtext">
+              Total packages: <strong>{packages.length}</strong>
+            </div>
+          </div>
+
+          <div className="customer-topbar-right adminpkg__topActions">
+            <button className="receipt-btn" onClick={openCreatePackage} type="button">
+              <span style={{ marginLeft: 2 }}>＋ New Package</span>
+            </button>
+
+            <button className="receipt-btn" onClick={() => void fetchPackages()} type="button">
+              <span style={{ marginLeft: 2 }}>Refresh</span>
+            </button>
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="adminpkg__loading">
+            <div className="adminpkg__spinner" />
+            <p className="customer-note" style={{ marginTop: 10 }}>
+              Loading packages...
+            </p>
+          </div>
+        ) : packages.length === 0 ? (
+          <p className="customer-note">No packages yet. Click “New Package”.</p>
+        ) : (
+          <div className="adminpkg__grid">
+            {packages.map((p) => {
+              const opts = optionsByPackage[p.id] || [];
+
+              return (
+                <div className="adminpkg__gridItem" key={p.id}>
+                  <div className="adminpkg__card adminpkg__fadeIn">
+                    <div className="adminpkg__cardHead">
+                      <div className="adminpkg__cardTitle">
+                        <span className="adminpkg__titleText">{p.title}</span>
+                        <span
+                          className={`adpkg-badge ${
+                            p.is_active ? "adpkg-badge--active" : "adpkg-badge--inactive"
+                          }`}
+                        >
+                          {p.is_active ? "ACTIVE" : "INACTIVE"}
+                        </span>
+                      </div>
+
+                      <div className="adminpkg__chips">
+                        <span className="adpkg-chip">{formatArea(p.area)}</span>
+                        <span className="adpkg-chip">
+                          {opts.length} option{opts.length !== 1 ? "s" : ""}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="adminpkg__cardBody">
+                      {p.description ? <p className="adminpkg__desc">{p.description}</p> : null}
+
+                      {p.amenities ? (
+                        <div className="adminpkg__amenities">
+                          <strong>AMENITIES</strong>
+                          <ul className="adminpkg__amenityList">
+                            {p.amenities
+                              .split("\n")
+                              .map((line) => line.replace("•", "").trim())
+                              .filter(Boolean)
+                              .map((line, idx) => (
+                                <li key={idx}>{line}</li>
+                              ))}
+                          </ul>
+                        </div>
+                      ) : null}
+
+                      {opts.length > 0 ? (
+                        <div className="adminpkg__options">
+                          <strong>OPTIONS</strong>
+
+                          <div className="adminpkg__optionGrid">
+                            {opts.slice(0, 6).map((o) => {
+                              const attempts = clampInt(toNum(o.promo_max_attempts), 1, 9999);
+                              const validity = clampInt(toNum(o.promo_validity_days), 1, 3650);
+
+                              return (
+                                <div className="adminpkg__optionRow" key={o.id}>
+                                  <div className="adminpkg__optionLeft">
+                                    <strong>{o.option_name}</strong>
+                                    <small className="adminpkg__muted">
+                                      {formatDuration(Number(o.duration_value), o.duration_unit)} • ₱
+                                      {toNum(o.price).toFixed(2)}
+                                    </small>
+                                    <small className="adminpkg__muted">
+                                      Promo Attempts: {attempts} • Promo Validity: {validity} day(s)
+                                    </small>
+                                  </div>
+                                </div>
+                              );
+                            })}
+
+                            {opts.length > 6 ? (
+                              <p className="adminpkg__muted" style={{ marginTop: 8 }}>
+                                +{opts.length - 6} more…
+                              </p>
+                            ) : null}
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="adminpkg__muted" style={{ marginTop: 10 }}>
+                          No options yet. Add options.
+                        </p>
+                      )}
+
+                      <div className="adminpkg__actions">
+                        <button className="receipt-btn" onClick={() => openEditPackage(p)} type="button">
+                          Edit
+                        </button>
+
+                        <button className="receipt-btn" onClick={() => void openManageOptions(p)} type="button">
+                          Manage Options
+                        </button>
+
+                        <button
+                          className="receipt-btn adminpkg__dangerBtn"
+                          disabled={deletingId === p.id}
+                          onClick={() => void deletePackage(p)}
+                          type="button"
+                        >
+                          {deletingId === p.id ? "Deleting..." : "Delete"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        <Modal
+          open={openPackageModal}
+          onClose={() => setOpenPackageModal(false)}
+          title={activePackage ? "Edit Package" : "New Package"}
+          size="md"
+        >
+          <div className="adminpkg__modalWrap">
+            <div className="adminpkg__list">
+              <div className="adpkg-field">
+                <label>Area</label>
+                <select value={pkgArea} onChange={(e) => setPkgArea(e.target.value as PackageArea)}>
+                  <option value="common_area">Common Area</option>
+                  <option value="conference_room">Conference Room</option>
+                </select>
+              </div>
+
+              <div className="adpkg-field">
+                <label>Title</label>
+                <input value={pkgTitle} onChange={(e) => setPkgTitle(e.target.value)} />
+              </div>
+
+              <div className="adpkg-field">
+                <label>Description (optional)</label>
+                <textarea value={pkgDesc} onChange={(e) => setPkgDesc(e.target.value)} rows={4} />
+              </div>
+
+              <div className="adpkg-field">
+                <label>AMENITIES (optional)</label>
+                <textarea
+                  placeholder={`Example:\n• Free Wi-Fi\n• Unlimited coffee\n• Printing services available`}
+                  value={pkgAmenities}
+                  onChange={(e) => setPkgAmenities(e.target.value)}
+                  rows={6}
+                />
+              </div>
+
+              <div className="adpkg-field">
+                <label>Active?</label>
+                <select
+                  value={pkgActive ? "yes" : "no"}
+                  onChange={(e) => setPkgActive(e.target.value === "yes")}
+                >
+                  <option value="yes">Active</option>
+                  <option value="no">Inactive</option>
+                </select>
+              </div>
             </div>
 
-            <input
-              type="date"
-              className="admin-dash-calendar-input"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-            />
-
-            <div className="admin-dash-calendar-actions">
-              <button
-                type="button"
-                className="admin-dash-calendar-btn secondary"
-                onClick={() => setSelectedDate(todayYYYYMMDD)}
-              >
-                Today
+            <div className="adminpkg__modalActions">
+              <button className="receipt-btn" disabled={saving} onClick={() => void savePackage()} type="button">
+                {saving ? "Saving..." : "Save"}
               </button>
 
               <button
+                className="receipt-btn adpkg-btn-outline"
+                onClick={() => {
+                  setOpenPackageModal(false);
+                  setActivePackage(null);
+                }}
                 type="button"
-                className="admin-dash-calendar-btn primary"
-                onClick={() => setOpenCalendar(false)}
               >
-                Done
+                Cancel
               </button>
             </div>
           </div>
-        </div>
-      )}
+        </Modal>
+
+        <Modal
+          open={openOptionsModal}
+          onClose={() => setOpenOptionsModal(false)}
+          title={`Options — ${activePackage?.title ?? ""}`}
+          size="lg"
+        >
+          <div className="adminpkg__modalWrap">
+            {!activePackage ? (
+              <p className="customer-note">No package selected.</p>
+            ) : (
+              <>
+                <div className="adminpkg__card adminpkg__fadeIn">
+                  <div className="adminpkg__cardHead">
+                    <div className="adminpkg__cardTitle">
+                      <span className="adminpkg__titleText">
+                        {editingOption ? "Edit Option" : "Add Option"}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="adminpkg__cardBody">
+                    <div className="adminpkg__list">
+                      <div className="adpkg-field">
+                        <label>Option Name</label>
+                        <input value={optName} onChange={(e) => setOptName(e.target.value)} />
+                      </div>
+
+                      <div className="adpkg-two-col">
+                        <div className="adpkg-field">
+                          <label>Duration Value</label>
+                          <input
+                            type="number"
+                            value={String(optDurationValue)}
+                            onChange={(e) => setOptDurationValue(Number(e.target.value || 1))}
+                          />
+                        </div>
+
+                        <div className="adpkg-field">
+                          <label>Duration Unit</label>
+                          <select
+                            value={optDurationUnit}
+                            onChange={(e) => setOptDurationUnit(e.target.value as DurationUnit)}
+                          >
+                            <option value="hour">Hour(s)</option>
+                            <option value="day">Day(s)</option>
+                            <option value="month">Month(s)</option>
+                            <option value="year">Year(s)</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="adpkg-two-col">
+                        <div className="adpkg-field">
+                          <label>Price (PHP)</label>
+                          <input
+                            type="number"
+                            value={String(optPrice)}
+                            onChange={(e) => setOptPrice(Number(e.target.value || 0))}
+                          />
+                        </div>
+
+                        <div className="adpkg-field">
+                          <label>Promo Max Attempts (attendance IN)</label>
+                          <input
+                            type="number"
+                            value={String(optPromoMaxAttempts)}
+                            onChange={(e) =>
+                              setOptPromoMaxAttempts(clampInt(Number(e.target.value || 7), 1, 9999))
+                            }
+                          />
+                        </div>
+                      </div>
+
+                      <div className="adpkg-field">
+                        <label>Promo Validity Days</label>
+                        <input
+                          type="number"
+                          value={String(optPromoValidityDays)}
+                          onChange={(e) =>
+                            setOptPromoValidityDays(clampInt(Number(e.target.value || 14), 1, 3650))
+                          }
+                        />
+                      </div>
+                    </div>
+
+                    <div className="adminpkg__optionActions">
+                      <button className="receipt-btn" disabled={saving} onClick={() => void saveOption()} type="button">
+                        {saving ? "Saving..." : editingOption ? "Update Option" : "Add Option"}
+                      </button>
+
+                      <button className="receipt-btn adpkg-btn-outline" onClick={resetOptionForm} type="button">
+                        Clear
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="adminpkg__savedWrap">
+                  <div className="adminpkg__savedTitle">Saved Options</div>
+
+                  {selectedOptions.length === 0 ? (
+                    <div className="adpkg-emptyRow">No options yet.</div>
+                  ) : (
+                    <div className="adpkg-optionList">
+                      {selectedOptions.map((o) => {
+                        const attempts = clampInt(toNum(o.promo_max_attempts), 1, 9999);
+                        const validity = clampInt(toNum(o.promo_validity_days), 1, 3650);
+
+                        return (
+                          <div className="adpkg-optionItem" key={o.id}>
+                            <div className="adpkg-optionInfo">
+                              <strong>{o.option_name}</strong>
+                              <div className="adminpkg__muted" style={{ fontSize: 12 }}>
+                                {formatDuration(Number(o.duration_value), o.duration_unit)} • ₱
+                                {toNum(o.price).toFixed(2)}
+                              </div>
+                              <div className="adminpkg__muted" style={{ fontSize: 12 }}>
+                                Promo Attempts: {attempts} • Promo Validity: {validity} day(s)
+                              </div>
+                            </div>
+
+                            <div className="adpkg-optionBtns">
+                              <button
+                                className="receipt-btn adpkg-btn-outline"
+                                onClick={() => openEditOption(o)}
+                                type="button"
+                              >
+                                Edit
+                              </button>
+
+                              <button
+                                className="receipt-btn adminpkg__dangerBtn"
+                                disabled={deletingId === o.id}
+                                onClick={() => void deleteOption(o)}
+                                type="button"
+                              >
+                                {deletingId === o.id ? "..." : "Delete"}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        </Modal>
+
+        {toastOpen && (
+          <div className="adpkg-toast" role="status" aria-live="polite">
+            {toastMsg}
+          </div>
+        )}
+      </div>
     </div>
   );
 };
 
-export default Admin_Dashboard;
+export default Admin_Packages;

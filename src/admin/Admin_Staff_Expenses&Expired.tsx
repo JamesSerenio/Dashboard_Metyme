@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { supabase } from "../utils/supabaseClient";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
@@ -177,6 +178,82 @@ const cashOutDateTimeDate = (r: CashOutRow): Date => {
   }
   const fallback = new Date(r.created_at);
   return Number.isFinite(fallback.getTime()) ? fallback : new Date();
+};
+
+const ConfirmModal: React.FC<{
+  open: boolean;
+  title: string;
+  text: React.ReactNode;
+  onClose: () => void;
+  onConfirm: () => void;
+  confirmText?: string;
+  cancelText?: string;
+}> = ({
+  open,
+  title,
+  text,
+  onClose,
+  onConfirm,
+  confirmText = "Confirm",
+  cancelText = "Cancel",
+}) => {
+  useEffect(() => {
+    if (!open) return;
+
+    const prevBodyOverflow = document.body.style.overflow;
+    const prevHtmlOverflow = document.documentElement.style.overflow;
+
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+    document.body.classList.add("staff-exp-modal-open");
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+
+    return () => {
+      document.body.style.overflow = prevBodyOverflow;
+      document.documentElement.style.overflow = prevHtmlOverflow;
+      document.body.classList.remove("staff-exp-modal-open");
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return createPortal(
+    <div className="staff-exp-modal-overlay" onClick={onClose}>
+      <div
+        className="staff-exp-modal"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+      >
+        <h3 className="staff-exp-modal-title">{title}</h3>
+        <div className="staff-exp-modal-text">{text}</div>
+        <div className="staff-exp-modal-actions">
+          <button
+            className="staff-exp-btn staff-exp-btn-light"
+            onClick={onClose}
+            type="button"
+          >
+            {cancelText}
+          </button>
+          <button
+            className="staff-exp-btn staff-exp-btn-danger"
+            onClick={onConfirm}
+            type="button"
+          >
+            {confirmText}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
 };
 
 const Admin_Staff_Expenses_Expired: React.FC = () => {
@@ -956,6 +1033,7 @@ const Admin_Staff_Expenses_Expired: React.FC = () => {
               <button
                 className="staff-exp-btn staff-exp-btn-dark"
                 onClick={() => void exportExcel()}
+                type="button"
               >
                 ⬇ Export Excel
               </button>
@@ -963,6 +1041,7 @@ const Admin_Staff_Expenses_Expired: React.FC = () => {
               <button
                 className="staff-exp-btn staff-exp-btn-danger"
                 onClick={() => setShowDeleteFilterAlert(true)}
+                type="button"
               >
                 🗑 Delete By{" "}
                 {filterMode === "day"
@@ -987,6 +1066,7 @@ const Admin_Staff_Expenses_Expired: React.FC = () => {
               <button
                 className="staff-exp-btn staff-exp-btn-light"
                 onClick={() => void fetchAll()}
+                type="button"
               >
                 ⟳ Refresh
               </button>
@@ -1047,6 +1127,7 @@ const Admin_Staff_Expenses_Expired: React.FC = () => {
                               disabled={busyId === r.id}
                               onClick={() => setConfirmDeleteCashOut(r)}
                               title="Delete cash out"
+                              type="button"
                             >
                               {busyId === r.id ? "..." : "Delete"}
                             </button>
@@ -1195,6 +1276,7 @@ const Admin_Staff_Expenses_Expired: React.FC = () => {
                                     ? "Already voided"
                                     : "Void (RPC restores counters)"
                                 }
+                                type="button"
                               >
                                 {busyId === r.id ? "..." : "Void"}
                               </button>
@@ -1204,6 +1286,7 @@ const Admin_Staff_Expenses_Expired: React.FC = () => {
                                 disabled={busyId === r.id}
                                 onClick={() => setConfirmDelete(r)}
                                 title="Delete log only (no revert)"
+                                type="button"
                               >
                                 {busyId === r.id ? "..." : "Delete"}
                               </button>
@@ -1304,6 +1387,7 @@ const Admin_Staff_Expenses_Expired: React.FC = () => {
                                 ? "Already voided"
                                 : "Void (RPC restores counters)"
                             }
+                            type="button"
                           >
                             {busyId === r.id ? "..." : "Void"}
                           </button>
@@ -1313,6 +1397,7 @@ const Admin_Staff_Expenses_Expired: React.FC = () => {
                             disabled={busyId === r.id}
                             onClick={() => setConfirmDelete(r)}
                             title="Delete log only (no revert)"
+                            type="button"
                           >
                             {busyId === r.id ? "..." : "Delete"}
                           </button>
@@ -1332,136 +1417,73 @@ const Admin_Staff_Expenses_Expired: React.FC = () => {
         </div>
       </div>
 
-      {!!confirmVoid && (
-        <div className="staff-exp-modal-overlay" onClick={() => setConfirmVoid(null)}>
-          <div className="staff-exp-modal" onClick={(e) => e.stopPropagation()}>
-            <h3 className="staff-exp-modal-title">Void this record?</h3>
-            <p className="staff-exp-modal-text">
+      <ConfirmModal
+        open={!!confirmVoid}
+        title="Void this record?"
+        text={
+          confirmVoid ? (
+            <>
               This will restore counts by reverting{" "}
               {typeLabel(confirmVoid.expense_type)} (qty: {confirmVoid.quantity}).
-            </p>
-            <div className="staff-exp-modal-actions">
-              <button
-                className="staff-exp-btn staff-exp-btn-light"
-                onClick={() => setConfirmVoid(null)}
-              >
-                Cancel
-              </button>
-              <button
-                className="staff-exp-btn staff-exp-btn-danger"
-                onClick={() => {
-                  const r = confirmVoid;
-                  setConfirmVoid(null);
-                  if (r) void doVoid(r);
-                }}
-              >
-                Void
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+            </>
+          ) : null
+        }
+        onClose={() => setConfirmVoid(null)}
+        onConfirm={() => {
+          const r = confirmVoid;
+          setConfirmVoid(null);
+          if (r) void doVoid(r);
+        }}
+        confirmText="Void"
+        cancelText="Cancel"
+      />
 
-      {!!confirmDelete && (
-        <div
-          className="staff-exp-modal-overlay"
-          onClick={() => setConfirmDelete(null)}
-        >
-          <div className="staff-exp-modal" onClick={(e) => e.stopPropagation()}>
-            <h3 className="staff-exp-modal-title">Delete this log?</h3>
-            <p className="staff-exp-modal-text">
-              This will delete the record only. Stock/counts will NOT change.
-            </p>
-            <div className="staff-exp-modal-actions">
-              <button
-                className="staff-exp-btn staff-exp-btn-light"
-                onClick={() => setConfirmDelete(null)}
-              >
-                Cancel
-              </button>
-              <button
-                className="staff-exp-btn staff-exp-btn-danger"
-                onClick={() => {
-                  const r = confirmDelete;
-                  setConfirmDelete(null);
-                  if (r) void doDelete(r);
-                }}
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmModal
+        open={!!confirmDelete}
+        title="Delete this log?"
+        text={<>This will delete the record only. Stock/counts will NOT change.</>}
+        onClose={() => setConfirmDelete(null)}
+        onConfirm={() => {
+          const r = confirmDelete;
+          setConfirmDelete(null);
+          if (r) void doDelete(r);
+        }}
+        confirmText="Delete"
+        cancelText="Cancel"
+      />
 
-      {!!confirmDeleteCashOut && (
-        <div
-          className="staff-exp-modal-overlay"
-          onClick={() => setConfirmDeleteCashOut(null)}
-        >
-          <div className="staff-exp-modal" onClick={(e) => e.stopPropagation()}>
-            <h3 className="staff-exp-modal-title">Delete this cash out?</h3>
-            <p className="staff-exp-modal-text">
-              This will delete the cash out record only.
-            </p>
-            <div className="staff-exp-modal-actions">
-              <button
-                className="staff-exp-btn staff-exp-btn-light"
-                onClick={() => setConfirmDeleteCashOut(null)}
-              >
-                Cancel
-              </button>
-              <button
-                className="staff-exp-btn staff-exp-btn-danger"
-                onClick={() => {
-                  const r = confirmDeleteCashOut;
-                  setConfirmDeleteCashOut(null);
-                  if (r) void doDeleteCashOut(r);
-                }}
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmModal
+        open={!!confirmDeleteCashOut}
+        title="Delete this cash out?"
+        text={<>This will delete the cash out record only.</>}
+        onClose={() => setConfirmDeleteCashOut(null)}
+        onConfirm={() => {
+          const r = confirmDeleteCashOut;
+          setConfirmDeleteCashOut(null);
+          if (r) void doDeleteCashOut(r);
+        }}
+        confirmText="Delete"
+        cancelText="Cancel"
+      />
 
-      {showDeleteFilterAlert && (
-        <div
-          className="staff-exp-modal-overlay"
-          onClick={() => setShowDeleteFilterAlert(false)}
-        >
-          <div className="staff-exp-modal" onClick={(e) => e.stopPropagation()}>
-            <h3 className="staff-exp-modal-title">
-              Delete by{" "}
-              {filterMode === "day"
-                ? "Date"
-                : filterMode === "week"
-                ? "Week"
-                : "Month"}
-              ?
-            </h3>
-            <p className="staff-exp-modal-text">{deleteFilterMessage}</p>
-            <div className="staff-exp-modal-actions">
-              <button
-                className="staff-exp-btn staff-exp-btn-light"
-                onClick={() => setShowDeleteFilterAlert(false)}
-              >
-                Cancel
-              </button>
-              <button
-                className="staff-exp-btn staff-exp-btn-danger"
-                onClick={() => {
-                  setShowDeleteFilterAlert(false);
-                  void deleteByFilter();
-                }}
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmModal
+        open={showDeleteFilterAlert}
+        title={`Delete by ${
+          filterMode === "day"
+            ? "Date"
+            : filterMode === "week"
+            ? "Week"
+            : "Month"
+        }?`}
+        text={<>{deleteFilterMessage}</>}
+        onClose={() => setShowDeleteFilterAlert(false)}
+        onConfirm={() => {
+          setShowDeleteFilterAlert(false);
+          void deleteByFilter();
+        }}
+        confirmText="Delete"
+        cancelText="Cancel"
+      />
 
       {toastOpen && (
         <div className="staff-exp-toast">

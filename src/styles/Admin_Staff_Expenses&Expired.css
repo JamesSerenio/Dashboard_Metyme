@@ -41,6 +41,16 @@
   box-sizing: border-box;
 }
 
+html,
+body {
+  max-width: 100%;
+}
+
+body.staff-exp-modal-open {
+  overflow: hidden !important;
+  touch-action: none;
+}
+
 .admin-staff-exp-page {
   min-height: 100vh;
   padding: 26px;
@@ -422,23 +432,34 @@
 .staff-exp-modal-overlay {
   position: fixed;
   inset: 0;
-  z-index: 9999;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 18px;
+  width: 100vw;
+  height: 100vh;
+  z-index: 2147483647;
   background: rgba(30, 22, 15, 0.38);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  overflow: hidden;
+  overscroll-behavior: contain;
   animation: aseFadeIn 180ms ease-out;
 }
 
 .staff-exp-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
   width: min(92vw, 460px);
+  max-width: 460px;
+  max-height: min(88vh, 720px);
+  transform: translate(-50%, -50%);
   border-radius: 28px;
   background: linear-gradient(180deg, #fbf6ee 0%, #f1e6d7 100%);
   border: 1px solid rgba(90, 65, 37, 0.10);
   box-shadow: 0 30px 70px rgba(28, 19, 12, 0.28);
   padding: 22px;
+  overflow-y: auto;
+  overflow-x: hidden;
   animation: asePopIn 220ms var(--ase-ease);
+  will-change: transform;
 }
 
 .staff-exp-modal-title {
@@ -472,7 +493,7 @@
   position: fixed;
   right: 20px;
   bottom: 20px;
-  z-index: 10000;
+  z-index: 2147483647;
   min-width: 260px;
   max-width: 380px;
   min-height: 58px;
@@ -557,8 +578,10 @@
   }
 
   .staff-exp-modal {
+    width: min(94vw, 420px);
     padding: 18px;
     border-radius: 22px;
+    max-height: 86vh;
   }
 
   .staff-exp-modal-title {
@@ -600,11 +623,11 @@
 @keyframes asePopIn {
   from {
     opacity: 0;
-    transform: translate3d(0, 12px, 0) scale(0.98);
+    transform: translate(-50%, calc(-50% + 12px)) scale(0.98);
   }
   to {
     opacity: 1;
-    transform: translate3d(0, 0, 0) scale(1);
+    transform: translate(-50%, -50%) scale(1);
   }
 }
 
