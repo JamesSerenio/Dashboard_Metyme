@@ -2216,11 +2216,11 @@ const Admin_customer_list: React.FC = () => {
 
         <section className="acl-table-wrap">
           <div className="acl-table-scroll">
-            <table className="acl-table">
+            <table className="acl-table acl-table-premium">
               <thead>
                 <tr>
                   <th>Date</th>
-                  <th>Full Name</th>
+                  <th>Customer</th>
                   <th>Seat</th>
                   <th>Orders</th>
                   <th>Grand Total</th>
@@ -2229,6 +2229,7 @@ const Admin_customer_list: React.FC = () => {
                   <th>Action</th>
                 </tr>
               </thead>
+
               <tbody>
                 {loading ? (
                   <tr>
@@ -2253,7 +2254,7 @@ const Admin_customer_list: React.FC = () => {
                     const customerViewActive = isCustomerViewOnForSession(activeView, s.id);
 
                     return (
-                      <tr key={s.id}>
+                      <tr key={s.id} className="acl-row-anim">
                         <td>
                           <div className="acl-date-cell">
                             <strong>{displayDateNice(s.date)}</strong>
@@ -2262,101 +2263,189 @@ const Admin_customer_list: React.FC = () => {
                         </td>
 
                         <td>
-                          <div className="acl-name-main">{s.full_name}</div>
-                          <div className="acl-name-sub">{s.customer_type}</div>
-                          <div className="acl-name-meta">Code: {s.booking_code || "N/A"}</div>
-                          <div className="acl-name-meta">Phone: {phoneText(s)}</div>
-                          <div className="acl-status-inline">{renderStatus(s)}</div>
-                        </td>
+                          <div className="acl-customer-cell">
+                            <div className="acl-name-main">{s.full_name}</div>
+                            <div className="acl-name-sub">{s.customer_type}</div>
 
-                        <td>{s.seat_number || "N/A"}</td>
+                            <div className="acl-meta-grid">
+                              <div className="acl-name-meta">
+                                <span className="acl-meta-label">Code</span>
+                                <span className="acl-meta-value">{s.booking_code || "N/A"}</span>
+                              </div>
 
-                        <td>
-                          {bundle.items.length === 0 ? (
-                            <div className="acl-orders-empty">No add-ons or consignment items.</div>
-                          ) : (
-                            <div className="acl-orders-list">
-                              {bundle.items.slice(0, 2).map((item) => (
-                                <div className="acl-order-line" key={item.id}>
-                                  <span>
-                                    {item.name} x{item.qty}
-                                  </span>
-                                  <span>₱{item.subtotal}</span>
-                                </div>
-                              ))}
-                              {bundle.items.length > 2 && (
-                                <div className="acl-order-more">+{bundle.items.length - 2} more item(s)</div>
-                              )}
+                              <div className="acl-name-meta">
+                                <span className="acl-meta-label">Phone</span>
+                                <span className="acl-meta-value">{phoneText(s)}</span>
+                              </div>
                             </div>
-                          )}
 
-                          <button
-                            className="acl-mini-btn"
-                            type="button"
-                            onClick={() => setSelectedOrderSession(s)}
-                          >
-                            View Orders
-                          </button>
-                        </td>
-
-                        <td>
-                          <div className="acl-grand-amount">₱{grandTotal}</div>
-                          <div className="acl-grand-breakdown">
-                            <span>System: ₱{getSystemDue(s)}</span>
-                            <span>Orders: ₱{ordersTotal}</span>
-                            <span>
-                              {displayAmount.label}: ₱{displayAmount.value}
-                            </span>
+                            <div className="acl-status-inline">{renderStatus(s)}</div>
                           </div>
                         </td>
 
                         <td>
-                          <div className="acl-payment-block">
-                            <div className="acl-pay-line">
-                              <strong>GCash ₱{systemPay.gcash}</strong> / Cash ₱{systemPay.cash}
-                            </div>
-                            <div className="acl-pay-line">System Remaining: ₱{getSystemRemaining(s)}</div>
+                          <div className="acl-seat-pill">{s.seat_number || "N/A"}</div>
+                        </td>
 
-                            <div className="acl-payment-stack">
-                              <button className="acl-mini-btn" type="button" onClick={() => openPaymentModal(s)}>
-                                System Payment
-                              </button>
-                              <button className="acl-mini-btn acl-mini-soft" type="button" onClick={() => openDiscountModal(s)}>
-                                Discount
-                              </button>
-                              <button className="acl-mini-btn acl-mini-soft" type="button" onClick={() => openDpModal(s)}>
-                                Down Payment
-                              </button>
+                        <td>
+                          <div className="acl-orders-cell">
+                            {bundle.items.length === 0 ? (
+                              <div className="acl-orders-empty">
+                                No add-ons or
+                                <br />
+                                consignment items.
+                              </div>
+                            ) : (
+                              <>
+                                <div className="acl-orders-list">
+                                  {bundle.items.slice(0, 2).map((item) => (
+                                    <div className="acl-order-line" key={item.id}>
+                                      <span className="acl-order-name">
+                                        {item.name} x{item.qty}
+                                      </span>
+                                      <span className="acl-order-price">₱{item.subtotal}</span>
+                                    </div>
+                                  ))}
+                                </div>
+
+                                {bundle.items.length > 2 && (
+                                  <div className="acl-order-more">
+                                    +{bundle.items.length - 2} more item(s)
+                                  </div>
+                                )}
+                              </>
+                            )}
+
+                            <button
+                              className="acl-mini-btn acl-orders-btn"
+                              type="button"
+                              onClick={() => setSelectedOrderSession(s)}
+                            >
+                              View Orders
+                            </button>
+                          </div>
+                        </td>
+
+                        <td>
+                          <div className="acl-total-card">
+                            <div className="acl-grand-amount">₱{grandTotal}</div>
+
+                            <div className="acl-grand-breakdown">
+                              <div className="acl-break-row">
+                                <span>System</span>
+                                <strong>₱{getSystemDue(s)}</strong>
+                              </div>
+
+                              <div className="acl-break-row">
+                                <span>Orders</span>
+                                <strong>₱{ordersTotal}</strong>
+                              </div>
+
+                              <div className="acl-break-row acl-break-row-highlight">
+                                <span>{displayAmount.label}</span>
+                                <strong>₱{displayAmount.value}</strong>
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+
+                        <td>
+                          <div className="acl-payment-card">
+                            <div className="acl-payment-section">
+                              <div className="acl-payment-title">System Payment</div>
+
+                              <div className="acl-pay-box">
+                                <div className="acl-pay-line acl-pay-line-strong">
+                                  <span>GCash</span>
+                                  <strong>₱{systemPay.gcash}</strong>
+                                </div>
+                                <div className="acl-pay-line acl-pay-line-strong">
+                                  <span>Cash</span>
+                                  <strong>₱{systemPay.cash}</strong>
+                                </div>
+                                <div className="acl-pay-line acl-pay-line-remain">
+                                  <span>Remaining</span>
+                                  <strong>₱{getSystemRemaining(s)}</strong>
+                                </div>
+                              </div>
+
+                              <div className="acl-payment-stack acl-payment-stack-compact">
+                                <button
+                                  className="acl-mini-btn acl-mini-btn-main"
+                                  type="button"
+                                  onClick={() => openPaymentModal(s)}
+                                >
+                                  System Payment
+                                </button>
+
+                                <div className="acl-inline-actions">
+                                  <button
+                                    className="acl-mini-btn acl-mini-soft"
+                                    type="button"
+                                    onClick={() => openDiscountModal(s)}
+                                  >
+                                    Discount
+                                  </button>
+
+                                  <button
+                                    className="acl-mini-btn acl-mini-soft"
+                                    type="button"
+                                    onClick={() => openDpModal(s)}
+                                  >
+                                    Down Payment
+                                  </button>
+                                </div>
+                              </div>
                             </div>
 
                             {ordersTotal > 0 && (
-                              <>
-                                <div className="acl-pay-divider" />
-                                <div className="acl-pay-line">
-                                  <strong>GCash ₱{orderPay.gcash}</strong> / Cash ₱{orderPay.cash}
+                              <div className="acl-payment-section acl-payment-section-order">
+                                <div className="acl-payment-title">Order Payment</div>
+
+                                <div className="acl-pay-box">
+                                  <div className="acl-pay-line acl-pay-line-strong">
+                                    <span>GCash</span>
+                                    <strong>₱{orderPay.gcash}</strong>
+                                  </div>
+                                  <div className="acl-pay-line acl-pay-line-strong">
+                                    <span>Cash</span>
+                                    <strong>₱{orderPay.cash}</strong>
+                                  </div>
+                                  <div className="acl-pay-line acl-pay-line-remain">
+                                    <span>Remaining</span>
+                                    <strong>₱{getOrderRemaining(s)}</strong>
+                                  </div>
                                 </div>
-                                <div className="acl-pay-line">Order Remaining: ₱{getOrderRemaining(s)}</div>
+
                                 <button
-                                  className="acl-mini-btn"
+                                  className="acl-mini-btn acl-mini-btn-main"
                                   type="button"
                                   onClick={() => void openOrderPaymentModal(s)}
                                 >
                                   Order Payment
                                 </button>
-                              </>
+                              </div>
                             )}
                           </div>
                         </td>
 
                         <td>
-                          <span className={`acl-paid-pill ${getFinalPaidStatus(s) ? "paid" : "unpaid"}`}>
-                            {getFinalPaidStatus(s) ? "PAID" : "UNPAID"}
-                          </span>
+                          <div className="acl-paid-wrap">
+                            <span
+                              className={`acl-paid-pill ${getFinalPaidStatus(s) ? "paid" : "unpaid"}`}
+                            >
+                              {getFinalPaidStatus(s) ? "PAID" : "UNPAID"}
+                            </span>
+                          </div>
                         </td>
 
                         <td>
-                          <div className="acl-action-stack">
-                            <button className="acl-action-btn" type="button" onClick={() => setSelectedSession(s)}>
+                          <div className="acl-action-stack acl-action-stack-premium">
+                            <button
+                              className="acl-action-btn"
+                              type="button"
+                              onClick={() => setSelectedSession(s)}
+                            >
                               View Receipt
                             </button>
 
