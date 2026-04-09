@@ -1,559 +1,393 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "../utils/supabaseClient";
-import { motion, AnimatePresence } from "framer-motion";
-import {
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  Tooltip,
-  Legend,
-  LineChart,
-  Line,
-  CartesianGrid,
-  XAxis,
-  YAxis,
-} from "recharts";
-import "../styles/admin_dashboard.css";
+import "../styles/Admin_Consignment_Approval.css";
 
-import iconWalkin from "../assets/list.png";
-import iconReserve from "../assets/reserve.png";
-import iconPromo from "../assets/discount.png";
-import iconAll from "../assets/all.png";
-import iconCalendar from "../assets/calendar.png";
+type ApprovalStatus = "pending" | "approved" | "rejected";
+type HistoryFilter = "all" | "approved" | "rejected";
 
-type Totals = {
-  walkin: number;
-  reservation: number;
-  promo: number;
-  all: number;
+type ConsignmentRow = {
+  id: string;
+  created_at: string;
+  full_name: string;
+  category: string | null;
+  item_name: string;
+  size: string | null;
+  image_url: string | null;
+  price: number;
+  restocked: number;
+  approval_status: ApprovalStatus;
+  rejection_reason: string | null;
+  approved_at: string | null;
 };
 
-type PieName = "Walk-in" | "Reservation" | "Promo";
+const formatDateTime = (value: string | null): string => {
+  if (!value) return "-";
 
-type PieRow = {
-  name: PieName;
-  value: number;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "-";
+
+  return d.toLocaleString();
 };
 
-type LineRow = {
-  day: string;
-  total: number;
-};
+const Admin_Consignment_Approval: React.FC = () => {
+  const [items, setItems] = useState<ConsignmentRow[]>([]);
+  const [historyItems, setHistoryItems] = useState<ConsignmentRow[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [historyLoading, setHistoryLoading] = useState<boolean>(true);
+  const [toastMessage, setToastMessage] = useState<string>("");
+  const [showToast, setShowToast] = useState<boolean>(false);
+  const [rejectReasons, setRejectReasons] = useState<Record<string, string>>({});
+  const [historyFilter, setHistoryFilter] = useState<HistoryFilter>("all");
 
-const PIE_COLORS: Record<PieName, string> = {
-  "Walk-in": "#2f3b2f",
-  Reservation: "#6a3fb5",
-  Promo: "#c04b1a",
-};
+  useEffect(() => {
+    if (!showToast) return;
+    const timer = window.setTimeout(() => setShowToast(false), 3000);
+    return () => window.clearTimeout(timer);
+  }, [showToast]);
 
-const pad2 = (n: number): string => String(n).padStart(2, "0");
+  const loadPending = async (): Promise<void> => {
+    try {
+      setLoading(true);
 
-const toYYYYMMDD = (d: Date): string => {
-  const y = d.getFullYear();
-  const m = pad2(d.getMonth() + 1);
-  const day = pad2(d.getDate());
-  return `${y}-${m}-${day}`;
-};
+      const { data, error } = await supabase
+        .from("consignment")
+        .select(`
+          id,
+          created_at,
+          full_name,
+          category,
+          item_name,
+          size,
+          image_url,
+          price,
+          restocked,
+          approval_status,
+          rejection_reason,
+          approved_at
+        `)
+        .eq("approval_status", "pending")
+        .order("created_at", { ascending: false });
 
-const formatPretty = (yyyyMmDd: string): string => {
-  const [y, m, d] = yyyyMmDd.split("-").map(Number);
-  const dt = new Date(y, m - 1, d);
-  return dt.toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "2-digit",
-  });
-};
+      if (error) throw error;
 
-const formatShort = (yyyyMmDd: string): string => {
-  const [y, m, d] = yyyyMmDd.split("-").map(Number);
-  const dt = new Date(y, m - 1, d);
-  return dt.toLocaleDateString("en-US", {
-    month: "short",
-    day: "2-digit",
-  });
-};
+      setItems((data ?? []) as ConsignmentRow[]);
+    } catch (err: unknown) {
+      console.error("loadPending error:", err);
+      setToastMessage(err instanceof Error ? err.message : "Failed to load pending consignment");
+      setShowToast(true);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-const addDaysYYYYMMDD = (yyyyMmDd: string, delta: number): string => {
-  const [y, m, d] = yyyyMmDd.split("-").map(Number);
-  const dt = new Date(y, m - 1, d);
-  dt.setDate(dt.getDate() + delta);
-  return toYYYYMMDD(dt);
-};
+  const loadHistory = async (): Promise<void> => {
+    try {
+      setHistoryLoading(true);
 
-const pct = (part: number, total: number): number => {
-  if (!Number.isFinite(part) || !Number.isFinite(total) || total <= 0) return 0;
-  return (part / total) * 100;
-};
+      const { data, error } = await supabase
+        .from("consignment")
+        .select(`
+          id,
+          created_at,
+          full_name,
+          category,
+          item_name,
+          size,
+          image_url,
+          price,
+          restocked,
+          approval_status,
+          rejection_reason,
+          approved_at
+        `)
+        .in("approval_status", ["approved", "rejected"])
+        .order("approved_at", { ascending: false });
 
-const formatPct = (n: number): string => {
-  if (!Number.isFinite(n)) return "0%";
-  const rounded1 = Math.round(n * 10) / 10;
-  const isInt = Math.abs(rounded1 - Math.round(rounded1)) < 1e-9;
-  return `${isInt ? Math.round(rounded1) : rounded1}%`;
-};
+      if (error) throw error;
 
-const cardSpring = {
-  type: "spring" as const,
-  stiffness: 180,
-  damping: 18,
-  mass: 0.9,
-};
+      setHistoryItems((data ?? []) as ConsignmentRow[]);
+    } catch (err: unknown) {
+      console.error("loadHistory error:", err);
+      setToastMessage(err instanceof Error ? err.message : "Failed to load consignment records");
+      setShowToast(true);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
 
-const numberSpring = {
-  type: "spring" as const,
-  stiffness: 260,
-  damping: 20,
-  mass: 0.6,
-};
-
-const Admin_Dashboard: React.FC = () => {
-  const todayYYYYMMDD = useMemo(() => toYYYYMMDD(new Date()), []);
-
-  const [selectedDate, setSelectedDate] = useState<string>(todayYYYYMMDD);
-  const [openCalendar, setOpenCalendar] = useState<boolean>(false);
-
-  const [totals, setTotals] = useState<Totals>({
-    walkin: 0,
-    reservation: 0,
-    promo: 0,
-    all: 0,
-  });
-
-  const [pulseKey, setPulseKey] = useState<number>(0);
-  const [weekSeries, setWeekSeries] = useState<LineRow[]>([]);
-  const [weekLoading, setWeekLoading] = useState<boolean>(false);
-
-  const prettyDate = useMemo(() => formatPretty(selectedDate), [selectedDate]);
-  const weekStart = useMemo(
-    () => addDaysYYYYMMDD(selectedDate, -6),
-    [selectedDate],
-  );
-
-  const weekRangeLabel = useMemo(() => {
-    return `${formatPretty(weekStart)} – ${formatPretty(selectedDate)}`;
-  }, [weekStart, selectedDate]);
-
-  const fetchTotalsForDate = async (dateYYYYMMDD: string): Promise<Totals> => {
-    const walkinQ = supabase
-      .from("customer_sessions")
-      .select("id", { count: "exact", head: true })
-      .eq("date", dateYYYYMMDD)
-      .eq("reservation", "no");
-
-    const reservationQ = supabase
-      .from("customer_sessions")
-      .select("id", { count: "exact", head: true })
-      .eq("date", dateYYYYMMDD)
-      .eq("reservation", "yes");
-
-    const startOfDay = new Date(`${dateYYYYMMDD}T00:00:00`);
-    const endOfDay = new Date(`${dateYYYYMMDD}T23:59:59`);
-
-    const promoQ = supabase
-      .from("promo_bookings")
-      .select("id", { count: "exact", head: true })
-      .gte("start_at", startOfDay.toISOString())
-      .lte("start_at", endOfDay.toISOString());
-
-    const [walkinRes, reservationRes, promoRes] = await Promise.all([
-      walkinQ,
-      reservationQ,
-      promoQ,
-    ]);
-
-    const walkin = walkinRes.count ?? 0;
-    const reservation = reservationRes.count ?? 0;
-    const promo = promoRes.count ?? 0;
-
-    return {
-      walkin,
-      reservation,
-      promo,
-      all: walkin + reservation + promo,
-    };
+  const reloadAll = async (): Promise<void> => {
+    await Promise.all([loadPending(), loadHistory()]);
   };
 
   useEffect(() => {
-    let alive = true;
+    void reloadAll();
+  }, []);
 
-    const run = async (): Promise<void> => {
-      const t = await fetchTotalsForDate(selectedDate);
-      if (!alive) return;
+  const handleApprove = async (id: string): Promise<void> => {
+    try {
+      const { error } = await supabase.rpc("approve_consignment", {
+        p_consignment_id: id,
+      });
 
-      setTotals(t);
-      setPulseKey((k) => k + 1);
-
-      setWeekLoading(true);
-
-      try {
-        const days: string[] = Array.from({ length: 7 }, (_, i) =>
-          addDaysYYYYMMDD(selectedDate, i - 6),
-        );
-
-        const results = await Promise.all(
-          days.map(async (d) => {
-            const tt = await fetchTotalsForDate(d);
-            return {
-              day: formatShort(d),
-              total: tt.all,
-            };
-          }),
-        );
-
-        if (!alive) return;
-        setWeekSeries(results);
-      } finally {
-        if (alive) setWeekLoading(false);
+      if (error) {
+        console.error("approve_consignment rpc error:", error);
+        throw new Error(error.message);
       }
-    };
 
-    void run();
+      setToastMessage("Consignment approved!");
+      setShowToast(true);
+      await reloadAll();
+    } catch (err: unknown) {
+      console.error("handleApprove error:", err);
+      setToastMessage(err instanceof Error ? err.message : "Approval failed");
+      setShowToast(true);
+    }
+  };
 
-    return () => {
-      alive = false;
-    };
-  }, [selectedDate]);
+  const handleReject = async (id: string): Promise<void> => {
+    try {
+      const reason = (rejectReasons[id] ?? "").trim();
 
-  const pieData: PieRow[] = useMemo(
-    () => [
-      { name: "Walk-in", value: totals.walkin },
-      { name: "Reservation", value: totals.reservation },
-      { name: "Promo", value: totals.promo },
-    ],
-    [totals.walkin, totals.reservation, totals.promo],
-  );
+      const { error } = await supabase.rpc("reject_consignment", {
+        p_consignment_id: id,
+        p_reason: reason || null,
+      });
 
-  const pieTotal = useMemo(
-    () => totals.walkin + totals.reservation + totals.promo,
-    [totals.walkin, totals.reservation, totals.promo],
-  );
+      if (error) {
+        console.error("reject_consignment rpc error:", error);
+        throw new Error(error.message);
+      }
 
-  const walkinPct = useMemo(
-    () => formatPct(pct(totals.walkin, totals.all)),
-    [totals.walkin, totals.all],
-  );
-  const reservePct = useMemo(
-    () => formatPct(pct(totals.reservation, totals.all)),
-    [totals.reservation, totals.all],
-  );
-  const promoPct = useMemo(
-    () => formatPct(pct(totals.promo, totals.all)),
-    [totals.promo, totals.all],
-  );
+      setToastMessage("Consignment rejected!");
+      setShowToast(true);
+      await reloadAll();
+    } catch (err: unknown) {
+      console.error("handleReject error:", err);
+      setToastMessage(err instanceof Error ? err.message : "Reject failed");
+      setShowToast(true);
+    }
+  };
+
+  const filteredHistory = useMemo(() => {
+    if (historyFilter === "approved") {
+      return historyItems.filter((item) => item.approval_status === "approved");
+    }
+    if (historyFilter === "rejected") {
+      return historyItems.filter((item) => item.approval_status === "rejected");
+    }
+    return historyItems;
+  }, [historyItems, historyFilter]);
 
   return (
-    <div className="admin-dashboard-page">
-      <div className="admin-dashboard-wrap">
-        <div className="admin-dash-headline">
-          <div>
-            <span className="admin-dash-badge">Metyme Lounge Performance</span>
-            <h2>Admin Dashboard</h2>
-            <p>Monitor walk-ins, reservations, promos, and weekly activity.</p>
+    <div className="aca-page">
+      <div className="aca-shell">
+        <div className="aca-head">
+          <h1 className="aca-title">Consignment Approval</h1>
+          <p className="aca-subtitle">Review and approve pending consignment items.</p>
+        </div>
+
+        <div className="aca-section">
+          <div className="aca-section-head">
+            <h2 className="aca-section-title">Pending Items</h2>
+
+            <button className="aca-btn aca-btn-approve" onClick={() => void reloadAll()}>
+              Refresh
+            </button>
           </div>
 
-          <button
-            type="button"
-            className="admin-dash-date-btn"
-            onClick={() => setOpenCalendar(true)}
-          >
-            <img src={iconCalendar} alt="Calendar" />
-            <span>{prettyDate}</span>
-          </button>
-        </div>
-
-        <div className="admin-dash-totals-row">
-          <motion.div
-            className="admin-dash-total-card admin-dash-total-card--walkin"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={cardSpring}
-          >
-            <img className="admin-dash-total-icon" src={iconWalkin} alt="Walk-in" />
-
-            <div className="admin-dash-total-meta">
-              <div className="admin-dash-total-label">Walk-in</div>
-              <AnimatePresence mode="popLayout">
-                <motion.div
-                  key={`walkin-${pulseKey}-${totals.walkin}`}
-                  className="admin-dash-total-value"
-                  initial={{ scale: 0.92, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.92, opacity: 0 }}
-                  transition={numberSpring}
-                >
-                  {totals.walkin}
-                </motion.div>
-              </AnimatePresence>
+          {loading ? (
+            <div className="aca-loading">
+              <div className="aca-spinner" />
             </div>
+          ) : items.length === 0 ? (
+            <div className="aca-empty">No pending consignment items.</div>
+          ) : (
+            <div className="aca-list">
+              {items.map((item) => (
+                <div key={item.id} className="aca-card">
+                  <div className="aca-card-grid">
+                    <div className="aca-image-wrap">
+                      {item.image_url ? (
+                        <img src={item.image_url} alt={item.item_name} className="aca-image" />
+                      ) : (
+                        <div className="aca-no-image">No Image</div>
+                      )}
+                    </div>
 
-            <div className="admin-dash-total-percent">
-              <strong>{walkinPct}</strong>
-              <span>of total</span>
-            </div>
-          </motion.div>
+                    <div className="aca-details">
+                      <div className="aca-item-title">{item.item_name}</div>
 
-          <motion.div
-            className="admin-dash-total-card admin-dash-total-card--reserve"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ ...cardSpring, delay: 0.03 }}
-          >
-            <img
-              className="admin-dash-total-icon"
-              src={iconReserve}
-              alt="Reservation"
-            />
+                      <div className="aca-info-grid">
+                        <div className="aca-info-pill">
+                          <span className="aca-info-label">Full Name</span>
+                          <span className="aca-info-value">{item.full_name}</span>
+                        </div>
 
-            <div className="admin-dash-total-meta">
-              <div className="admin-dash-total-label">Reservation</div>
-              <AnimatePresence mode="popLayout">
-                <motion.div
-                  key={`reserve-${pulseKey}-${totals.reservation}`}
-                  className="admin-dash-total-value"
-                  initial={{ scale: 0.92, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.92, opacity: 0 }}
-                  transition={numberSpring}
-                >
-                  {totals.reservation}
-                </motion.div>
-              </AnimatePresence>
-            </div>
+                        <div className="aca-info-pill">
+                          <span className="aca-info-label">Category</span>
+                          <span className="aca-info-value">{item.category ?? "-"}</span>
+                        </div>
 
-            <div className="admin-dash-total-percent">
-              <strong>{reservePct}</strong>
-              <span>of total</span>
-            </div>
-          </motion.div>
+                        <div className="aca-info-pill">
+                          <span className="aca-info-label">Size</span>
+                          <span className="aca-info-value">{item.size ?? "-"}</span>
+                        </div>
 
-          <motion.div
-            className="admin-dash-total-card admin-dash-total-card--promo"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ ...cardSpring, delay: 0.06 }}
-          >
-            <img className="admin-dash-total-icon" src={iconPromo} alt="Promo" />
+                        <div className="aca-info-pill">
+                          <span className="aca-info-label">Price</span>
+                          <span className="aca-info-value">₱{Number(item.price).toFixed(2)}</span>
+                        </div>
 
-            <div className="admin-dash-total-meta">
-              <div className="admin-dash-total-label">Promo</div>
-              <AnimatePresence mode="popLayout">
-                <motion.div
-                  key={`promo-${pulseKey}-${totals.promo}`}
-                  className="admin-dash-total-value"
-                  initial={{ scale: 0.92, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.92, opacity: 0 }}
-                  transition={numberSpring}
-                >
-                  {totals.promo}
-                </motion.div>
-              </AnimatePresence>
-            </div>
+                        <div className="aca-info-pill">
+                          <span className="aca-info-label">Restocked</span>
+                          <span className="aca-info-value">{item.restocked}</span>
+                        </div>
 
-            <div className="admin-dash-total-percent">
-              <strong>{promoPct}</strong>
-              <span>of total</span>
-            </div>
-          </motion.div>
+                        <div className="aca-info-pill">
+                          <span className="aca-info-label">Status</span>
+                          <span className="aca-info-value aca-status">{item.approval_status}</span>
+                        </div>
+                      </div>
 
-          <motion.div
-            className="admin-dash-total-card admin-dash-total-card--all"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ ...cardSpring, delay: 0.09 }}
-          >
-            <img className="admin-dash-total-icon" src={iconAll} alt="All" />
+                      <div className="aca-reason-item">
+                        <label className="aca-reason-label" htmlFor={`reject-${item.id}`}>
+                          Reject Reason (optional)
+                        </label>
 
-            <div className="admin-dash-total-meta">
-              <div className="admin-dash-total-label">Total All</div>
-              <AnimatePresence mode="popLayout">
-                <motion.div
-                  key={`all-${pulseKey}-${totals.all}`}
-                  className="admin-dash-total-value"
-                  initial={{ scale: 0.92, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.92, opacity: 0 }}
-                  transition={numberSpring}
-                >
-                  {totals.all}
-                </motion.div>
-              </AnimatePresence>
-            </div>
-
-            <div className="admin-dash-total-percent">
-              <strong>100%</strong>
-              <span>overview</span>
-            </div>
-          </motion.div>
-        </div>
-
-        <div className="admin-dash-charts-grid">
-          <motion.div
-            className="admin-dash-chart-card"
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ ...cardSpring, delay: 0.12 }}
-          >
-            <div className="admin-dash-chart-head">
-              <div>
-                <div className="admin-dash-chart-title">Total All (7 days)</div>
-                <div className="admin-dash-chart-sub">{weekRangeLabel}</div>
-              </div>
-            </div>
-
-            {weekLoading ? (
-              <div className="admin-dash-chart-loading">
-                <div className="admin-dash-loader" />
-                <div>Loading...</div>
-              </div>
-            ) : (
-              <div className="admin-dash-line-wrap">
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart
-                    data={weekSeries}
-                    margin={{ top: 10, right: 18, left: 0, bottom: 0 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="day" />
-                    <YAxis allowDecimals={false} />
-                    <Tooltip />
-                    <Line
-                      type="monotone"
-                      dataKey="total"
-                      stroke="#0f5a4a"
-                      strokeWidth={3}
-                      dot={{ r: 4 }}
-                      activeDot={{ r: 6 }}
-                      isAnimationActive
-                      animationDuration={700}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-          </motion.div>
-
-          <motion.div
-            className="admin-dash-chart-card"
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ ...cardSpring, delay: 0.16 }}
-          >
-            <div className="admin-dash-chart-head">
-              <div>
-                <div className="admin-dash-chart-title">Breakdown</div>
-                <div className="admin-dash-chart-sub">{prettyDate}</div>
-              </div>
-            </div>
-
-            {pieTotal <= 0 ? (
-              <div className="admin-dash-chart-empty">No data for this date.</div>
-            ) : (
-              <div className="admin-dash-chart-body">
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={pieData}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={68}
-                      outerRadius={104}
-                      paddingAngle={3}
-                      isAnimationActive
-                      animationDuration={700}
-                    >
-                      {pieData.map((entry) => (
-                        <Cell
-                          key={`cell-${entry.name}`}
-                          fill={PIE_COLORS[entry.name]}
+                        <textarea
+                          id={`reject-${item.id}`}
+                          className="aca-reason-textarea"
+                          value={rejectReasons[item.id] ?? ""}
+                          placeholder="Type reason here..."
+                          onChange={(e) =>
+                            setRejectReasons((prev) => ({
+                              ...prev,
+                              [item.id]: e.target.value,
+                            }))
+                          }
                         />
-                      ))}
-                    </Pie>
+                      </div>
 
-                    <Tooltip
-                      formatter={(value: unknown, name: unknown) => {
-                        const v = typeof value === "number" ? value : Number(value);
-                        const label = String(name);
-                        const pv = Number.isFinite(v) ? v : 0;
-                        return [`${pv} (${formatPct(pct(pv, pieTotal))})`, label];
-                      }}
-                    />
+                      <div className="aca-actions">
+                        <button
+                          className="aca-btn aca-btn-approve"
+                          onClick={() => void handleApprove(item.id)}
+                        >
+                          Approve
+                        </button>
 
-                    <Legend verticalAlign="bottom" />
-                  </PieChart>
-                </ResponsiveContainer>
-
-                <div className="admin-dash-chart-center">
-                  <div className="admin-dash-chart-center-label">Total</div>
-                  <AnimatePresence mode="popLayout">
-                    <motion.div
-                      key={`pieTotal-${pulseKey}-${pieTotal}`}
-                      className="admin-dash-chart-center-value"
-                      initial={{ scale: 0.92, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      exit={{ scale: 0.92, opacity: 0 }}
-                      transition={numberSpring}
-                    >
-                      {pieTotal}
-                    </motion.div>
-                  </AnimatePresence>
+                        <button
+                          className="aca-btn aca-btn-reject"
+                          onClick={() => void handleReject(item.id)}
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            )}
-          </motion.div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="aca-section aca-history-section">
+          <div className="aca-section-head aca-section-head--history">
+            <h2 className="aca-section-title">Approval Records</h2>
+          </div>
+
+          <div className="aca-history-toolbar">
+            <div className="aca-segment" role="tablist" aria-label="History Filter">
+              <button
+                className={`aca-segment-btn ${historyFilter === "all" ? "active" : ""}`}
+                onClick={() => setHistoryFilter("all")}
+                type="button"
+              >
+                All
+              </button>
+              <button
+                className={`aca-segment-btn ${historyFilter === "approved" ? "active" : ""}`}
+                onClick={() => setHistoryFilter("approved")}
+                type="button"
+              >
+                Approved
+              </button>
+              <button
+                className={`aca-segment-btn ${historyFilter === "rejected" ? "active" : ""}`}
+                onClick={() => setHistoryFilter("rejected")}
+                type="button"
+              >
+                Rejected
+              </button>
+            </div>
+
+            <button className="aca-btn aca-btn-approve" onClick={() => void loadHistory()}>
+              Refresh Records
+            </button>
+          </div>
+
+          {historyLoading ? (
+            <div className="aca-loading">
+              <div className="aca-spinner" />
+            </div>
+          ) : filteredHistory.length === 0 ? (
+            <div className="aca-empty">No approval records found.</div>
+          ) : (
+            <div className="aca-table-wrap">
+              <table className="aca-table">
+                <thead>
+                  <tr>
+                    <th>Date Submitted</th>
+                    <th>Decision Date</th>
+                    <th>Full Name</th>
+                    <th>Item Name</th>
+                    <th>Category</th>
+                    <th>Size</th>
+                    <th>Price</th>
+                    <th>Restocked</th>
+                    <th>Status</th>
+                    <th>Reject Reason</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredHistory.map((item) => (
+                    <tr key={item.id}>
+                      <td>{formatDateTime(item.created_at)}</td>
+                      <td>{formatDateTime(item.approved_at)}</td>
+                      <td>{item.full_name}</td>
+                      <td>{item.item_name}</td>
+                      <td>{item.category ?? "-"}</td>
+                      <td>{item.size ?? "-"}</td>
+                      <td>₱{Number(item.price).toFixed(2)}</td>
+                      <td>{item.restocked}</td>
+                      <td>
+                        <span
+                          className={`aca-badge ${
+                            item.approval_status === "approved"
+                              ? "aca-badge-approved"
+                              : "aca-badge-rejected"
+                          }`}
+                        >
+                          {item.approval_status}
+                        </span>
+                      </td>
+                      <td>{item.rejection_reason?.trim() ? item.rejection_reason : "-"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>
 
-      {openCalendar && (
-        <div className="admin-dash-calendar-overlay" onClick={() => setOpenCalendar(false)}>
-          <div
-            className="admin-dash-calendar-card"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="admin-dash-calendar-head">
-              <h3>Select Date</h3>
-              <button
-                type="button"
-                className="admin-dash-calendar-close"
-                onClick={() => setOpenCalendar(false)}
-              >
-                Close
-              </button>
-            </div>
-
-            <input
-              type="date"
-              className="admin-dash-calendar-input"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-            />
-
-            <div className="admin-dash-calendar-actions">
-              <button
-                type="button"
-                className="admin-dash-calendar-btn secondary"
-                onClick={() => setSelectedDate(todayYYYYMMDD)}
-              >
-                Today
-              </button>
-
-              <button
-                type="button"
-                className="admin-dash-calendar-btn primary"
-                onClick={() => setOpenCalendar(false)}
-              >
-                Done
-              </button>
-            </div>
-          </div>
+      {showToast && (
+        <div className="aca-toast" role="status" aria-live="polite">
+          {toastMessage}
         </div>
       )}
     </div>
   );
 };
 
-export default Admin_Dashboard;
+export default Admin_Consignment_Approval;
