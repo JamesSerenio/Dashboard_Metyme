@@ -1,553 +1,993 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import seatsImage from "../assets/seats.png";
+import bearImage from "../assets/bear.png";
+import grassImage from "../assets/grass.png";
 import { supabase } from "../utils/supabaseClient";
-import { motion, AnimatePresence } from "framer-motion";
-import {
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  Tooltip,
-  Legend,
-  LineChart,
-  Line,
-  CartesianGrid,
-  XAxis,
-  YAxis,
-} from "recharts";
-import "../styles/admin_dashboard.css";
+import "../styles/Admin_Seat_Table.css";
 
-import iconWalkin from "../assets/list.png";
-import iconReserve from "../assets/reserve.png";
-import iconPromo from "../assets/discount.png";
-import iconAll from "../assets/all.png";
-import iconCalendar from "../assets/calendar.png";
+type SeatStatus = "temp_available" | "occupied_temp" | "occupied" | "reserved";
+type PinKind = "seat" | "room";
 
-type Totals = {
-  walkin: number;
-  reservation: number;
-  promo: number;
-  all: number;
+type SeatPin = {
+  id: string;
+  label: string;
+  x: number;
+  y: number;
+  kind: PinKind;
+  readonly?: boolean;
+  fixedStatus?: SeatStatus;
 };
 
-type PieName = "Walk-in" | "Reservation" | "Promo";
+type StoredPos = { x: number; y: number };
+type StoredMap = Record<string, StoredPos>;
 
-type PieRow = {
-  name: PieName;
-  value: number;
+type SeatBlockedRow = {
+  seat_number: string;
+  start_at: string;
+  end_at: string;
+  source: "promo" | "regular" | "reserved" | string;
+  note: string | null;
 };
 
-type LineRow = {
-  day: string;
-  total: number;
+type PromoBookingRow = {
+  id: string;
+  start_at: string;
+  end_at: string;
+  status: string;
+  area: string;
+  seat_number: string | null;
+  full_name: string;
 };
 
-const PIE_COLORS: Record<PieName, string> = {
-  "Walk-in": "#2f3b2f",
-  Reservation: "#6a3fb5",
-  Promo: "#c04b1a",
+type PackageRow = { id: string; area?: string };
+type PackageOptionRow = { id: string };
+
+const STORAGE_KEY = "seatmap_pin_positions_v1";
+const CONFERENCE_ID = "CONFERENCE_ROOM";
+
+const SWATCH_GREEN_ID = "__SWATCH_GREEN__";
+const SWATCH_YELLOW_ID = "__SWATCH_YELLOW__";
+const SWATCH_RED_ID = "__SWATCH_RED__";
+const SWATCH_PURPLE_ID = "__SWATCH_PURPLE__";
+
+const STATUS_COLOR: Record<SeatStatus, string> = {
+  temp_available: "seat-green",
+  occupied_temp: "seat-yellow",
+  occupied: "seat-orange",
+  reserved: "seat-purple",
 };
 
-const pad2 = (n: number): string => String(n).padStart(2, "0");
-
-const toYYYYMMDD = (d: Date): string => {
-  const y = d.getFullYear();
-  const m = pad2(d.getMonth() + 1);
-  const day = pad2(d.getDate());
-  return `${y}-${m}-${day}`;
-};
-
-const formatPretty = (yyyyMmDd: string): string => {
-  const [y, m, d] = yyyyMmDd.split("-").map(Number);
-  const dt = new Date(y, m - 1, d);
-  return dt.toLocaleDateString("en-US", {
+const formatPHDate = (d: Date): string =>
+  d.toLocaleDateString("en-PH", {
+    weekday: "short",
     year: "numeric",
-    month: "long",
-    day: "2-digit",
-  });
-};
-
-const formatShort = (yyyyMmDd: string): string => {
-  const [y, m, d] = yyyyMmDd.split("-").map(Number);
-  const dt = new Date(y, m - 1, d);
-  return dt.toLocaleDateString("en-US", {
     month: "short",
     day: "2-digit",
   });
+
+const normalizeSeatId = (v: string): string => String(v).trim();
+
+const farFutureIso = (): string => new Date("2999-12-31T23:59:59.000Z").toISOString();
+
+const isTempName = (name: string): boolean => name.trim().toLowerCase().startsWith("temp");
+const isTempMirrorNote = (note: string | null): boolean => (note ?? "").trim().toLowerCase() === "temp";
+
+const isStoredPos = (v: unknown): v is StoredPos => {
+  if (typeof v !== "object" || v === null) return false;
+  const obj = v as Record<string, unknown>;
+  return (
+    typeof obj.x === "number" &&
+    Number.isFinite(obj.x) &&
+    typeof obj.y === "number" &&
+    Number.isFinite(obj.y)
+  );
 };
 
-const addDaysYYYYMMDD = (yyyyMmDd: string, delta: number): string => {
-  const [y, m, d] = yyyyMmDd.split("-").map(Number);
-  const dt = new Date(y, m - 1, d);
-  dt.setDate(dt.getDate() + delta);
-  return toYYYYMMDD(dt);
+const loadStored = (): StoredMap => {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return {};
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed !== "object" || parsed === null) return {};
+    const rec = parsed as Record<string, unknown>;
+
+    const out: StoredMap = {};
+    for (const k of Object.keys(rec)) {
+      const v = rec[k];
+      if (isStoredPos(v)) out[k] = v;
+    }
+    return out;
+  } catch {
+    return {};
+  }
 };
 
-const pct = (part: number, total: number): number => {
-  if (!Number.isFinite(part) || !Number.isFinite(total) || total <= 0) return 0;
-  return (part / total) * 100;
+const saveStored = (m: StoredMap): void => {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(m));
 };
 
-const formatPct = (n: number): string => {
-  if (!Number.isFinite(n)) return "0%";
-  const rounded1 = Math.round(n * 10) / 10;
-  const isInt = Math.abs(rounded1 - Math.round(rounded1)) < 1e-9;
-  return `${isInt ? Math.round(rounded1) : rounded1}%`;
+const normalizeDurationHHMM = (value: string): string | null => {
+  const raw = value
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "")
+    .replace(/[^0-9:]/g, "");
+  if (!raw) return null;
+
+  let m = raw.match(/^(\d{1,8}):(\d{1,2})$/);
+  if (m) {
+    const h = parseInt(m[1], 10);
+    const mm = parseInt(m[2], 10);
+    if (!Number.isFinite(h) || !Number.isFinite(mm)) return null;
+    if (h < 0) return null;
+    if (mm < 0 || mm > 59) return null;
+    if (h === 0 && mm === 0) return null;
+    return `${h.toString().padStart(2, "0")}:${mm.toString().padStart(2, "0")}`;
+  }
+
+  m = raw.match(/^(\d{1,8})$/);
+  if (m) {
+    const digits = m[1];
+
+    if (digits.length === 3 || digits.length === 4) {
+      const s = digits.padStart(4, "0");
+      const hh = parseInt(s.slice(0, 2), 10);
+      const mm = parseInt(s.slice(2), 10);
+      if (mm <= 59) {
+        if (hh === 0 && mm === 0) return null;
+        return `${hh.toString().padStart(2, "0")}:${mm.toString().padStart(2, "0")}`;
+      }
+    }
+
+    const h = parseInt(digits, 10);
+    if (!Number.isFinite(h) || h <= 0) return null;
+    return `${h.toString().padStart(2, "0")}:00`;
+  }
+
+  return null;
 };
 
-const cardSpring = {
-  type: "spring" as const,
-  stiffness: 180,
-  damping: 18,
-  mass: 0.9,
+const addDurationToIso = (startIso: string, hhmm: string): string => {
+  const start = new Date(startIso);
+  if (!Number.isFinite(start.getTime())) return startIso;
+
+  const [hh, mm] = hhmm.split(":");
+  const h = Number(hh);
+  const m = Number(mm);
+  if (Number.isNaN(h) || Number.isNaN(m)) return startIso;
+
+  const totalMin = h * 60 + m;
+  return new Date(start.getTime() + totalMin * 60_000).toISOString();
 };
 
-const numberSpring = {
-  type: "spring" as const,
-  stiffness: 260,
-  damping: 20,
-  mass: 0.6,
-};
+const Admin_Seat_Table: React.FC = () => {
+  const defaultPins: SeatPin[] = useMemo(
+    () => [
+      { id: CONFERENCE_ID, label: "CONFERENCE ROOM", x: 13, y: 21.6, kind: "room" },
 
-const Admin_Dashboard: React.FC = () => {
-  const todayYYYYMMDD = useMemo(() => toYYYYMMDD(new Date()), []);
+      { id: "6", label: "6", x: 39.3, y: 29, kind: "seat" },
+      { id: "5", label: "5", x: 45.8, y: 29, kind: "seat" },
+      { id: "4", label: "4", x: 52.5, y: 29, kind: "seat" },
+      { id: "3", label: "3", x: 58.9, y: 29, kind: "seat" },
+      { id: "2", label: "2", x: 73.6, y: 29, kind: "seat" },
+      { id: "1", label: "1", x: 80.2, y: 29, kind: "seat" },
 
-  const [selectedDate, setSelectedDate] = useState<string>(todayYYYYMMDD);
-  const [openCalendar, setOpenCalendar] = useState<boolean>(false);
+      { id: "11", label: "11", x: 13, y: 40.7, kind: "seat" },
+      { id: "10", label: "10", x: 25.5, y: 42.7, kind: "seat" },
+      { id: "9", label: "9", x: 28, y: 39.5, kind: "seat" },
 
-  const [totals, setTotals] = useState<Totals>({
-    walkin: 0,
-    reservation: 0,
-    promo: 0,
-    all: 0,
-  });
+      { id: "8A", label: "8A", x: 42, y: 39.5, kind: "seat" },
+      { id: "8B", label: "8B", x: 42.0, y: 43, kind: "seat" },
 
-  const [pulseKey, setPulseKey] = useState<number>(0);
-  const [weekSeries, setWeekSeries] = useState<LineRow[]>([]);
-  const [weekLoading, setWeekLoading] = useState<boolean>(false);
+      { id: "7A", label: "7A", x: 58, y: 39.7, kind: "seat" },
+      { id: "7B", label: "7B", x: 58.2, y: 43, kind: "seat" },
 
-  const prettyDate = useMemo(() => formatPretty(selectedDate), [selectedDate]);
-  const weekStart = useMemo(
-    () => addDaysYYYYMMDD(selectedDate, -6),
-    [selectedDate],
+      { id: "13", label: "13", x: 42.5, y: 62.2, kind: "seat" },
+
+      { id: "14", label: "14", x: 47.8, y: 52.3, kind: "seat" },
+      { id: "15", label: "15", x: 54.5, y: 52.3, kind: "seat" },
+      { id: "16", label: "16", x: 61, y: 52.2, kind: "seat" },
+      { id: "17", label: "17", x: 67.6, y: 52.3, kind: "seat" },
+
+      { id: "25", label: "25", x: 55.5, y: 60.8, kind: "seat" },
+
+      { id: "18", label: "18", x: 47.8, y: 69.5, kind: "seat" },
+      { id: "19", label: "19", x: 56.7, y: 69.5, kind: "seat" },
+      { id: "20", label: "20", x: 65.8, y: 69.5, kind: "seat" },
+
+      { id: "24", label: "24", x: 76, y: 56.7, kind: "seat" },
+      { id: "23", label: "23", x: 81.5, y: 59.5, kind: "seat" },
+      { id: "22", label: "22", x: 74.4, y: 65.3, kind: "seat" },
+      { id: "21", label: "21", x: 82, y: 68.7, kind: "seat" },
+
+      { id: "12A", label: "12A", x: 9.1, y: 67, kind: "seat" },
+      { id: "12B", label: "12B", x: 16.5, y: 68.3, kind: "seat" },
+      { id: "12C", label: "12C", x: 24, y: 68.2, kind: "seat" },
+
+      { id: SWATCH_GREEN_ID, label: "", x: 90, y: 83.5, kind: "seat", readonly: true, fixedStatus: "temp_available" },
+      { id: SWATCH_YELLOW_ID, label: "", x: 90, y: 88, kind: "seat", readonly: true, fixedStatus: "occupied_temp" },
+      { id: SWATCH_RED_ID, label: "", x: 90, y: 92.5, kind: "seat", readonly: true, fixedStatus: "occupied" },
+      { id: SWATCH_PURPLE_ID, label: "", x: 90, y: 96, kind: "seat", readonly: true, fixedStatus: "reserved" },
+    ],
+    []
   );
 
-  const weekRangeLabel = useMemo(() => {
-    return `${formatPretty(weekStart)} – ${formatPretty(selectedDate)}`;
-  }, [weekStart, selectedDate]);
+  const [stored, setStored] = useState<StoredMap>(() => loadStored());
+  const [statusBySeat, setStatusBySeat] = useState<Record<string, SeatStatus>>({});
+  const [now, setNow] = useState<Date>(new Date());
 
-  const fetchTotalsForDate = async (dateYYYYMMDD: string): Promise<Totals> => {
-    const walkinQ = supabase
-      .from("customer_sessions")
-      .select("id", { count: "exact", head: true })
-      .eq("date", dateYYYYMMDD)
-      .eq("reservation", "no");
+  const calibrate = useMemo(() => {
+    try {
+      const url = new URL(window.location.href);
+      return url.searchParams.get("calibrate") === "1";
+    } catch {
+      return false;
+    }
+  }, []);
 
-    const reservationQ = supabase
-      .from("customer_sessions")
-      .select("id", { count: "exact", head: true })
-      .eq("date", dateYYYYMMDD)
-      .eq("reservation", "yes");
+  const [selectedPinId, setSelectedPinId] = useState<string>("");
+  const stageRef = useRef<HTMLDivElement | null>(null);
 
-    const startOfDay = new Date(`${dateYYYYMMDD}T00:00:00`);
-    const endOfDay = new Date(`${dateYYYYMMDD}T23:59:59`);
+  const pins: SeatPin[] = useMemo(() => {
+    return defaultPins.map((p) => {
+      if (p.readonly) return p;
+      const s = stored[p.id];
+      if (!s) return p;
+      return { ...p, x: s.x, y: s.y };
+    });
+  }, [defaultPins, stored]);
 
-    const promoQ = supabase
-      .from("promo_bookings")
-      .select("id", { count: "exact", head: true })
-      .gte("start_at", startOfDay.toISOString())
-      .lte("start_at", endOfDay.toISOString());
+  const seatIdsOnly = useMemo<string[]>(
+    () => pins.filter((p) => p.kind === "seat" && !p.readonly).map((p) => p.id),
+    [pins]
+  );
 
-    const [walkinRes, reservationRes, promoRes] = await Promise.all([
-      walkinQ,
-      reservationQ,
-      promoQ,
-    ]);
+  const blockedIds = useMemo<string[]>(() => [...seatIdsOnly, CONFERENCE_ID], [seatIdsOnly]);
 
-    const walkin = walkinRes.count ?? 0;
-    const reservation = reservationRes.count ?? 0;
-    const promo = promoRes.count ?? 0;
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedSeat, setSelectedSeat] = useState<string>("");
+  const [selectedKind, setSelectedKind] = useState<PinKind>("seat");
 
-    return {
-      walkin,
-      reservation,
-      promo,
-      all: walkin + reservation + promo,
+  const [fullName, setFullName] = useState<string>("TEMP OCCUPIED");
+  const [openTime, setOpenTime] = useState<boolean>(false);
+  const [durationInput, setDurationInput] = useState<string>("01:00");
+  const [saving, setSaving] = useState<boolean>(false);
+
+  const [packageIdCommon, setPackageIdCommon] = useState<string>("");
+  const [packageIdConference, setPackageIdConference] = useState<string>("");
+  const [packageOptionId, setPackageOptionId] = useState<string>("");
+
+  useEffect(() => {
+    const t = window.setInterval(() => setNow(new Date()), 60000);
+    return () => window.clearInterval(t);
+  }, []);
+
+  useEffect(() => {
+    document.body.style.overflow = isModalOpen ? "hidden" : "";
+    document.documentElement.style.overflow = isModalOpen ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+      document.documentElement.style.overflow = "";
     };
+  }, [isModalOpen]);
+
+  const loadRequiredIds = async (): Promise<void> => {
+    const pkgCommonReq = supabase.from("packages").select("id, area").eq("area", "common_area").limit(1);
+    const pkgConfReq = supabase.from("packages").select("id, area").eq("area", "conference_room").limit(1);
+    const optReq = supabase.from("package_options").select("id").limit(1);
+
+    const [
+      { data: pkgsCommon, error: pkgCommonErr },
+      { data: pkgsConf, error: pkgConfErr },
+      { data: opts, error: optErr },
+    ] = await Promise.all([pkgCommonReq, pkgConfReq, optReq]);
+
+    if (pkgCommonErr) console.error("packages(common_area) load error:", pkgCommonErr.message);
+    if (pkgConfErr) console.error("packages(conference_room) load error:", pkgConfErr.message);
+    if (optErr) console.error("package_options load error:", optErr.message);
+
+    const common = (pkgsCommon ?? [])[0] as PackageRow | undefined;
+    const conf = (pkgsConf ?? [])[0] as PackageRow | undefined;
+    const opt = (opts ?? [])[0] as PackageOptionRow | undefined;
+
+    if (common?.id) setPackageIdCommon(common.id);
+    if (conf?.id) setPackageIdConference(conf.id);
+    if (opt?.id) setPackageOptionId(opt.id);
   };
 
   useEffect(() => {
-    let alive = true;
+    void loadRequiredIds();
+  }, []);
 
-    const run = async (): Promise<void> => {
-      const t = await fetchTotalsForDate(selectedDate);
-      if (!alive) return;
+  const isConference = (id: string): boolean => id === CONFERENCE_ID;
 
-      setTotals(t);
-      setPulseKey((k) => k + 1);
+  const getAreaForSelection = (kind: PinKind): "common_area" | "conference_room" =>
+    kind === "room" ? "conference_room" : "common_area";
 
-      setWeekLoading(true);
+  const buildEndIso = (startIso: string): string => {
+    if (openTime) return farFutureIso();
+    const dur = normalizeDurationHHMM(durationInput);
+    if (!dur) return new Date(new Date(startIso).getTime() + 60_000).toISOString();
+    return addDurationToIso(startIso, dur);
+  };
 
-      try {
-        const days: string[] = Array.from({ length: 7 }, (_, i) =>
-          addDaysYYYYMMDD(selectedDate, i - 6),
-        );
+  const openManageModalForPin = (pinId: string, kind: PinKind): void => {
+    setSelectedSeat(pinId);
+    setSelectedKind(kind);
+    setOpenTime(false);
+    setDurationInput("01:00");
+    setFullName("TEMP OCCUPIED");
+    setIsModalOpen(true);
+  };
 
-        const results = await Promise.all(
-          days.map(async (d) => {
-            const tt = await fetchTotalsForDate(d);
-            return {
-              day: formatShort(d),
-              total: tt.all,
-            };
-          }),
-        );
+  const checkConflicts = async (
+    pinId: string,
+    kind: PinKind,
+    startIso: string,
+    endIso: string
+  ): Promise<string | null> => {
+    const seatKey = kind === "room" ? CONFERENCE_ID : pinId;
 
-        if (!alive) return;
-        setWeekSeries(results);
-      } finally {
-        if (alive) setWeekLoading(false);
+    const { data: blk, error: blkErr } = await supabase
+      .from("seat_blocked_times")
+      .select("seat_number, source, note")
+      .eq("seat_number", seatKey)
+      .lt("start_at", endIso)
+      .gt("end_at", startIso);
+
+    if (blkErr) return `Block check error: ${blkErr.message}`;
+    if ((blk ?? []).length > 0) return "Already blocked (occupied/reserved).";
+
+    if (kind === "room") {
+      const { data: confRows, error: confErr } = await supabase
+        .from("promo_bookings")
+        .select("id")
+        .eq("area", "conference_room")
+        .eq("status", "active")
+        .is("seat_number", null)
+        .lt("start_at", endIso)
+        .gt("end_at", startIso);
+
+      if (confErr) return `Conference promo check error: ${confErr.message}`;
+      if ((confRows ?? []).length > 0) return "Conference room already has promo overlap.";
+    } else {
+      const { data: seatRows, error: seatErr } = await supabase
+        .from("promo_bookings")
+        .select("id")
+        .eq("area", "common_area")
+        .eq("status", "active")
+        .eq("seat_number", pinId)
+        .lt("start_at", endIso)
+        .gt("end_at", startIso);
+
+      if (seatErr) return `Seat promo check error: ${seatErr.message}`;
+      if ((seatRows ?? []).length > 0) return `Seat already has promo overlap: ${pinId}`;
+    }
+
+    return null;
+  };
+
+  const loadSeatStatuses = async (): Promise<void> => {
+    const nowIso = new Date().toISOString();
+    const endIso = farFutureIso();
+
+    const blockedReq = supabase
+      .from("seat_blocked_times")
+      .select("seat_number, start_at, end_at, source, note")
+      .in("seat_number", blockedIds)
+      .lt("start_at", endIso)
+      .gt("end_at", nowIso);
+
+    const promoSeatsReq = supabase
+      .from("promo_bookings")
+      .select("id, seat_number, start_at, end_at, status, area, full_name")
+      .eq("area", "common_area")
+      .eq("status", "active")
+      .in("seat_number", seatIdsOnly)
+      .gt("end_at", nowIso);
+
+    const promoConfReq = supabase
+      .from("promo_bookings")
+      .select("id, seat_number, start_at, end_at, status, area, full_name")
+      .eq("area", "conference_room")
+      .eq("status", "active")
+      .is("seat_number", null)
+      .gt("end_at", nowIso);
+
+    const [
+      { data: blockedData, error: blockedErr },
+      { data: promoSeatsData, error: promoSeatsErr },
+      { data: promoConfData, error: promoConfErr },
+    ] = await Promise.all([blockedReq, promoSeatsReq, promoConfReq]);
+
+    const next: Record<string, SeatStatus> = {};
+    for (const p of pins) next[p.id] = "temp_available";
+
+    const applyPromoRow = (targetId: string, row: PromoBookingRow): void => {
+      const nowT = new Date().getTime();
+      const sT = new Date(row.start_at).getTime();
+      const eT = new Date(row.end_at).getTime();
+      if (!Number.isFinite(sT) || !Number.isFinite(eT)) return;
+
+      if (isTempName(row.full_name)) {
+        if (sT <= nowT && nowT < eT) next[targetId] = "occupied_temp";
+        return;
+      }
+
+      if (sT <= nowT && nowT < eT) {
+        next[targetId] = "occupied";
+        return;
+      }
+
+      if (nowT < sT) {
+        if (next[targetId] === "temp_available") next[targetId] = "reserved";
       }
     };
 
-    void run();
+    if (promoSeatsErr) {
+      console.error("promo seats status error:", promoSeatsErr.message);
+    } else {
+      const rows = (promoSeatsData ?? []) as PromoBookingRow[];
+      for (const r of rows) {
+        const seat = r.seat_number ? normalizeSeatId(r.seat_number) : "";
+        if (!seat) continue;
+        applyPromoRow(seat, r);
+      }
+    }
 
-    return () => {
-      alive = false;
+    if (promoConfErr) {
+      console.error("promo conference status error:", promoConfErr.message);
+    } else {
+      const rows = (promoConfData ?? []) as PromoBookingRow[];
+      for (const r of rows) applyPromoRow(CONFERENCE_ID, r);
+    }
+
+    if (blockedErr) {
+      console.error("seat_blocked_times status error:", blockedErr.message);
+    } else {
+      const rows = (blockedData ?? []) as SeatBlockedRow[];
+      const bySeat: Record<string, SeatStatus> = {};
+
+      for (const r of rows) {
+        const id = normalizeSeatId(r.seat_number);
+
+        if (isTempMirrorNote(r.note)) continue;
+
+        if (r.source === "reserved") {
+          bySeat[id] = "reserved";
+          continue;
+        }
+
+        if (r.source === "regular") {
+          if (bySeat[id] !== "reserved") bySeat[id] = "occupied";
+          continue;
+        }
+
+        if (bySeat[id] !== "reserved") bySeat[id] = "occupied";
+      }
+
+      for (const id of blockedIds) {
+        if (bySeat[id]) next[id] = bySeat[id];
+      }
+    }
+
+    setStatusBySeat(next);
+  };
+
+  useEffect(() => {
+    void loadSeatStatuses();
+  }, [blockedIds.join("|"), pins.length]);
+
+  useEffect(() => {
+    const t = window.setInterval(() => void loadSeatStatuses(), 15000);
+    return () => window.clearInterval(t);
+  }, [blockedIds.join("|"), pins.length]);
+
+  const setPinPositionFromClick = (clientX: number, clientY: number): void => {
+    if (!calibrate) return;
+    if (!selectedPinId) return;
+
+    const pinObj = pins.find((p) => p.id === selectedPinId);
+    if (pinObj?.readonly) return;
+
+    const stage = stageRef.current;
+    if (!stage) return;
+
+    const rect = stage.getBoundingClientRect();
+    const xPx = clientX - rect.left;
+    const yPx = clientY - rect.top;
+
+    const xPct = (xPx / rect.width) * 100;
+    const yPct = (yPx / rect.height) * 100;
+
+    const x = Math.max(0, Math.min(100, Number(xPct.toFixed(2))));
+    const y = Math.max(0, Math.min(100, Number(yPct.toFixed(2))));
+
+    const next: StoredMap = { ...stored, [selectedPinId]: { x, y } };
+    setStored(next);
+    saveStored(next);
+  };
+
+  const onStageClick = (e: React.MouseEvent<HTMLDivElement>): void => {
+    if (!calibrate) return;
+    setPinPositionFromClick(e.clientX, e.clientY);
+  };
+
+  const clearSaved = (): void => {
+    if (!calibrate) return;
+    localStorage.removeItem(STORAGE_KEY);
+    setStored({});
+    setSelectedPinId("");
+  };
+
+  const clearToAvailableNow = async (pinId: string, kind: PinKind): Promise<void> => {
+    const nowIso = new Date().toISOString();
+    const seatKey = kind === "room" ? CONFERENCE_ID : pinId;
+    const area = getAreaForSelection(kind);
+
+    setSaving(true);
+
+    const { error: delBlkErr } = await supabase
+      .from("seat_blocked_times")
+      .delete()
+      .eq("seat_number", seatKey)
+      .lt("start_at", nowIso)
+      .gt("end_at", nowIso);
+
+    if (delBlkErr) {
+      setSaving(false);
+      return alert(`Delete blocked error: ${delBlkErr.message}`);
+    }
+
+    const promoBase = supabase
+      .from("promo_bookings")
+      .select("id")
+      .eq("area", area)
+      .eq("status", "active")
+      .lt("start_at", nowIso)
+      .gt("end_at", nowIso);
+
+    const { data: promoRows, error: promoErr } =
+      kind === "room"
+        ? await promoBase.is("seat_number", null)
+        : await promoBase.eq("seat_number", seatKey);
+
+    if (promoErr) {
+      setSaving(false);
+      return alert(`Load promo error: ${promoErr.message}`);
+    }
+
+    const ids = (promoRows ?? []).map((r: { id: string }) => r.id);
+    if (ids.length > 0) {
+      const { error: delPromoErr } = await supabase.from("promo_bookings").delete().in("id", ids);
+      if (delPromoErr) {
+        setSaving(false);
+        return alert(`Delete promo error: ${delPromoErr.message}`);
+      }
+    }
+
+    setSaving(false);
+    setIsModalOpen(false);
+    setSelectedSeat("");
+    await loadSeatStatuses();
+  };
+
+  const setBlocked = async (choice: "occupied" | "reserved"): Promise<void> => {
+    if (!selectedSeat) return;
+
+    if (!openTime) {
+      const dur = normalizeDurationHHMM(durationInput);
+      if (!dur) return alert("Invalid duration. Examples: 1 / 0:45 / 2:30 / 230 / 100:30");
+    }
+
+    const startIso = new Date().toISOString();
+    const endIso = buildEndIso(startIso);
+
+    const confMsg = await checkConflicts(selectedSeat, selectedKind, startIso, endIso);
+    if (confMsg) return alert(confMsg);
+
+    const seatKey = selectedKind === "room" ? CONFERENCE_ID : selectedSeat;
+    const area = getAreaForSelection(selectedKind);
+
+    setSaving(true);
+
+    {
+      const promoDel = supabase
+        .from("promo_bookings")
+        .delete()
+        .eq("area", area)
+        .eq("status", "active")
+        .lt("start_at", endIso)
+        .gt("end_at", startIso);
+
+      const { error: delTempErr } =
+        selectedKind === "room"
+          ? await promoDel.is("seat_number", null)
+          : await promoDel.eq("seat_number", seatKey);
+
+      if (delTempErr) {
+        setSaving(false);
+        return alert(`Failed removing promo first: ${delTempErr.message}`);
+      }
+    }
+
+    {
+      const { error: delMirrorErr } = await supabase
+        .from("seat_blocked_times")
+        .delete()
+        .eq("seat_number", seatKey)
+        .eq("note", "temp")
+        .lt("start_at", endIso)
+        .gt("end_at", startIso);
+
+      if (delMirrorErr) {
+        setSaving(false);
+        return alert(`Failed removing temp mirror: ${delMirrorErr.message}`);
+      }
+    }
+
+    const source = choice === "occupied" ? "regular" : "reserved";
+
+    const payload: {
+      seat_number: string;
+      start_at: string;
+      end_at: string;
+      source: string;
+      created_by?: string | null;
+      note?: string | null;
+    } = {
+      seat_number: seatKey,
+      start_at: startIso,
+      end_at: endIso,
+      source,
+      note: "admin_set",
     };
-  }, [selectedDate]);
 
-  const pieData: PieRow[] = useMemo(
-    () => [
-      { name: "Walk-in", value: totals.walkin },
-      { name: "Reservation", value: totals.reservation },
-      { name: "Promo", value: totals.promo },
-    ],
-    [totals.walkin, totals.reservation, totals.promo],
-  );
+    const { data: auth } = await supabase.auth.getUser();
+    if (auth?.user?.id) payload.created_by = auth.user.id;
 
-  const pieTotal = useMemo(
-    () => totals.walkin + totals.reservation + totals.promo,
-    [totals.walkin, totals.reservation, totals.promo],
-  );
+    const { error } = await supabase.from("seat_blocked_times").insert(payload);
 
-  const walkinPct = useMemo(
-    () => formatPct(pct(totals.walkin, totals.all)),
-    [totals.walkin, totals.all],
-  );
-  const reservePct = useMemo(
-    () => formatPct(pct(totals.reservation, totals.all)),
-    [totals.reservation, totals.all],
-  );
-  const promoPct = useMemo(
-    () => formatPct(pct(totals.promo, totals.all)),
-    [totals.promo, totals.all],
-  );
+    setSaving(false);
+    if (error) return alert(`Error saving: ${error.message}`);
+
+    setIsModalOpen(false);
+    setSelectedSeat("");
+    await loadSeatStatuses();
+  };
+
+  const saveTempOccupied = async (): Promise<void> => {
+    if (!selectedSeat) return;
+
+    const trimmed = fullName.trim();
+    if (!trimmed) return alert("Full Name is required.");
+
+    const finalName = isTempName(trimmed) ? trimmed : `TEMP ${trimmed}`;
+
+    const area = getAreaForSelection(selectedKind);
+    const pkgId = area === "common_area" ? packageIdCommon : packageIdConference;
+
+    if (!pkgId) {
+      return alert(
+        area === "common_area"
+          ? 'Missing package (area="common_area"). Create at least 1 common_area package.'
+          : 'Missing package (area="conference_room"). Create at least 1 conference_room package.'
+      );
+    }
+    if (!packageOptionId) return alert("Missing package option. Create at least 1 package option.");
+
+    if (!openTime) {
+      const dur = normalizeDurationHHMM(durationInput);
+      if (!dur) return alert("Invalid duration. Examples: 1 / 0:45 / 2:30 / 230 / 100:30");
+    }
+
+    const startIso = new Date().toISOString();
+    const endIso = buildEndIso(startIso);
+
+    const confMsg = await checkConflicts(selectedSeat, selectedKind, startIso, endIso);
+    if (confMsg) return alert(confMsg);
+
+    const { data: auth } = await supabase.auth.getUser();
+    if (!auth?.user) return alert("You must be logged in.");
+
+    setSaving(true);
+
+    {
+      const seatKey = selectedKind === "room" ? CONFERENCE_ID : selectedSeat;
+
+      const { error: delBlkErr } = await supabase
+        .from("seat_blocked_times")
+        .delete()
+        .eq("seat_number", seatKey)
+        .lt("start_at", endIso)
+        .gt("end_at", startIso);
+
+      if (delBlkErr) {
+        setSaving(false);
+        return alert(`Failed removing occupied/reserved first: ${delBlkErr.message}`);
+      }
+    }
+
+    const insertPromo: {
+      user_id: string;
+      full_name: string;
+      area: "common_area" | "conference_room";
+      package_id: string;
+      package_option_id: string;
+      seat_number: string | null;
+      start_at: string;
+      end_at: string;
+      price: number;
+      status: string;
+      gcash_amount: number;
+      cash_amount: number;
+      is_paid: boolean;
+      discount_kind: string;
+      discount_value: number;
+      discount_reason: string | null;
+    } = {
+      user_id: auth.user.id,
+      full_name: finalName,
+      area,
+      package_id: pkgId,
+      package_option_id: packageOptionId,
+      seat_number: selectedKind === "seat" ? selectedSeat : null,
+      start_at: startIso,
+      end_at: endIso,
+      price: 0,
+      status: "active",
+      gcash_amount: 0,
+      cash_amount: 0,
+      is_paid: false,
+      discount_kind: "none",
+      discount_value: 0,
+      discount_reason: null,
+    };
+
+    const { error: promoErr } = await supabase.from("promo_bookings").insert(insertPromo);
+    if (promoErr) {
+      setSaving(false);
+      return alert(`Error saving promo: ${promoErr.message}`);
+    }
+
+    {
+      const seatKey = selectedKind === "room" ? CONFERENCE_ID : selectedSeat;
+
+      const mirrorPayload: {
+        seat_number: string;
+        start_at: string;
+        end_at: string;
+        source: string;
+        created_by?: string | null;
+        note?: string | null;
+      } = {
+        seat_number: seatKey,
+        start_at: startIso,
+        end_at: endIso,
+        source: "reserved",
+        note: "temp",
+      };
+
+      if (auth?.user?.id) mirrorPayload.created_by = auth.user.id;
+
+      const { error: mirrorErr } = await supabase.from("seat_blocked_times").insert(mirrorPayload);
+      if (mirrorErr) {
+        console.error("mirror insert error:", mirrorErr.message);
+      }
+    }
+
+    setSaving(false);
+    setIsModalOpen(false);
+    setSelectedSeat("");
+    await loadSeatStatuses();
+  };
+
+  const currentStatus: SeatStatus =
+    selectedSeat ? statusBySeat[selectedSeat] ?? "temp_available" : "temp_available";
 
   return (
-    <div className="admin-dashboard-page">
-      <div className="admin-dashboard-wrap">
-        <div className="admin-dash-headline">
-          <div>
-            <span className="admin-dash-badge">Metyme Lounge Performance</span>
-            <h2>Admin Dashboard</h2>
-            <p>Monitor walk-ins, reservations, promos, and weekly activity.</p>
-          </div>
-
-          <button
-            type="button"
-            className="admin-dash-date-btn"
-            onClick={() => setOpenCalendar(true)}
-          >
-            <img src={iconCalendar} alt="Calendar" />
-            <span>{prettyDate}</span>
-          </button>
-        </div>
-
-        <div className="admin-dash-totals-row">
-          <motion.div
-            className="admin-dash-total-card admin-dash-total-card--walkin"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={cardSpring}
-          >
-            <img className="admin-dash-total-icon" src={iconWalkin} alt="Walk-in" />
-
-            <div className="admin-dash-total-meta">
-              <div className="admin-dash-total-label">Walk-in</div>
-              <AnimatePresence mode="popLayout">
-                <motion.div
-                  key={`walkin-${pulseKey}-${totals.walkin}`}
-                  className="admin-dash-total-value"
-                  initial={{ scale: 0.92, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.92, opacity: 0 }}
-                  transition={numberSpring}
-                >
-                  {totals.walkin}
-                </motion.div>
-              </AnimatePresence>
+    <div className="staff-content">
+      <div className="seatmap-wrap">
+        <div className="seatmap-container">
+          <div className="seatmap-card">
+            <div className="seatmap-topbar">
+              <p className="seatmap-title">Seat Map</p>
+              <span className="seatmap-date">{formatPHDate(now)}</span>
             </div>
 
-            <div className="admin-dash-total-percent">
-              <strong>{walkinPct}</strong>
-              <span>of total</span>
-            </div>
-          </motion.div>
+            <div className="seatmap-stage" ref={stageRef} onClick={onStageClick}>
+              <img src={seatsImage} alt="Seat Map" className="seatmap-img" />
 
-          <motion.div
-            className="admin-dash-total-card admin-dash-total-card--reserve"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ ...cardSpring, delay: 0.03 }}
-          >
-            <img
-              className="admin-dash-total-icon"
-              src={iconReserve}
-              alt="Reservation"
-            />
+              {pins.map((p, index) => {
+                const st: SeatStatus = p.fixedStatus ?? (statusBySeat[p.id] ?? "temp_available");
+                const baseCls = p.kind === "room" ? "seat-pin room" : "seat-pin";
+                const selectedCls =
+                  calibrate && selectedPinId === p.id && !p.readonly ? " selected" : "";
+                const readonlyCls = p.readonly ? " seat-pin--readonly" : "";
+                const cls = `${baseCls} ${STATUS_COLOR[st]}${selectedCls}${readonlyCls}`;
+                const isRoom = p.kind === "room";
 
-            <div className="admin-dash-total-meta">
-              <div className="admin-dash-total-label">Reservation</div>
-              <AnimatePresence mode="popLayout">
-                <motion.div
-                  key={`reserve-${pulseKey}-${totals.reservation}`}
-                  className="admin-dash-total-value"
-                  initial={{ scale: 0.92, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.92, opacity: 0 }}
-                  transition={numberSpring}
-                >
-                  {totals.reservation}
-                </motion.div>
-              </AnimatePresence>
-            </div>
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    className={cls}
+                    style={
+                      {
+                        left: `${p.x}%`,
+                        top: `${p.y}%`,
+                        ["--i" as string]: index,
+                      } as React.CSSProperties
+                    }
+                    title={
+                      p.readonly
+                        ? "Legend"
+                        : calibrate
+                        ? `Click to select: ${p.label}`
+                        : `Manage: ${p.label}`
+                    }
+                    onClick={(ev) => {
+                      ev.stopPropagation();
 
-            <div className="admin-dash-total-percent">
-              <strong>{reservePct}</strong>
-              <span>of total</span>
-            </div>
-          </motion.div>
+                      if (p.readonly) return;
 
-          <motion.div
-            className="admin-dash-total-card admin-dash-total-card--promo"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ ...cardSpring, delay: 0.06 }}
-          >
-            <img className="admin-dash-total-icon" src={iconPromo} alt="Promo" />
+                      if (calibrate) {
+                        setSelectedPinId(p.id);
+                        return;
+                      }
 
-            <div className="admin-dash-total-meta">
-              <div className="admin-dash-total-label">Promo</div>
-              <AnimatePresence mode="popLayout">
-                <motion.div
-                  key={`promo-${pulseKey}-${totals.promo}`}
-                  className="admin-dash-total-value"
-                  initial={{ scale: 0.92, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.92, opacity: 0 }}
-                  transition={numberSpring}
-                >
-                  {totals.promo}
-                </motion.div>
-              </AnimatePresence>
-            </div>
-
-            <div className="admin-dash-total-percent">
-              <strong>{promoPct}</strong>
-              <span>of total</span>
-            </div>
-          </motion.div>
-
-          <motion.div
-            className="admin-dash-total-card admin-dash-total-card--all"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ ...cardSpring, delay: 0.09 }}
-          >
-            <img className="admin-dash-total-icon" src={iconAll} alt="All" />
-
-            <div className="admin-dash-total-meta">
-              <div className="admin-dash-total-label">Total All</div>
-              <AnimatePresence mode="popLayout">
-                <motion.div
-                  key={`all-${pulseKey}-${totals.all}`}
-                  className="admin-dash-total-value"
-                  initial={{ scale: 0.92, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.92, opacity: 0 }}
-                  transition={numberSpring}
-                >
-                  {totals.all}
-                </motion.div>
-              </AnimatePresence>
-            </div>
-
-            <div className="admin-dash-total-percent">
-              <strong>100%</strong>
-              <span>overview</span>
-            </div>
-          </motion.div>
-        </div>
-
-        <div className="admin-dash-charts-grid">
-          <motion.div
-            className="admin-dash-chart-card"
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ ...cardSpring, delay: 0.12 }}
-          >
-            <div className="admin-dash-chart-head">
-              <div>
-                <div className="admin-dash-chart-title">Total All (7 days)</div>
-                <div className="admin-dash-chart-sub">{weekRangeLabel}</div>
-              </div>
-            </div>
-
-            {weekLoading ? (
-              <div className="admin-dash-chart-loading">
-                <div className="admin-dash-loader" />
-                <div>Loading...</div>
-              </div>
-            ) : (
-              <div className="admin-dash-line-wrap">
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart
-                    data={weekSeries}
-                    margin={{ top: 10, right: 18, left: 0, bottom: 0 }}
+                      openManageModalForPin(p.id, isRoom ? "room" : "seat");
+                    }}
                   >
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="day" />
-                    <YAxis allowDecimals={false} />
-                    <Tooltip />
-                    <Line
-                      type="monotone"
-                      dataKey="total"
-                      stroke="#0f5a4a"
-                      strokeWidth={3}
-                      dot={{ r: 4 }}
-                      activeDot={{ r: 6 }}
-                      isAnimationActive
-                      animationDuration={700}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-          </motion.div>
+                    {p.label}
+                  </button>
+                );
+              })}
+            </div>
 
-          <motion.div
-            className="admin-dash-chart-card"
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ ...cardSpring, delay: 0.16 }}
-          >
-            <div className="admin-dash-chart-head">
-              <div>
-                <div className="admin-dash-chart-title">Breakdown</div>
-                <div className="admin-dash-chart-sub">{prettyDate}</div>
+            <div className="seatmap-legend">
+              <div className="legend-item">
+                <span className="legend-dot seat-green" /> Temporarily Available
+              </div>
+              <div className="legend-item">
+                <span className="legend-dot seat-yellow" /> Occupied Temporarily (TEMP promo)
+              </div>
+              <div className="legend-item">
+                <span className="legend-dot seat-orange" /> Occupied (CURRENT promo / regular)
+              </div>
+              <div className="legend-item">
+                <span className="legend-dot seat-purple" /> Reserved (FUTURE promo / reserved)
               </div>
             </div>
 
-            {pieTotal <= 0 ? (
-              <div className="admin-dash-chart-empty">No data for this date.</div>
-            ) : (
-              <div className="admin-dash-chart-body">
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={pieData}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={68}
-                      outerRadius={104}
-                      paddingAngle={3}
-                      isAnimationActive
-                      animationDuration={700}
-                    >
-                      {pieData.map((entry) => (
-                        <Cell
-                          key={`cell-${entry.name}`}
-                          fill={PIE_COLORS[entry.name]}
-                        />
-                      ))}
-                    </Pie>
-
-                    <Tooltip
-                      formatter={(value: unknown, name: unknown) => {
-                        const v = typeof value === "number" ? value : Number(value);
-                        const label = String(name);
-                        const pv = Number.isFinite(v) ? v : 0;
-                        return [`${pv} (${formatPct(pct(pv, pieTotal))})`, label];
-                      }}
-                    />
-
-                    <Legend verticalAlign="bottom" />
-                  </PieChart>
-                </ResponsiveContainer>
-
-                <div className="admin-dash-chart-center">
-                  <div className="admin-dash-chart-center-label">Total</div>
-                  <AnimatePresence mode="popLayout">
-                    <motion.div
-                      key={`pieTotal-${pulseKey}-${pieTotal}`}
-                      className="admin-dash-chart-center-value"
-                      initial={{ scale: 0.92, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      exit={{ scale: 0.92, opacity: 0 }}
-                      transition={numberSpring}
-                    >
-                      {pieTotal}
-                    </motion.div>
-                  </AnimatePresence>
-                </div>
+            {calibrate ? (
+              <div className="seatmap-hint">
+                Calibrate mode ON: click a pin to select, then click exact number on the image to place it.
+                <br />
+                Selected: <strong>{selectedPinId || "NONE"}</strong>{" "}
+                <button type="button" onClick={clearSaved} className="seatmap-reset-btn">
+                  Reset Saved Pins
+                </button>
               </div>
-            )}
-          </motion.div>
+            ) : null}
+
+            <img src={bearImage} alt="Bear" className="seatmap-bear-outside" draggable={false} />
+            <img src={grassImage} alt="Grass" className="seatmap-grass-outside" draggable={false} />
+          </div>
         </div>
       </div>
 
-      {openCalendar && (
-        <div className="admin-dash-calendar-overlay" onClick={() => setOpenCalendar(false)}>
-          <div
-            className="admin-dash-calendar-card"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="admin-dash-calendar-head">
-              <h3>Select Date</h3>
+      {isModalOpen && (
+        <div
+          className="seat-modal-overlay"
+          onClick={() => {
+            setIsModalOpen(false);
+            setSelectedSeat("");
+          }}
+        >
+          <div className="seat-modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="seat-modal-header">
+              <h3>Seat Status</h3>
               <button
+                className="seat-modal-close"
+                onClick={() => {
+                  setIsModalOpen(false);
+                  setSelectedSeat("");
+                }}
                 type="button"
-                className="admin-dash-calendar-close"
-                onClick={() => setOpenCalendar(false)}
               >
-                Close
+                ×
               </button>
             </div>
 
-            <input
-              type="date"
-              className="admin-dash-calendar-input"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-            />
+            <div className="seat-modal-body">
+              <div className="bookadd-card">
+                <div className="form-item">
+                  <label>Target</label>
+                  <input
+                    value={isConference(selectedSeat) ? "CONFERENCE ROOM" : `SEAT ${selectedSeat}`}
+                    readOnly
+                  />
+                </div>
 
-            <div className="admin-dash-calendar-actions">
-              <button
-                type="button"
-                className="admin-dash-calendar-btn secondary"
-                onClick={() => setSelectedDate(todayYYYYMMDD)}
-              >
-                Today
-              </button>
+                <div className="form-item">
+                  <label>Current Status</label>
+                  <input value={currentStatus.replaceAll("_", " ").toUpperCase()} readOnly />
+                </div>
 
-              <button
-                type="button"
-                className="admin-dash-calendar-btn primary"
-                onClick={() => setOpenCalendar(false)}
-              >
-                Done
-              </button>
+                <div className="form-item form-item-inline">
+                  <label>Open Time</label>
+                  <div className="toggle-wrap">
+                    <input
+                      id="seat-open-time"
+                      type="checkbox"
+                      checked={openTime}
+                      onChange={(e) => setOpenTime(e.target.checked)}
+                    />
+                    <label htmlFor="seat-open-time" className="toggle-label">
+                      {openTime ? "Yes" : "No"}
+                    </label>
+                  </div>
+                </div>
+
+                {!openTime && (
+                  <div className="form-item">
+                    <label>Duration (HH:MM or hours)</label>
+                    <input
+                      value={durationInput}
+                      placeholder="Examples: 1 / 0:45 / 2:30 / 230 / 100:30"
+                      onChange={(e) => setDurationInput(e.target.value)}
+                      onBlur={() => {
+                        const n = normalizeDurationHHMM(durationInput);
+                        if (n) setDurationInput(n);
+                      }}
+                    />
+                  </div>
+                )}
+
+                <div className="form-item">
+                  <label>Full Name (TEMP only)</label>
+                  <input value={fullName} onChange={(e) => setFullName(e.target.value)} />
+                </div>
+
+                <button
+                  className="seat-modal-btn seat-modal-btn--clear"
+                  disabled={saving}
+                  onClick={() => void clearToAvailableNow(selectedSeat, selectedKind)}
+                  type="button"
+                >
+                  {saving ? "Working..." : "Set as Temporarily Available (CLEAR NOW)"}
+                </button>
+
+                <div style={{ height: 10 }} />
+
+                <button
+                  className="seat-modal-btn seat-modal-btn--temp"
+                  disabled={saving}
+                  onClick={() => void saveTempOccupied()}
+                  type="button"
+                >
+                  Set as Occupied Temporarily (Yellow)
+                </button>
+
+                <button
+                  className="seat-modal-btn seat-modal-btn--occupied"
+                  disabled={saving}
+                  onClick={() => void setBlocked("occupied")}
+                  type="button"
+                >
+                  Set as Occupied (Red)
+                </button>
+
+                <button
+                  className="seat-modal-btn seat-modal-btn--reserved"
+                  disabled={saving}
+                  onClick={() => void setBlocked("reserved")}
+                  type="button"
+                >
+                  Set as Reserved (Purple)
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -556,4 +996,4 @@ const Admin_Dashboard: React.FC = () => {
   );
 };
 
-export default Admin_Dashboard;
+export default Admin_Seat_Table;
