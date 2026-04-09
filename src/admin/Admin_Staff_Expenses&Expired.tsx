@@ -906,7 +906,6 @@ const Admin_Staff_Expenses_Expired: React.FC = () => {
     <div className="admin-staff-exp-page">
       <div className="admin-staff-exp-shell">
         <div className="staff-exp-hero">
-          <div className="staff-exp-badge">✦ STAFF LOGS</div>
           <h1 className="staff-exp-main-title">Admin Staff Expenses & Expired</h1>
           <p className="staff-exp-hero-subtitle">
             Review expired items, inventory losses, cash outs, and bilin records in

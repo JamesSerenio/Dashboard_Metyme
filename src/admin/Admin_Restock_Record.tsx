@@ -920,7 +920,6 @@ const Admin_Restock_Record: React.FC = () => {
     <div className="admin-restock-page">
       <div className="restock-shell">
         <div className="restock-hero">
-          <div className="restock-badge">✦ RESTOCK RECORDS</div>
           <h1 className="admin-restock-main-title">Admin Restock Record</h1>
           <p className="restock-hero-subtitle">
             Track daily restocks, edit quantities, remove wrong entries, and export polished reports.

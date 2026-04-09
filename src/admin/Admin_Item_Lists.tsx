@@ -795,10 +795,7 @@ const Admin_Item_Lists: React.FC = () => {
     <div className="admin-items-page">
       <div className="admin-items-shell">
         <section className="admin-items-hero">
-          <div className="admin-items-badge">
-            <span>✦</span>
-            <span>Item Inventory</span>
-          </div>
+
 
           <div className="admin-items-hero-main">
             <div className="admin-items-copy">

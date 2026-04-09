@@ -216,10 +216,6 @@ const Admin_Add_Ons: React.FC = () => {
 
       <div className="aao-wrap">
         <div className="aao-top-banner">
-          <div className="aao-top-badge">
-            <span className="aao-badge-icon">✦</span>
-            <span>Add-On Management</span>
-          </div>
 
           <div className="aao-top-copy">
             <h1>Add New Add-On</h1>
