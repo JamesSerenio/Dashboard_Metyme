@@ -2570,122 +2570,137 @@ const Admin_customer_list: React.FC = () => {
         {selectedSession && (() => {
           const di = getDiscountInfo(selectedSession);
           const systemCost = getSessionSystemCost(selectedSession);
-          const ordersTotal = getOrdersTotal(selectedSession);
-          const systemPay = getSystemPaymentInfo(selectedSession);
-          const orderPay = getOrderPaymentInfo(selectedSession);
           const usedMinutes = getUsedMinutesForReceipt(selectedSession);
           const chargeMinutes = getChargeMinutesForReceipt(selectedSession);
-          const displayAmount = getDisplayAmount(selectedSession);
-          const bottomLabel = displayAmount.label;
-          const bottomValue = displayAmount.value;
+          const systemPay = getSystemPaymentInfo(selectedSession);
+          const orderPay = getOrderPaymentInfo(selectedSession);
+          const orders = getOrderBundle(selectedSession).items;
+          const ordersTotal = getOrdersTotal(selectedSession);
+          const totalPaid = systemPay.totalPaid + orderPay.totalPaid;
+          const totalDue = getGrandDue(selectedSession);
+          const totalChange = Math.max(0, totalPaid - totalDue);
+          const paidAtText = selectedSession.paid_at
+            ? new Date(selectedSession.paid_at).toLocaleString()
+            : "—";
 
           return (
-            <div className="acl-receipt">
-              <div className="acl-receipt-brand">
-                <div>
-                  <div className="acl-receipt-brand-top">ME TYME LOUNGE</div>
-                  <div className="acl-receipt-brand-sub">Admin Customer Receipt</div>
+            <div className="acl-plain-receipt">
+              <div className="acl-plain-receipt-head">
+                <img src={logo} alt="Logo" className="acl-plain-receipt-logo" />
+                <h2>ME TYME LOUNGE</h2>
+                <p>OFFICIAL RECEIPT</p>
+              </div>
+
+              <div className="acl-plain-divider" />
+
+              <div className="acl-plain-info">
+                <div className="acl-plain-row">
+                  <span>Date</span>
+                  <strong>{new Date().toLocaleString()}</strong>
+                </div>
+                <div className="acl-plain-row">
+                  <span>Customer</span>
+                  <strong>{selectedSession.full_name || "N/A"}</strong>
+                </div>
+                <div className="acl-plain-row">
+                  <span>Seat</span>
+                  <strong>{selectedSession.seat_number || "N/A"}</strong>
+                </div>
+                {selectedSession.booking_code && (
+                  <div className="acl-plain-row">
+                    <span>Booking Code</span>
+                    <strong>{selectedSession.booking_code}</strong>
+                  </div>
+                )}
+              </div>
+
+              <div className="acl-plain-divider" />
+
+              <div className="acl-plain-items">
+                {orders.length > 0 ? (
+                  orders.map((item) => (
+                    <div className="acl-plain-item-card" key={item.id}>
+                      <div className="acl-plain-item-left">
+                        <div className="acl-plain-item-name">
+                          {item.name}
+                          {item.size ? ` (${item.size})` : ""}
+                        </div>
+                        <div className="acl-plain-item-sub">
+                          {item.qty} × ₱{item.price}
+                        </div>
+                      </div>
+                      <div className="acl-plain-item-total">₱{item.subtotal}</div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="acl-plain-item-card">
+                    <div className="acl-plain-item-left">
+                      <div className="acl-plain-item-name">
+                        Study Hub Session
+                      </div>
+                      <div className="acl-plain-item-sub">
+                        {usedMinutes} mins used • {chargeMinutes} mins charged
+                      </div>
+                    </div>
+                    <div className="acl-plain-item-total">₱{systemCost}</div>
+                  </div>
+                )}
+              </div>
+
+              <div className="acl-plain-divider" />
+
+              <div className="acl-plain-summary">
+                <div className="acl-plain-row">
+                  <span>System Cost</span>
+                  <strong>₱{systemCost}</strong>
+                </div>
+
+                <div className="acl-plain-row">
+                  <span>Discount</span>
+                  <strong>{getDiscountTextFrom(di.kind, di.value)}</strong>
+                </div>
+
+                <div className="acl-plain-row">
+                  <span>Orders Total</span>
+                  <strong>₱{ordersTotal}</strong>
+                </div>
+
+                <div className="acl-plain-row">
+                  <span>GCash</span>
+                  <strong>₱{systemPay.gcash + orderPay.gcash}</strong>
+                </div>
+
+                <div className="acl-plain-row">
+                  <span>Cash</span>
+                  <strong>₱{systemPay.cash + orderPay.cash}</strong>
+                </div>
+
+                <div className="acl-plain-row">
+                  <span>Total Paid</span>
+                  <strong>₱{totalPaid}</strong>
+                </div>
+
+                <div className="acl-plain-row">
+                  <span>Change</span>
+                  <strong>₱{totalChange}</strong>
+                </div>
+
+                <div className="acl-plain-row">
+                  <span>Status</span>
+                  <strong className={getFinalPaidStatus(selectedSession) ? "acl-paid-green" : "acl-paid-gold"}>
+                    {getFinalPaidStatus(selectedSession) ? "PAID" : "UNPAID"}
+                  </strong>
+                </div>
+
+                <div className="acl-plain-row">
+                  <span>Paid at</span>
+                  <strong>{paidAtText}</strong>
                 </div>
               </div>
 
-              <div className="acl-receipt-block">
-                <div className="acl-receipt-row">
-                  <span>Name</span>
-                  <span>{selectedSession.full_name}</span>
-                </div>
-                <div className="acl-receipt-row">
-                  <span>Booking Code</span>
-                  <span>{selectedSession.booking_code || "N/A"}</span>
-                </div>
-                <div className="acl-receipt-row">
-                  <span>Seat</span>
-                  <span>{selectedSession.seat_number || "N/A"}</span>
-                </div>
-                <div className="acl-receipt-row">
-                  <span>Date</span>
-                  <span>{displayDateNice(selectedSession.date)}</span>
-                </div>
-                <div className="acl-receipt-row">
-                  <span>Time In</span>
-                  <span>{formatTimeText(selectedSession.time_started)}</span>
-                </div>
-                <div className="acl-receipt-row">
-                  <span>Time Out</span>
-                  <span>{renderTimeOut(selectedSession)}</span>
-                </div>
-                <div className="acl-receipt-row">
-                  <span>Used Minutes</span>
-                  <span>{usedMinutes}</span>
-                </div>
-                <div className="acl-receipt-row">
-                  <span>Charge Minutes</span>
-                  <span>{chargeMinutes}</span>
-                </div>
-                <div className="acl-receipt-row">
-                  <span>System Cost</span>
-                  <span>₱{systemCost}</span>
-                </div>
-                <div className="acl-receipt-row">
-                  <span>Discount</span>
-                  <span>{getDiscountTextFrom(di.kind, di.value)}</span>
-                </div>
-                <div className="acl-receipt-row">
-                  <span>Down Payment</span>
-                  <span>₱{getDownPayment(selectedSession)}</span>
-                </div>
-
-                {ordersTotal > 0 && (
-                  <>
-                    <hr />
-                    <div className="acl-receipt-orders-title">Order Items</div>
-                    {getOrderBundle(selectedSession).items.map((item, idx) => (
-                      <div className="acl-receipt-row" key={`${item.name}-${idx}`}>
-                        <span>
-                          {item.name} x{item.qty}
-                        </span>
-                        <span>₱{item.subtotal}</span>
-                      </div>
-                    ))}
-                  </>
-                )}
-
-                <hr />
-
-                <div className="acl-receipt-row">
-                  <span>System Payment</span>
-                  <span>GCash ₱{systemPay.gcash} / Cash ₱{systemPay.cash}</span>
-                </div>
-
-                {ordersTotal > 0 && (
-                  <div className="acl-receipt-row">
-                    <span>Order Payment</span>
-                    <span>GCash ₱{orderPay.gcash} / Cash ₱{orderPay.cash}</span>
-                  </div>
-                )}
-
-                <div className="acl-receipt-row">
-                  <span>System Remaining</span>
-                  <span>₱{getSystemRemaining(selectedSession)}</span>
-                </div>
-
-                {ordersTotal > 0 && (
-                  <div className="acl-receipt-row">
-                    <span>Order Remaining</span>
-                    <span>₱{getOrderRemaining(selectedSession)}</span>
-                  </div>
-                )}
-
-                <div className="acl-receipt-row">
-                  <span>Status</span>
-                  <span className="acl-receipt-status">
-                    {getFinalPaidStatus(selectedSession) ? "PAID" : "UNPAID"}
-                  </span>
-                </div>
-
-                <div className="acl-receipt-total">
-                  <span>{bottomLabel}</span>
-                  <span>₱{bottomValue}</span>
-                </div>
+              <div className="acl-plain-total-box">
+                <span>TOTAL</span>
+                <strong>₱{totalDue}</strong>
               </div>
 
               <p className="acl-receipt-footer">
@@ -2693,16 +2708,16 @@ const Admin_customer_list: React.FC = () => {
                 <strong>Me Tyme Lounge</strong>
               </p>
 
-              <div className="acl-modal-actions">
-                <button
-                  className="acl-btn acl-btn-light"
-                  onClick={() => void closeReceipt()}
-                  disabled={viewBusy}
-                  type="button"
-                >
-                  Close
-                </button>
-              </div>
+          <div className="acl-plain-close-full">
+            <button
+              className="acl-plain-close-btn-full"
+              onClick={() => void closeReceipt()}
+              disabled={viewBusy}
+              type="button"
+            >
+              Close
+            </button>
+          </div>
             </div>
           );
         })()}
