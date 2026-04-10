@@ -506,12 +506,6 @@ const CenterModal: React.FC<{
         className={`acl-modal-card acl-modal-${size}`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="acl-modal-head">
-          <h3>{title}</h3>
-          <button className="acl-modal-close" type="button" onClick={onClose}>
-            ×
-          </button>
-        </div>
         <div className="acl-modal-body">{children}</div>
       </div>
     </div>,

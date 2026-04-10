@@ -555,13 +555,15 @@ const ReceiptModal: React.FC<{
         className={`acr-modal-card acr-modal-${size}`}
         onClick={(e) => e.stopPropagation()}
       >
+      {title ? (
         <div className="acr-modal-head">
           <h3>{title}</h3>
           <button className="acr-modal-close" onClick={onClose} type="button">
             ×
           </button>
         </div>
-        <div className="acr-modal-body">{children}</div>
+      ) : null}
+      <div className="acr-modal-body">{children}</div>
       </div>
     </div>,
     document.body
@@ -2334,10 +2336,10 @@ const Admin_customer_reservation: React.FC = () => {
         </div>
 
         <ReceiptModal
-          open={!!selectedOrderSession}
-          title="Order Details"
-          size="lg"
-          onClose={() => setSelectedOrderSession(null)}
+          open={!!selectedSession}
+          title="Receipt"
+          size="md"
+          onClose={() => setSelectedSession(null)}
         >
           {selectedOrderSession ? (
             <div className="acr-order-modal-wrap">
@@ -2628,165 +2630,181 @@ const Admin_customer_reservation: React.FC = () => {
 
         <ReceiptModal
           open={!!selectedSession}
-          title="Receipt"
-          size="lg"
+          title=""
+          size="md"
           onClose={() => setSelectedSession(null)}
         >
           {selectedSession ? (
-            <div className="receipt-container-custom">
-              <div className="receipt-head-brand">
-                <img src={logo} alt="Study Hub" className="receipt-brand-logo" />
-                <div>
-                  <h4>Me Tyme Lounge</h4>
-                  <p>Reservation Receipt</p>
-                </div>
-              </div>
+            (() => {
+              const di = getDiscountInfo(selectedSession);
+              const systemCost = getSessionSystemCost(selectedSession);
+              const systemPay = getSystemPaymentInfo(selectedSession);
+              const orderPay = getOrderPaymentInfo(selectedSession);
+              const orders = getOrderBundle(selectedSession).items;
+              const ordersTotal = getOrdersTotal(selectedSession);
+              const totalPaid = wholePeso(systemPay.totalPaid + orderPay.totalPaid);
+              const totalDue = getGrandDue(selectedSession);
+              const totalChange = wholePeso(Math.max(0, totalPaid - totalDue));
+              const paidAtText = selectedSession.paid_at
+                ? formatDateTimeText(selectedSession.paid_at)
+                : "—";
 
-              <div className="receipt-block">
-                <div className="receipt-row">
-                  <span>Name</span>
-                  <span>{selectedSession.full_name}</span>
-                </div>
-                <div className="receipt-row">
-                  <span>Phone</span>
-                  <span>{safePhone(selectedSession.phone_number)}</span>
-                </div>
-                <div className="receipt-row">
-                  <span>Seat</span>
-                  <span>{selectedSession.seat_number}</span>
-                </div>
-                <div className="receipt-row">
-                  <span>Booking Code</span>
-                  <span>{selectedSession.booking_code || "—"}</span>
-                </div>
-                <div className="receipt-row">
-                  <span>Reservation Date</span>
-                  <span>{formatReservationRange(selectedSession)}</span>
-                </div>
-                <div className="receipt-row">
-                  <span>Time</span>
-                  <span>
-                    {formatTimeText(selectedSession.time_started)} - {renderTimeOut(selectedSession)}
-                  </span>
-                </div>
-                <div className="receipt-row">
-                  <span>Total Time</span>
-                  <span>{formatMinutesToTime(getDisplayedTotalMinutes(selectedSession))}</span>
-                </div>
-                <div className="receipt-row">
-                  <span>Discount</span>
-                  <span>{getDiscountText(selectedSession)}</span>
-                </div>
-                {String(selectedSession.discount_reason ?? "").trim() ? (
-                  <div className="receipt-row">
-                    <span>Reason</span>
-                    <span>{selectedSession.discount_reason}</span>
+              const bottomLabel = totalDue > totalPaid ? "BALANCE" : "TOTAL";
+              const bottomValue = totalDue > totalPaid
+                ? wholePeso(Math.max(0, totalDue - totalPaid))
+                : totalDue;
+
+              return (
+                <div className="acr-plain-receipt">
+                  <div className="acr-plain-receipt-head">
+                    <img src={logo} alt="Logo" className="acr-plain-receipt-logo" />
+                    <h2>ME TYME LOUNGE</h2>
+                    <p>OFFICIAL RECEIPT</p>
                   </div>
-                ) : null}
-              </div>
 
-              <div className="receipt-block">
-                <div className="receipt-section-title">Orders</div>
-                {getOrderBundle(selectedSession).items.length === 0 ? (
-                  <div className="receipt-empty">No order items</div>
-                ) : (
-                  <div className="receipt-order-list">
-                    {getOrderBundle(selectedSession).items.map((item) => (
-                      <div className="receipt-order-item" key={item.id}>
-                        <div>
-                          <strong>{item.name}</strong>
-                          <span>
-                            {item.category} • {item.qty} × ₱{item.price}
-                          </span>
+                  <div className="acr-plain-divider" />
+
+                  <div className="acr-plain-info">
+                    <div className="acr-plain-row">
+                      <span>Date</span>
+                      <strong>{new Date().toLocaleString()}</strong>
+                    </div>
+
+                    <div className="acr-plain-row">
+                      <span>Customer</span>
+                      <strong>{selectedSession.full_name || "N/A"}</strong>
+                    </div>
+
+                    <div className="acr-plain-row">
+                      <span>Seat</span>
+                      <strong>{selectedSession.seat_number || "N/A"}</strong>
+                    </div>
+
+                    <div className="acr-plain-row">
+                      <span>Reservation</span>
+                      <strong>{formatReservationRange(selectedSession)}</strong>
+                    </div>
+
+                    {selectedSession.booking_code && (
+                      <div className="acr-plain-row">
+                        <span>Booking Code</span>
+                        <strong>{selectedSession.booking_code}</strong>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="acr-plain-divider" />
+
+                  <div className="acr-plain-items">
+                    {orders.length > 0 ? (
+                      orders.map((item) => (
+                        <div className="acr-plain-item-card" key={item.id}>
+                          <div className="acr-plain-item-left">
+                            <div className="acr-plain-item-name">
+                              {item.name}
+                              {item.size ? ` (${item.size})` : ""}
+                            </div>
+                            <div className="acr-plain-item-sub">
+                              {item.qty} × ₱{item.price}
+                            </div>
+                          </div>
+                          <div className="acr-plain-item-total">₱{item.subtotal}</div>
                         </div>
-                        <strong>₱{item.subtotal}</strong>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {(() => {
-                const display = getDisplayAmount(selectedSession);
-                const systemPay = getSystemPaymentInfo(selectedSession);
-                const orderPay = getOrderPaymentInfo(selectedSession);
-                const ordersTotal = getOrderDue(selectedSession);
-                const bottomLabel = display.label;
-                const bottomValue = display.value;
-
-                return (
-                  <div className="receipt-block">
-                    <div className="receipt-section-title">Payment Summary</div>
-
-                    <div className="receipt-row">
-                      <span>System Due</span>
-                      <span>₱{getSystemDue(selectedSession)}</span>
-                    </div>
-
-                    {ordersTotal > 0 && (
-                      <div className="receipt-row">
-                        <span>Order Due</span>
-                        <span>₱{ordersTotal}</span>
+                      ))
+                    ) : (
+                      <div className="acr-plain-item-card">
+                        <div className="acr-plain-item-left">
+                          <div className="acr-plain-item-name">Reservation Session</div>
+                          <div className="acr-plain-item-sub">
+                            {String(selectedSession.hour_avail || "N/A").toUpperCase() === "OPEN"
+                              ? "Open time reservation"
+                              : `Reserved Duration: ${selectedSession.hour_avail || "N/A"}`}
+                          </div>
+                        </div>
+                        <div className="acr-plain-item-total">₱{systemCost}</div>
                       </div>
                     )}
+                  </div>
 
-                    <div className="receipt-row">
+                  <div className="acr-plain-divider" />
+
+                  <div className="acr-plain-summary">
+                    <div className="acr-plain-row">
+                      <span>System Cost</span>
+                      <strong>₱{systemCost}</strong>
+                    </div>
+
+                    <div className="acr-plain-row">
+                      <span>Discount</span>
+                      <strong>{getDiscountTextFrom(di.kind, di.value)}</strong>
+                    </div>
+
+                    <div className="acr-plain-row">
+                      <span>Orders Total</span>
+                      <strong>₱{ordersTotal}</strong>
+                    </div>
+
+                    <div className="acr-plain-row">
                       <span>Down Payment</span>
-                      <span>₱{getDownPayment(selectedSession)}</span>
+                      <strong>₱{getDownPayment(selectedSession)}</strong>
                     </div>
 
-                    <div className="receipt-row">
-                      <span>System Payment</span>
-                      <span>GCash ₱{systemPay.gcash} / Cash ₱{systemPay.cash}</span>
+                    <div className="acr-plain-row">
+                      <span>GCash</span>
+                      <strong>₱{systemPay.gcash + orderPay.gcash}</strong>
                     </div>
 
-                    {ordersTotal > 0 && (
-                      <div className="receipt-row">
-                        <span>Order Payment</span>
-                        <span>GCash ₱{orderPay.gcash} / Cash ₱{orderPay.cash}</span>
-                      </div>
-                    )}
-
-                    <div className="receipt-row">
-                      <span>System Remaining</span>
-                      <span>₱{getSystemRemaining(selectedSession)}</span>
+                    <div className="acr-plain-row">
+                      <span>Cash</span>
+                      <strong>₱{systemPay.cash + orderPay.cash}</strong>
                     </div>
 
-                    {ordersTotal > 0 && (
-                      <div className="receipt-row">
-                        <span>Order Remaining</span>
-                        <span>₱{getOrderRemaining(selectedSession)}</span>
-                      </div>
-                    )}
+                    <div className="acr-plain-row">
+                      <span>Total Paid</span>
+                      <strong>₱{totalPaid}</strong>
+                    </div>
 
-                    <div className="receipt-row">
+                    <div className="acr-plain-row">
+                      <span>Change</span>
+                      <strong>₱{totalChange}</strong>
+                    </div>
+
+                    <div className="acr-plain-row">
                       <span>Status</span>
-                      <span className="receipt-status">
+                      <strong className={getFinalPaidStatus(selectedSession) ? "acr-paid-green" : "acr-paid-gold"}>
                         {getFinalPaidStatus(selectedSession) ? "PAID" : "UNPAID"}
-                      </span>
+                      </strong>
                     </div>
 
-                    <div className="receipt-total">
-                      <span>{bottomLabel}</span>
-                      <span>₱{bottomValue}</span>
+                    <div className="acr-plain-row">
+                      <span>Paid at</span>
+                      <strong>{paidAtText}</strong>
                     </div>
                   </div>
-                );
-              })()}
 
-              <p className="receipt-footer">
-                Thank you for choosing <br />
-                <strong>Me Tyme Lounge</strong>
-              </p>
+                  <div className="acr-plain-total-box">
+                    <span>{bottomLabel}</span>
+                    <strong>₱{bottomValue}</strong>
+                  </div>
 
-              <button
-                className="acr-btn acr-btn-light"
-                onClick={() => setSelectedSession(null)}
-                type="button"
-              >
-                Close
-              </button>
-            </div>
+                  <p className="acr-plain-thankyou">
+                    Thank you for choosing
+                    <br />
+                    <strong>Me Tyme Lounge</strong>
+                  </p>
+
+                  <div className="acr-plain-close-full">
+                    <button
+                      className="acr-plain-close-btn-full"
+                      onClick={() => setSelectedSession(null)}
+                      type="button"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+              );
+            })()
           ) : null}
         </ReceiptModal>
       </div>
