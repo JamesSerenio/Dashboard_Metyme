@@ -573,12 +573,6 @@ const FixedCenterModal: React.FC<FixedCenterModalProps> = ({
         aria-modal="true"
         aria-label={title}
       >
-        <div className="crv-fm-head">
-          <h3>{title}</h3>
-          <button className="crv-fm-close" onClick={onClose} type="button">
-            ×
-          </button>
-        </div>
         <div className="crv-fm-body">{children}</div>
       </div>
     </div>,
@@ -2394,14 +2388,14 @@ const Customer_Reservations: React.FC = () => {
           )}
         </section>
 
-        <FixedCenterModal
-          open={!!selectedAttendanceSession}
-          title="Attendance Logs"
-          size="md"
-          onClose={() => setSelectedAttendanceSession(null)}
-        >
-          {selectedAttendanceSession && (
-            <>
+          <FixedCenterModal
+            open={!!selectedAttendanceSession}
+            title="Attendance"
+            size="sm"
+            onClose={() => setSelectedAttendanceSession(null)}
+          >
+            {selectedAttendanceSession && (
+              <>
               <div className="crv-modal-summary-grid">
                 <div>
                   <span>Customer</span>
@@ -2526,173 +2520,196 @@ const Customer_Reservations: React.FC = () => {
           )}
         </FixedCenterModal>
 
-        <FixedCenterModal
-          open={!!selectedSession}
-          title="Receipt"
-          size="md"
-          onClose={() => setSelectedSession(null)}
-        >
-          {selectedSession && (() => {
+      <FixedCenterModal
+        open={!!selectedSession}
+        title=""
+        size="sm"
+        onClose={() => setSelectedSession(null)}
+      >
+        {selectedSession ? (
+          (() => {
             const orderBundle = getOrderBundle(selectedSession);
+            const orders = orderBundle.items;
+            const ordersTotal = getOrdersTotal(selectedSession);
+            const systemCost = getSystemDue(selectedSession);
             const systemPay = getSystemPaymentInfo(selectedSession);
             const orderPay = getOrderPaymentInfo(selectedSession);
-            const ordersTotal = getOrdersTotal(selectedSession);
-            const bottomInfo = getDisplayAmount(selectedSession);
             const di = getDiscountInfo(selectedSession);
-            const discountCalc = applyDiscount(getBaseSystemCost(selectedSession), di.kind, di.value);
+            const totalPaid = wholePeso(
+              systemPay.gcash +
+                systemPay.cash +
+                orderPay.gcash +
+                orderPay.cash
+            );
+            const totalChange = getSessionChangeAfterDP(selectedSession);
+            const bottomInfo = getDisplayAmount(selectedSession);
 
             return (
-              <div className="crv-receipt">
-                <div className="crv-receipt-brand">
-                  <div>
-                    <div className="crv-receipt-brand-top">ME TYME LOUNGE</div>
-                    <div className="crv-receipt-brand-sub">Reservation Receipt</div>
-                  </div>
-                  <img src={logo} alt="Study Hub" className="crv-plain-receipt-logo" />
-                </div>
-
-                <div className="crv-receipt-block">
-                  <div className="crv-receipt-row">
-                    <span>Name</span>
-                    <span>{selectedSession.full_name}</span>
-                  </div>
-                  <div className="crv-receipt-row">
-                    <span>Reservation</span>
-                    <span>{formatReservationRange(selectedSession)}</span>
-                  </div>
-                  <div className="crv-receipt-row">
-                    <span>Booking Code</span>
-                    <span>{selectedSession.booking_code ?? "—"}</span>
-                  </div>
-                  <div className="crv-receipt-row">
-                    <span>Seat</span>
-                    <span>{selectedSession.seat_number}</span>
-                  </div>
-                  <div className="crv-receipt-row">
-                    <span>Time</span>
-                    <span>
-                      {formatTimeText(selectedSession.time_started)} - {renderTimeOut(selectedSession)}
-                    </span>
-                  </div>
-                  <div className="crv-receipt-row">
-                    <span>Attendance</span>
-                    <span>{getAttendanceCountText(selectedSession)}</span>
-                  </div>
-                  <div className="crv-receipt-row">
-                    <span>Used Minutes</span>
-                    <span>{getUsedMinutesForReceipt(selectedSession)} mins</span>
-                  </div>
-                  <div className="crv-receipt-row">
-                    <span>Charge Minutes</span>
-                    <span>{getChargeMinutesForReceipt(selectedSession)} mins</span>
-                  </div>
-                  <div className="crv-receipt-row">
-                    <span>Discount</span>
-                    <span>{getDiscountTextFrom(di.kind, di.value)}</span>
-                  </div>
-                  <div className="crv-receipt-row">
-                    <span>Discount Amount</span>
-                    <span>₱{wholePeso(discountCalc.discountAmount)}</span>
-                  </div>
-                  <div className="crv-receipt-row">
-                    <span>System Cost</span>
-                    <span>₱{getSystemDue(selectedSession)}</span>
-                  </div>
-                  <div className="crv-receipt-row">
-                    <span>Order Total</span>
-                    <span>₱{ordersTotal}</span>
-                  </div>
-                  <div className="crv-receipt-row">
-                    <span>Down Payment</span>
-                    <span>₱{getDownPayment(selectedSession)}</span>
-                  </div>
-                  <div className="crv-receipt-row">
-                    <span>Grand Total</span>
-                    <span>₱{getGrandDue(selectedSession)}</span>
+              <div className="crv-plain-receipt-wrap">
+                <div className="crv-plain-receipt">
+                  <div className="crv-plain-brand">
+                    <img
+                      src={logo}
+                      alt="Me Tyme Lounge"
+                      className="crv-plain-receipt-logo"
+                    />
+                    <div className="crv-plain-brand-top">ME TYME LOUNGE</div>
+                    <div className="crv-plain-brand-title">Reservation Receipt</div>
                   </div>
 
-                  {orderBundle.items.length > 0 && (
-                    <>
-                      <div className="crv-receipt-orders-title">Order List</div>
-                      {orderBundle.items.map((item, idx) => (
-                        <div className="crv-receipt-row" key={`${item.source}-${item.name}-${idx}`}>
-                          <span>{item.name} x{item.qty}</span>
-                          <span>₱{item.subtotal}</span>
+                  <div className="crv-plain-block">
+                    <div className="crv-plain-row">
+                      <span>Name</span>
+                      <strong>{selectedSession.full_name || "N/A"}</strong>
+                    </div>
+
+                    <div className="crv-plain-row">
+                      <span>Seat</span>
+                      <strong>{selectedSession.seat_number || "N/A"}</strong>
+                    </div>
+
+                    <div className="crv-plain-row">
+                      <span>Reservation</span>
+                      <strong>{formatReservationRange(selectedSession)}</strong>
+                    </div>
+
+                    {selectedSession.booking_code && (
+                      <div className="crv-plain-row">
+                        <span>Booking Code</span>
+                        <strong>{selectedSession.booking_code}</strong>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="crv-plain-divider" />
+
+                  <div className="crv-plain-items">
+                    {orders.length > 0 ? (
+                      orders.map((item) => (
+                        <div className="crv-plain-item-card" key={item.id}>
+                          <div className="crv-plain-item-left">
+                            <div className="crv-plain-item-name">
+                              {item.name}
+                              {item.size ? ` (${item.size})` : ""}
+                            </div>
+                            <div className="crv-plain-item-sub">
+                              {item.qty} × ₱{item.price}
+                            </div>
+                          </div>
+                          <div className="crv-plain-item-total">₱{item.subtotal}</div>
                         </div>
-                      ))}
-                    </>
-                  )}
-                </div>
-
-                <div className="crv-receipt-block">
-                  <div className="crv-receipt-row">
-                    <span>System Payment</span>
-                    <span>GCash ₱{systemPay.gcash} / Cash ₱{systemPay.cash}</span>
+                      ))
+                    ) : (
+                      <div className="crv-plain-item-card">
+                        <div className="crv-plain-item-left">
+                          <div className="crv-plain-item-name">Reservation Session</div>
+                          <div className="crv-plain-item-sub">
+                            {String(selectedSession.hour_avail || "N/A").toUpperCase() === "OPEN"
+                              ? "Open time reservation"
+                              : `Reserved Duration: ${selectedSession.hour_avail || "N/A"}`}
+                          </div>
+                        </div>
+                        <div className="crv-plain-item-total">₱{systemCost}</div>
+                      </div>
+                    )}
                   </div>
 
-                  {ordersTotal > 0 && (
-                    <div className="crv-receipt-row">
-                      <span>Order Payment</span>
-                      <span>GCash ₱{orderPay.gcash} / Cash ₱{orderPay.cash}</span>
+                  <div className="crv-plain-divider" />
+
+                  <div className="crv-plain-summary">
+                    <div className="crv-plain-row">
+                      <span>System Cost</span>
+                      <strong>₱{systemCost}</strong>
                     </div>
-                  )}
 
-                  <div className="crv-receipt-row">
-                    <span>System Remaining</span>
-                    <span>₱{getSystemRemaining(selectedSession)}</span>
-                  </div>
-
-                  {ordersTotal > 0 && (
-                    <div className="crv-receipt-row">
-                      <span>Order Remaining</span>
-                      <span>₱{getOrderRemaining(selectedSession)}</span>
+                    <div className="crv-plain-row">
+                      <span>Discount</span>
+                      <strong>{getDiscountTextFrom(di.kind, di.value)}</strong>
                     </div>
-                  )}
 
-                  <div className="crv-receipt-row">
-                    <span>Status</span>
-                    <span className="crv-receipt-status">
-                      {toBool(selectedSession.is_paid) ? "PAID" : "UNPAID"}
-                    </span>
+                    <div className="crv-plain-row">
+                      <span>Orders Total</span>
+                      <strong>₱{ordersTotal}</strong>
+                    </div>
+
+                    <div className="crv-plain-row">
+                      <span>Down Payment</span>
+                      <strong>₱{getDownPayment(selectedSession)}</strong>
+                    </div>
+
+                    <div className="crv-plain-row">
+                      <span>GCash</span>
+                      <strong>₱{systemPay.gcash + orderPay.gcash}</strong>
+                    </div>
+
+                    <div className="crv-plain-row">
+                      <span>Cash</span>
+                      <strong>₱{systemPay.cash + orderPay.cash}</strong>
+                    </div>
+
+                    <div className="crv-plain-row">
+                      <span>Total Paid</span>
+                      <strong>₱{totalPaid}</strong>
+                    </div>
+
+                    <div className="crv-plain-row">
+                      <span>Change</span>
+                      <strong>₱{totalChange}</strong>
+                    </div>
+
+                    <div className="crv-plain-row">
+                      <span>Status</span>
+                      <strong
+                        className={
+                          getFinalPaidStatus(selectedSession)
+                            ? "crv-plain-status paid"
+                            : "crv-plain-status unpaid"
+                        }
+                      >
+                        {getFinalPaidStatus(selectedSession) ? "PAID" : "UNPAID"}
+                      </strong>
+                    </div>
                   </div>
 
-                  <div className="crv-receipt-total">
+                  <div className="crv-plain-total-box">
                     <span>{bottomInfo.label}</span>
-                    <span>₱{bottomInfo.value}</span>
+                    <strong>₱{bottomInfo.value}</strong>
                   </div>
-                </div>
 
-                <p className="crv-receipt-footer">
-                  Thank you for choosing <br />
-                  <strong>Me Tyme Lounge</strong>
-                </p>
+                  <p className="crv-plain-thankyou">
+                    Thank you for choosing
+                    <br />
+                    <strong>Me Tyme Lounge</strong>
+                  </p>
 
-                <div className="crv-modal-actions">
-                  <button
-                    className="crv-btn crv-btn-dark"
-                    onClick={() => void toggleCustomerViewForSession(selectedSession)}
-                    disabled={viewBusy}
-                    type="button"
-                  >
-                    {viewBusy
-                      ? "Updating..."
-                      : isCustomerViewOnForSession(activeView, selectedSession.id)
-                      ? "Stop View"
-                      : "View Customer"}
-                  </button>
+                  <div className="crv-plain-actions">
+                    <button
+                      className="crv-btn crv-btn-dark"
+                      onClick={() => void toggleCustomerViewForSession(selectedSession)}
+                      disabled={viewBusy}
+                      type="button"
+                    >
+                      {viewBusy
+                        ? "Updating..."
+                        : isCustomerViewOnForSession(activeView, selectedSession.id)
+                        ? "Hide Customer"
+                        : "View Customer"}
+                    </button>
 
-                  <button
-                    className="crv-btn crv-btn-light"
-                    onClick={() => setSelectedSession(null)}
-                    type="button"
-                  >
-                    Close
-                  </button>
+                    <button
+                      className="crv-btn crv-btn-light"
+                      onClick={() => setSelectedSession(null)}
+                      type="button"
+                    >
+                      Close
+                    </button>
+                  </div>
                 </div>
               </div>
             );
-          })()}
-        </FixedCenterModal>
+          })()
+        ) : null}
+      </FixedCenterModal>
 
         <FixedCenterModal
           open={!!discountTarget}

@@ -438,17 +438,6 @@ const FixedCenterModal: React.FC<FixedCenterModalProps> = ({
         aria-modal="true"
         aria-label={title}
       >
-        <div className="cll-fm-head">
-          <h3>{title}</h3>
-          <button
-            className="cll-fm-close"
-            onClick={onClose}
-            type="button"
-            aria-label="Close modal"
-          >
-            ×
-          </button>
-        </div>
 
         <div className="cll-fm-body">{children}</div>
       </div>
@@ -2195,161 +2184,191 @@ const Customer_Lists: React.FC = () => {
           )}
         </FixedCenterModal>
 
-        {/* RECEIPT MODAL */}
+       {/* RECEIPT MODAL */}
         <FixedCenterModal
           open={!!selectedSession}
-          title="Receipt"
-          size="md"
+          title=""
+          size="sm"
           onClose={() => setSelectedSession(null)}
         >
-          {selectedSession && (() => {
-            const orderBundle = getOrderBundle(selectedSession);
-            const systemPay = getSystemPaymentInfo(selectedSession);
-            const orderPay = getOrderPaymentInfo(selectedSession);
-            const ordersTotal = getOrdersTotal(selectedSession);
-            const bottomInfo = getDisplayAmount(selectedSession);
+          {selectedSession ? (
+            (() => {
+              const orders = getOrderBundle(selectedSession).items;
+              const systemCost = getSystemDue(selectedSession);
+              const systemPay = getSystemPaymentInfo(selectedSession);
+              const orderPay = getOrderPaymentInfo(selectedSession);
+              const ordersTotal = getOrdersTotal(selectedSession);
+              const di = getDiscountInfo(selectedSession);
+              const totalPaid = wholePeso(systemPay.totalPaid + orderPay.totalPaid);
+              const totalDue = getGrandDue(selectedSession);
+              const totalChange = wholePeso(Math.max(0, totalPaid - totalDue));
+              const bottomInfo = getDisplayAmount(selectedSession);
 
-            return (
-              <div className="cll-receipt">
-                <div className="cll-receipt-brand">
-                  <div>
-                    <div className="cll-receipt-brand-top">ME TYME LOUNGE</div>
-                    <div className="cll-receipt-brand-sub">Customer Receipt</div>
-                  </div>
-                  <img src={logo} alt="Study Hub" className="cll-plain-receipt-logo" />
-                </div>
+              return (
+                <div className="cll-plain-receipt-wrap">
+                  <div className="cll-plain-receipt">
+                    <div className="cll-plain-brand">
+                      <img
+                        src={logo}
+                        alt="Me Tyme Lounge"
+                        className="cll-plain-receipt-logo"
+                      />
+                      <div className="cll-plain-brand-top">ME TYME LOUNGE</div>
+                      <div className="cll-plain-brand-title">Customer Receipt</div>
+                    </div>
 
-                <div className="cll-receipt-block">
-                  <div className="cll-receipt-row">
-                    <span>Name</span>
-                    <span>{selectedSession.full_name}</span>
-                  </div>
-                  <div className="cll-receipt-row">
-                    <span>Date</span>
-                    <span>{formatDateText(selectedSession.date)}</span>
-                  </div>
-                  <div className="cll-receipt-row">
-                    <span>Booking Code</span>
-                    <span>{selectedSession.booking_code ?? "—"}</span>
-                  </div>
-                  <div className="cll-receipt-row">
-                    <span>Seat</span>
-                    <span>{selectedSession.seat_number}</span>
-                  </div>
-                  <div className="cll-receipt-row">
-                    <span>Time</span>
-                    <span>
-                      {formatTimeText(selectedSession.time_started)} -{" "}
-                      {renderTimeOut(selectedSession)}
-                    </span>
-                  </div>
-                  <div className="cll-receipt-row">
-                    <span>Used Minutes</span>
-                    <span>{getUsedMinutesForReceipt(selectedSession)} mins</span>
-                  </div>
-                  <div className="cll-receipt-row">
-                    <span>Charge Minutes</span>
-                    <span>{getChargeMinutesForReceipt(selectedSession)} mins</span>
-                  </div>
-                  <div className="cll-receipt-row">
-                    <span>System Cost</span>
-                    <span>₱{getSystemDue(selectedSession)}</span>
-                  </div>
-                  <div className="cll-receipt-row">
-                    <span>Order Total</span>
-                    <span>₱{ordersTotal}</span>
-                  </div>
-                  <div className="cll-receipt-row">
-                    <span>Down Payment</span>
-                    <span>₱{getDownPayment(selectedSession)}</span>
-                  </div>
+                    <div className="cll-plain-block">
+                      <div className="cll-plain-row">
+                        <span>Name</span>
+                        <strong>{selectedSession.full_name || "N/A"}</strong>
+                      </div>
 
-                  {orderBundle.items.length > 0 && (
-                    <>
-                      <div className="cll-receipt-orders-title">Order List</div>
-                      {orderBundle.items.map((item, idx) => (
-                        <div
-                          className="cll-receipt-row"
-                          key={`${item.source}-${item.name}-${idx}`}
-                        >
-                          <span>
-                            {item.name} x{item.qty}
-                          </span>
-                          <span>₱{item.subtotal}</span>
+                      <div className="cll-plain-row">
+                        <span>Date</span>
+                        <strong>{formatDateText(selectedSession.date)}</strong>
+                      </div>
+
+                      <div className="cll-plain-row">
+                        <span>Seat</span>
+                        <strong>{selectedSession.seat_number || "N/A"}</strong>
+                      </div>
+
+                      {selectedSession.booking_code && (
+                        <div className="cll-plain-row">
+                          <span>Booking Code</span>
+                          <strong>{selectedSession.booking_code}</strong>
                         </div>
-                      ))}
-                    </>
-                  )}
-                </div>
-
-                <div className="cll-receipt-block">
-                  <div className="cll-receipt-row">
-                    <span>System Payment</span>
-                    <span>GCash ₱{systemPay.gcash} / Cash ₱{systemPay.cash}</span>
-                  </div>
-
-                  {ordersTotal > 0 && (
-                    <div className="cll-receipt-row">
-                      <span>Order Payment</span>
-                      <span>GCash ₱{orderPay.gcash} / Cash ₱{orderPay.cash}</span>
+                      )}
                     </div>
-                  )}
 
-                  <div className="cll-receipt-row">
-                    <span>System Remaining</span>
-                    <span>₱{getSystemRemaining(selectedSession)}</span>
-                  </div>
+                    <div className="cll-plain-divider" />
 
-                  {ordersTotal > 0 && (
-                    <div className="cll-receipt-row">
-                      <span>Order Remaining</span>
-                      <span>₱{getOrderRemaining(selectedSession)}</span>
+                    <div className="cll-plain-items">
+                      {orders.length > 0 ? (
+                        orders.map((item) => (
+                          <div className="cll-plain-item-card" key={item.id}>
+                            <div className="cll-plain-item-left">
+                              <div className="cll-plain-item-name">
+                                {item.name}
+                                {item.size ? ` (${item.size})` : ""}
+                              </div>
+                              <div className="cll-plain-item-sub">
+                                {item.qty} × ₱{item.price}
+                              </div>
+                            </div>
+                            <div className="cll-plain-item-total">₱{item.subtotal}</div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="cll-plain-item-card">
+                          <div className="cll-plain-item-left">
+                            <div className="cll-plain-item-name">Customer Session</div>
+                            <div className="cll-plain-item-sub">
+                              {isOpenTimeSession(selectedSession)
+                                ? "Open time session"
+                                : `${getUsedMinutesForReceipt(selectedSession)} mins used`}
+                            </div>
+                          </div>
+                          <div className="cll-plain-item-total">₱{systemCost}</div>
+                        </div>
+                      )}
                     </div>
-                  )}
 
-                  <div className="cll-receipt-row">
-                    <span>Status</span>
-                    <span className="cll-receipt-status">
-                      {toBool(selectedSession.is_paid) ? "PAID" : "UNPAID"}
-                    </span>
-                  </div>
+                    <div className="cll-plain-divider" />
 
-                  <div className="cll-receipt-total">
-                    <span>{bottomInfo.label}</span>
-                    <span>₱{bottomInfo.value}</span>
+                    <div className="cll-plain-summary">
+                      <div className="cll-plain-row">
+                        <span>System Cost</span>
+                        <strong>₱{systemCost}</strong>
+                      </div>
+
+                      <div className="cll-plain-row">
+                        <span>Discount</span>
+                        <strong>{getDiscountTextFrom(di.kind, di.value)}</strong>
+                      </div>
+
+                      <div className="cll-plain-row">
+                        <span>Orders Total</span>
+                        <strong>₱{ordersTotal}</strong>
+                      </div>
+
+                      <div className="cll-plain-row">
+                        <span>Down Payment</span>
+                        <strong>₱{getDownPayment(selectedSession)}</strong>
+                      </div>
+
+                      <div className="cll-plain-row">
+                        <span>GCash</span>
+                        <strong>₱{systemPay.gcash + orderPay.gcash}</strong>
+                      </div>
+
+                      <div className="cll-plain-row">
+                        <span>Cash</span>
+                        <strong>₱{systemPay.cash + orderPay.cash}</strong>
+                      </div>
+
+                      <div className="cll-plain-row">
+                        <span>Total Paid</span>
+                        <strong>₱{totalPaid}</strong>
+                      </div>
+
+                      <div className="cll-plain-row">
+                        <span>Change</span>
+                        <strong>₱{totalChange}</strong>
+                      </div>
+
+                      <div className="cll-plain-row">
+                        <span>Status</span>
+                        <strong
+                          className={
+                            getFinalPaidStatus(selectedSession)
+                              ? "cll-plain-status paid"
+                              : "cll-plain-status unpaid"
+                          }
+                        >
+                          {getFinalPaidStatus(selectedSession) ? "PAID" : "UNPAID"}
+                        </strong>
+                      </div>
+                    </div>
+
+                    <div className="cll-plain-total-box">
+                      <span>{bottomInfo.label}</span>
+                      <strong>₱{bottomInfo.value}</strong>
+                    </div>
+
+                    <p className="cll-plain-thankyou">
+                      Thank you for choosing
+                      <br />
+                      <strong>Me Tyme Lounge</strong>
+                    </p>
+
+                    <div className="cll-plain-actions">
+                      <button
+                        className="cll-btn cll-btn-dark"
+                        onClick={() => void toggleCustomerViewForSession(selectedSession)}
+                        disabled={viewBusy}
+                        type="button"
+                      >
+                        {viewBusy
+                          ? "Updating..."
+                          : isCustomerViewOnForSession(activeView, selectedSession.id)
+                          ? "Hide Customer"
+                          : "View Customer"}
+                      </button>
+
+                      <button
+                        className="cll-btn cll-btn-light"
+                        onClick={() => setSelectedSession(null)}
+                        type="button"
+                      >
+                        Close
+                      </button>
+                    </div>
                   </div>
                 </div>
-
-                <p className="cll-receipt-footer">
-                  Thank you for choosing <br />
-                  <strong>Me Tyme Lounge</strong>
-                </p>
-
-                <div className="cll-modal-actions">
-                  <button
-                    className="cll-btn cll-btn-dark"
-                    onClick={() => void toggleCustomerViewForSession(selectedSession)}
-                    disabled={viewBusy}
-                    type="button"
-                  >
-                    {viewBusy
-                      ? "Updating..."
-                      : isCustomerViewOnForSession(activeView, selectedSession.id)
-                      ? "Stop View"
-                      : "View Customer"}
-                  </button>
-
-                  <button
-                    className="cll-btn cll-btn-light"
-                    onClick={() => setSelectedSession(null)}
-                    type="button"
-                  >
-                    Close
-                  </button>
-                </div>
-              </div>
-            );
-          })()}
+              );
+            })()
+          ) : null}
         </FixedCenterModal>
 
         {/* DISCOUNT */}
