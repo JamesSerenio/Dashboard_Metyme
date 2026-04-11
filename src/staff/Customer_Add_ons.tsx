@@ -1,559 +1,956 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { supabase } from "../utils/supabaseClient";
-import { motion, AnimatePresence } from "framer-motion";
-import {
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  Tooltip,
-  Legend,
-  LineChart,
-  Line,
-  CartesianGrid,
-  XAxis,
-  YAxis,
-} from "recharts";
-import "../styles/admin_dashboard.css";
+import logo from "../assets/study_hub.png";
+import "../styles/Customer_Add_ons.css";
 
-import iconWalkin from "../assets/list.png";
-import iconReserve from "../assets/reserve.png";
-import iconPromo from "../assets/discount.png";
-import iconAll from "../assets/all.png";
-import iconCalendar from "../assets/calendar.png";
+type NumericLike = number | string;
 
-type Totals = {
-  walkin: number;
-  reservation: number;
-  promo: number;
-  all: number;
-};
+interface AddOnInfo {
+  id: string;
+  name: string;
+  category: string;
+  size: string | null;
+}
 
-type PieName = "Walk-in" | "Reservation" | "Promo";
+interface CustomerSessionAddOnRow {
+  id: string;
+  created_at: string;
+  add_on_id: string;
+  quantity: number;
+  price: NumericLike;
+  total: NumericLike;
+  full_name: string;
+  seat_number: string;
+  gcash_amount: NumericLike;
+  cash_amount: NumericLike;
+  is_paid: boolean | number | string | null;
+  paid_at: string | null;
+  add_ons: AddOnInfo | null;
+}
 
-type PieRow = {
-  name: PieName;
-  value: number;
-};
+interface CustomerAddOnMerged {
+  id: string;
+  created_at: string;
+  add_on_id: string;
+  quantity: number;
+  price: number;
+  total: number;
+  full_name: string;
+  seat_number: string;
+  item_name: string;
+  category: string;
+  size: string | null;
+  gcash_amount: number;
+  cash_amount: number;
+  is_paid: boolean;
+  paid_at: string | null;
+}
 
-type LineRow = {
-  day: string;
+type OrderItem = {
+  id: string;
+  add_on_id: string;
+  category: string;
+  size: string | null;
+  item_name: string;
+  quantity: number;
+  price: number;
   total: number;
 };
 
-const PIE_COLORS: Record<PieName, string> = {
-  "Walk-in": "#2f3b2f",
-  Reservation: "#6a3fb5",
-  Promo: "#c04b1a",
+type OrderGroup = {
+  key: string;
+  created_at: string;
+  full_name: string;
+  seat_number: string;
+  items: OrderItem[];
+  grand_total: number;
+  gcash_amount: number;
+  cash_amount: number;
+  is_paid: boolean;
+  paid_at: string | null;
 };
 
-const pad2 = (n: number): string => String(n).padStart(2, "0");
+/* ---------------- helpers ---------------- */
 
-const toYYYYMMDD = (d: Date): string => {
+const toNumber = (v: NumericLike | null | undefined): number => {
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  if (typeof v === "string") {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  }
+  return 0;
+};
+
+const round2 = (n: number): number => Number((Number.isFinite(n) ? n : 0).toFixed(2));
+
+const toBool = (v: unknown): boolean => {
+  if (typeof v === "boolean") return v;
+  if (typeof v === "number") return v !== 0;
+  if (typeof v === "string") {
+    const s = v.trim().toLowerCase();
+    return s === "true" || s === "1" || s === "yes" || s === "paid";
+  }
+  return false;
+};
+
+const yyyyMmDdLocal = (d: Date): string => {
   const y = d.getFullYear();
-  const m = pad2(d.getMonth() + 1);
-  const day = pad2(d.getDate());
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 };
 
-const formatPretty = (yyyyMmDd: string): string => {
-  const [y, m, d] = yyyyMmDd.split("-").map(Number);
-  const dt = new Date(y, m - 1, d);
-  return dt.toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "2-digit",
-  });
+const norm = (s: string | null | undefined): string => (s ?? "").trim().toLowerCase();
+
+const ms = (iso: string): number => {
+  const t = new Date(iso).getTime();
+  return Number.isFinite(t) ? t : 0;
 };
 
-const formatShort = (yyyyMmDd: string): string => {
-  const [y, m, d] = yyyyMmDd.split("-").map(Number);
-  const dt = new Date(y, m - 1, d);
-  return dt.toLocaleDateString("en-US", {
-    month: "short",
-    day: "2-digit",
-  });
+const moneyText = (n: number): string => `₱${round2(n).toFixed(2)}`;
+
+const sizeText = (s: string | null | undefined): string => {
+  const v = String(s ?? "").trim();
+  return v.length > 0 ? v : "—";
 };
 
-const addDaysYYYYMMDD = (yyyyMmDd: string, delta: number): string => {
-  const [y, m, d] = yyyyMmDd.split("-").map(Number);
-  const dt = new Date(y, m - 1, d);
-  dt.setDate(dt.getDate() + delta);
-  return toYYYYMMDD(dt);
+const manilaDayRange = (yyyyMmDd: string): { startIso: string; endIso: string } => {
+  const start = new Date(`${yyyyMmDd}T00:00:00+08:00`);
+  const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+  return { startIso: start.toISOString(), endIso: end.toISOString() };
 };
 
-const pct = (part: number, total: number): number => {
-  if (!Number.isFinite(part) || !Number.isFinite(total) || total <= 0) return 0;
-  return (part / total) * 100;
+const GROUP_WINDOW_MS = 10_000;
+
+const samePersonSeat = (a: CustomerAddOnMerged, b: CustomerAddOnMerged): boolean =>
+  norm(a.full_name) === norm(b.full_name) && norm(a.seat_number) === norm(b.seat_number);
+
+const formatDateTime = (iso: string): string => {
+  const d = new Date(iso);
+  if (!Number.isFinite(d.getTime())) return "-";
+  return d.toLocaleString("en-PH");
 };
 
-const formatPct = (n: number): string => {
-  if (!Number.isFinite(n)) return "0%";
-  const rounded1 = Math.round(n * 10) / 10;
-  const isInt = Math.abs(rounded1 - Math.round(rounded1)) < 1e-9;
-  return `${isInt ? Math.round(rounded1) : rounded1}%`;
+/* ---------------- fixed center modal ---------------- */
+
+type FixedCenterModalProps = {
+  open: boolean;
+  title?: string;
+  size?: "sm" | "md" | "lg";
+  onClose: () => void;
+  children: React.ReactNode;
 };
 
-const cardSpring = {
-  type: "spring" as const,
-  stiffness: 180,
-  damping: 18,
-  mass: 0.9,
-};
-
-const numberSpring = {
-  type: "spring" as const,
-  stiffness: 260,
-  damping: 20,
-  mass: 0.6,
-};
-
-const Admin_Dashboard: React.FC = () => {
-  const todayYYYYMMDD = useMemo(() => toYYYYMMDD(new Date()), []);
-
-  const [selectedDate, setSelectedDate] = useState<string>(todayYYYYMMDD);
-  const [openCalendar, setOpenCalendar] = useState<boolean>(false);
-
-  const [totals, setTotals] = useState<Totals>({
-    walkin: 0,
-    reservation: 0,
-    promo: 0,
-    all: 0,
-  });
-
-  const [pulseKey, setPulseKey] = useState<number>(0);
-  const [weekSeries, setWeekSeries] = useState<LineRow[]>([]);
-  const [weekLoading, setWeekLoading] = useState<boolean>(false);
-
-  const prettyDate = useMemo(() => formatPretty(selectedDate), [selectedDate]);
-  const weekStart = useMemo(
-    () => addDaysYYYYMMDD(selectedDate, -6),
-    [selectedDate],
-  );
-
-  const weekRangeLabel = useMemo(() => {
-    return `${formatPretty(weekStart)} – ${formatPretty(selectedDate)}`;
-  }, [weekStart, selectedDate]);
-
-  const fetchTotalsForDate = async (dateYYYYMMDD: string): Promise<Totals> => {
-    const walkinQ = supabase
-      .from("customer_sessions")
-      .select("id", { count: "exact", head: true })
-      .eq("date", dateYYYYMMDD)
-      .eq("reservation", "no");
-
-    const reservationQ = supabase
-      .from("customer_sessions")
-      .select("id", { count: "exact", head: true })
-      .eq("date", dateYYYYMMDD)
-      .eq("reservation", "yes");
-
-    const startOfDay = new Date(`${dateYYYYMMDD}T00:00:00`);
-    const endOfDay = new Date(`${dateYYYYMMDD}T23:59:59`);
-
-    const promoQ = supabase
-      .from("promo_bookings")
-      .select("id", { count: "exact", head: true })
-      .gte("start_at", startOfDay.toISOString())
-      .lte("start_at", endOfDay.toISOString());
-
-    const [walkinRes, reservationRes, promoRes] = await Promise.all([
-      walkinQ,
-      reservationQ,
-      promoQ,
-    ]);
-
-    const walkin = walkinRes.count ?? 0;
-    const reservation = reservationRes.count ?? 0;
-    const promo = promoRes.count ?? 0;
-
-    return {
-      walkin,
-      reservation,
-      promo,
-      all: walkin + reservation + promo,
-    };
-  };
-
+const FixedCenterModal: React.FC<FixedCenterModalProps> = ({
+  open,
+  title,
+  size = "md",
+  onClose,
+  children,
+}) => {
   useEffect(() => {
-    let alive = true;
+    if (!open) return;
 
-    const run = async (): Promise<void> => {
-      const t = await fetchTotalsForDate(selectedDate);
-      if (!alive) return;
+    const prevOverflow = document.body.style.overflow;
+    const prevTouchAction = document.body.style.touchAction;
 
-      setTotals(t);
-      setPulseKey((k) => k + 1);
+    document.body.style.overflow = "hidden";
+    document.body.style.touchAction = "none";
+    document.body.classList.add("cao-modal-open");
 
-      setWeekLoading(true);
-
-      try {
-        const days: string[] = Array.from({ length: 7 }, (_, i) =>
-          addDaysYYYYMMDD(selectedDate, i - 6),
-        );
-
-        const results = await Promise.all(
-          days.map(async (d) => {
-            const tt = await fetchTotalsForDate(d);
-            return {
-              day: formatShort(d),
-              total: tt.all,
-            };
-          }),
-        );
-
-        if (!alive) return;
-        setWeekSeries(results);
-      } finally {
-        if (alive) setWeekLoading(false);
-      }
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
     };
 
-    void run();
+    window.addEventListener("keydown", handleKey);
 
     return () => {
-      alive = false;
+      document.body.style.overflow = prevOverflow;
+      document.body.style.touchAction = prevTouchAction;
+      document.body.classList.remove("cao-modal-open");
+      window.removeEventListener("keydown", handleKey);
     };
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return createPortal(
+    <div className="cao-fm-overlay" onClick={onClose}>
+      <div
+        className={`cao-fm-card cao-fm-${size}`}
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title || "Modal"}
+      >
+        {children}
+      </div>
+    </div>,
+    document.body
+  );
+};
+
+/* ---------------- component ---------------- */
+
+const Customer_Add_ons: React.FC = () => {
+  const [records, setRecords] = useState<CustomerAddOnMerged[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+
+  const [selectedDate, setSelectedDate] = useState<string>(yyyyMmDdLocal(new Date()));
+  const [searchText, setSearchText] = useState<string>("");
+
+  const [selectedOrder, setSelectedOrder] = useState<OrderGroup | null>(null);
+
+  const [paymentTarget, setPaymentTarget] = useState<OrderGroup | null>(null);
+  const [gcashInput, setGcashInput] = useState<string>("0");
+  const [cashInput, setCashInput] = useState<string>("0");
+  const [savingPayment, setSavingPayment] = useState<boolean>(false);
+
+  const [togglingPaidKey, setTogglingPaidKey] = useState<string | null>(null);
+
+  const [cancelTarget, setCancelTarget] = useState<OrderGroup | null>(null);
+  const [cancelDesc, setCancelDesc] = useState<string>("");
+  const [cancellingKey, setCancellingKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    void fetchAddOns(selectedDate);
+  }, []);
+
+  useEffect(() => {
+    void fetchAddOns(selectedDate);
   }, [selectedDate]);
 
-  const pieData: PieRow[] = useMemo(
-    () => [
-      { name: "Walk-in", value: totals.walkin },
-      { name: "Reservation", value: totals.reservation },
-      { name: "Promo", value: totals.promo },
-    ],
-    [totals.walkin, totals.reservation, totals.promo],
-  );
+  const fetchAddOns = async (dateStr: string): Promise<void> => {
+    setLoading(true);
 
-  const pieTotal = useMemo(
-    () => totals.walkin + totals.reservation + totals.promo,
-    [totals.walkin, totals.reservation, totals.promo],
-  );
+    const { startIso, endIso } = manilaDayRange(dateStr);
 
-  const walkinPct = useMemo(
-    () => formatPct(pct(totals.walkin, totals.all)),
-    [totals.walkin, totals.all],
-  );
-  const reservePct = useMemo(
-    () => formatPct(pct(totals.reservation, totals.all)),
-    [totals.reservation, totals.all],
-  );
-  const promoPct = useMemo(
-    () => formatPct(pct(totals.promo, totals.all)),
-    [totals.promo, totals.all],
-  );
+    const q = supabase
+      .from("customer_session_add_ons")
+      .select(
+        `
+        id,
+        created_at,
+        add_on_id,
+        quantity,
+        price,
+        total,
+        full_name,
+        seat_number,
+        gcash_amount,
+        cash_amount,
+        is_paid,
+        paid_at,
+        add_ons (
+          id,
+          name,
+          category,
+          size
+        )
+      `
+      )
+      .gte("created_at", startIso)
+      .lt("created_at", endIso)
+      .order("created_at", { ascending: true });
+
+    const { data, error } = await q.returns<CustomerSessionAddOnRow[]>();
+
+    if (error) {
+      console.error("FETCH ADD-ONS ERROR:", error);
+      setRecords([]);
+      setLoading(false);
+      return;
+    }
+
+    const merged: CustomerAddOnMerged[] = (data ?? []).map((r) => {
+      const a = r.add_ons;
+      return {
+        id: r.id,
+        created_at: r.created_at,
+        add_on_id: r.add_on_id,
+        quantity: Number.isFinite(r.quantity) ? r.quantity : 0,
+        price: toNumber(r.price),
+        total: toNumber(r.total),
+        full_name: r.full_name,
+        seat_number: r.seat_number,
+        item_name: a?.name ?? "-",
+        category: a?.category ?? "-",
+        size: a?.size ?? null,
+        gcash_amount: round2(Math.max(0, toNumber(r.gcash_amount))),
+        cash_amount: round2(Math.max(0, toNumber(r.cash_amount))),
+        is_paid: toBool(r.is_paid),
+        paid_at: r.paid_at ?? null,
+      };
+    });
+
+    setRecords(merged);
+    setLoading(false);
+  };
+
+  const groupedOrdersAll = useMemo<OrderGroup[]>(() => {
+    if (records.length === 0) return [];
+
+    const groups: OrderGroup[] = [];
+    let current: OrderGroup | null = null;
+    let lastRow: CustomerAddOnMerged | null = null;
+
+    for (const row of records) {
+      const startNew =
+        current === null ||
+        lastRow === null ||
+        !samePersonSeat(row, lastRow) ||
+        Math.abs(ms(row.created_at) - ms(lastRow.created_at)) > GROUP_WINDOW_MS;
+
+      if (startNew) {
+        const key = `${norm(row.full_name)}|${norm(row.seat_number)}|${ms(row.created_at)}`;
+
+        current = {
+          key,
+          created_at: row.created_at,
+          full_name: row.full_name,
+          seat_number: row.seat_number,
+          items: [],
+          grand_total: 0,
+          gcash_amount: 0,
+          cash_amount: 0,
+          is_paid: false,
+          paid_at: null,
+        };
+
+        groups.push(current);
+      }
+
+      if (!current) continue;
+
+      current.items.push({
+        id: row.id,
+        add_on_id: row.add_on_id,
+        category: row.category,
+        size: row.size,
+        item_name: row.item_name,
+        quantity: Number(row.quantity) || 0,
+        price: row.price,
+        total: row.total,
+      });
+
+      current.grand_total = round2(current.grand_total + row.total);
+      current.gcash_amount = round2(current.gcash_amount + row.gcash_amount);
+      current.cash_amount = round2(current.cash_amount + row.cash_amount);
+      current.is_paid = current.is_paid || row.is_paid;
+      current.paid_at = current.paid_at ?? row.paid_at;
+
+      lastRow = row;
+    }
+
+    return groups.sort((a, b) => ms(b.created_at) - ms(a.created_at));
+  }, [records]);
+
+  const groupedOrders = useMemo<OrderGroup[]>(() => {
+    const q = searchText.trim().toLowerCase();
+    if (!q) return groupedOrdersAll;
+
+    return groupedOrdersAll.filter((o) => {
+      const name = String(o.full_name ?? "").toLowerCase();
+      const seat = String(o.seat_number ?? "").toLowerCase();
+      const items = o.items.some((it) => String(it.item_name ?? "").toLowerCase().includes(q));
+      return name.includes(q) || seat.includes(q) || items;
+    });
+  }, [groupedOrdersAll, searchText]);
+
+  const openPaymentModal = (o: OrderGroup): void => {
+    setPaymentTarget(o);
+    setGcashInput(String(round2(Math.max(0, o.gcash_amount))));
+    setCashInput(String(round2(Math.max(0, o.cash_amount))));
+  };
+
+  const savePayment = async (): Promise<void> => {
+    if (!paymentTarget) return;
+
+    const g = round2(Math.max(0, toNumber(gcashInput)));
+    const c = round2(Math.max(0, toNumber(cashInput)));
+    const itemIds = paymentTarget.items.map((x) => x.id);
+    if (itemIds.length === 0) return;
+
+    try {
+      setSavingPayment(true);
+
+      const { error } = await supabase.rpc("set_addon_payment", {
+        p_item_ids: itemIds,
+        p_gcash: g,
+        p_cash: c,
+      });
+
+      if (error) {
+        alert(`Save payment error: ${error.message}`);
+        return;
+      }
+
+      setPaymentTarget(null);
+      await fetchAddOns(selectedDate);
+    } catch (e) {
+      console.error(e);
+      alert("Save payment failed.");
+    } finally {
+      setSavingPayment(false);
+    }
+  };
+
+  const togglePaid = async (o: OrderGroup): Promise<void> => {
+    const itemIds = o.items.map((x) => x.id);
+    if (itemIds.length === 0) return;
+
+    try {
+      setTogglingPaidKey(o.key);
+
+      const nextPaid = !toBool(o.is_paid);
+
+      const { error } = await supabase.rpc("set_addon_paid_status", {
+        p_item_ids: itemIds,
+        p_is_paid: nextPaid,
+      });
+
+      if (error) {
+        alert(`Toggle paid error: ${error.message}`);
+        return;
+      }
+
+      await fetchAddOns(selectedDate);
+    } catch (e) {
+      console.error(e);
+      alert("Toggle paid failed.");
+    } finally {
+      setTogglingPaidKey(null);
+    }
+  };
+
+  const openCancelModal = (o: OrderGroup): void => {
+    setCancelTarget(o);
+    setCancelDesc("");
+  };
+
+  const submitCancel = async (): Promise<void> => {
+    if (!cancelTarget) return;
+
+    const desc = cancelDesc.trim();
+    if (!desc) {
+      alert("Description is required before you can cancel.");
+      return;
+    }
+
+    const itemIds = cancelTarget.items.map((x) => x.id);
+    if (itemIds.length === 0) {
+      alert("Nothing to cancel.");
+      return;
+    }
+
+    try {
+      setCancellingKey(cancelTarget.key);
+
+      const { error } = await supabase.rpc("cancel_add_on_order", {
+        p_item_ids: itemIds,
+        p_description: desc,
+      });
+
+      if (error) {
+        alert(`Cancel error: ${error.message}`);
+        return;
+      }
+
+      setCancelTarget(null);
+      setSelectedOrder(null);
+      await fetchAddOns(selectedDate);
+    } catch (e) {
+      console.error(e);
+      alert("Cancel failed.");
+    } finally {
+      setCancellingKey(null);
+    }
+  };
 
   return (
-    <div className="admin-dashboard-page">
-      <div className="admin-dashboard-wrap">
-        <div className="admin-dash-headline">
-          <div>
-            <span className="admin-dash-badge">Metyme Lounge Performance</span>
-            <h2>Admin Dashboard</h2>
-            <p>Monitor walk-ins, reservations, promos, and weekly activity.</p>
+    <div className="cao-page">
+      <div className="cao-shell">
+        <section className="cao-topbar">
+          <div className="cao-topbar-left">
+            <h2 className="cao-title">Customer Add-Ons Records</h2>
+            <div className="cao-subtext">
+              Showing records for: <strong>{selectedDate}</strong> ({groupedOrders.length})
+            </div>
           </div>
 
-          <button
-            type="button"
-            className="admin-dash-date-btn"
-            onClick={() => setOpenCalendar(true)}
-          >
-            <img src={iconCalendar} alt="Calendar" />
-            <span>{prettyDate}</span>
-          </button>
-        </div>
+          <div className="cao-topbar-right">
+            <div className="cao-searchbar-inline">
+              <div className="cao-searchbar-inner">
+                <span className="cao-search-icon" aria-hidden="true">
+                  🔎
+                </span>
 
-        <div className="admin-dash-totals-row">
-          <motion.div
-            className="admin-dash-total-card admin-dash-total-card--walkin"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={cardSpring}
-          >
-            <img className="admin-dash-total-icon" src={iconWalkin} alt="Walk-in" />
+                <input
+                  className="cao-search-input"
+                  type="text"
+                  placeholder="Search name / seat / item..."
+                  value={searchText}
+                  onChange={(e) => setSearchText(e.currentTarget.value)}
+                />
 
-            <div className="admin-dash-total-meta">
-              <div className="admin-dash-total-label">Walk-in</div>
-              <AnimatePresence mode="popLayout">
-                <motion.div
-                  key={`walkin-${pulseKey}-${totals.walkin}`}
-                  className="admin-dash-total-value"
-                  initial={{ scale: 0.92, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.92, opacity: 0 }}
-                  transition={numberSpring}
-                >
-                  {totals.walkin}
-                </motion.div>
-              </AnimatePresence>
-            </div>
-
-            <div className="admin-dash-total-percent">
-              <strong>{walkinPct}</strong>
-              <span>of total</span>
-            </div>
-          </motion.div>
-
-          <motion.div
-            className="admin-dash-total-card admin-dash-total-card--reserve"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ ...cardSpring, delay: 0.03 }}
-          >
-            <img
-              className="admin-dash-total-icon"
-              src={iconReserve}
-              alt="Reservation"
-            />
-
-            <div className="admin-dash-total-meta">
-              <div className="admin-dash-total-label">Reservation</div>
-              <AnimatePresence mode="popLayout">
-                <motion.div
-                  key={`reserve-${pulseKey}-${totals.reservation}`}
-                  className="admin-dash-total-value"
-                  initial={{ scale: 0.92, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.92, opacity: 0 }}
-                  transition={numberSpring}
-                >
-                  {totals.reservation}
-                </motion.div>
-              </AnimatePresence>
-            </div>
-
-            <div className="admin-dash-total-percent">
-              <strong>{reservePct}</strong>
-              <span>of total</span>
-            </div>
-          </motion.div>
-
-          <motion.div
-            className="admin-dash-total-card admin-dash-total-card--promo"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ ...cardSpring, delay: 0.06 }}
-          >
-            <img className="admin-dash-total-icon" src={iconPromo} alt="Promo" />
-
-            <div className="admin-dash-total-meta">
-              <div className="admin-dash-total-label">Promo</div>
-              <AnimatePresence mode="popLayout">
-                <motion.div
-                  key={`promo-${pulseKey}-${totals.promo}`}
-                  className="admin-dash-total-value"
-                  initial={{ scale: 0.92, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.92, opacity: 0 }}
-                  transition={numberSpring}
-                >
-                  {totals.promo}
-                </motion.div>
-              </AnimatePresence>
-            </div>
-
-            <div className="admin-dash-total-percent">
-              <strong>{promoPct}</strong>
-              <span>of total</span>
-            </div>
-          </motion.div>
-
-          <motion.div
-            className="admin-dash-total-card admin-dash-total-card--all"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ ...cardSpring, delay: 0.09 }}
-          >
-            <img className="admin-dash-total-icon" src={iconAll} alt="All" />
-
-            <div className="admin-dash-total-meta">
-              <div className="admin-dash-total-label">Total All</div>
-              <AnimatePresence mode="popLayout">
-                <motion.div
-                  key={`all-${pulseKey}-${totals.all}`}
-                  className="admin-dash-total-value"
-                  initial={{ scale: 0.92, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.92, opacity: 0 }}
-                  transition={numberSpring}
-                >
-                  {totals.all}
-                </motion.div>
-              </AnimatePresence>
-            </div>
-
-            <div className="admin-dash-total-percent">
-              <strong>100%</strong>
-              <span>overview</span>
-            </div>
-          </motion.div>
-        </div>
-
-        <div className="admin-dash-charts-grid">
-          <motion.div
-            className="admin-dash-chart-card"
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ ...cardSpring, delay: 0.12 }}
-          >
-            <div className="admin-dash-chart-head">
-              <div>
-                <div className="admin-dash-chart-title">Total All (7 days)</div>
-                <div className="admin-dash-chart-sub">{weekRangeLabel}</div>
+                {searchText.trim() && (
+                  <button className="cao-search-clear" onClick={() => setSearchText("")} type="button">
+                    Clear
+                  </button>
+                )}
               </div>
             </div>
 
-            {weekLoading ? (
-              <div className="admin-dash-chart-loading">
-                <div className="admin-dash-loader" />
-                <div>Loading...</div>
-              </div>
-            ) : (
-              <div className="admin-dash-line-wrap">
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart
-                    data={weekSeries}
-                    margin={{ top: 10, right: 18, left: 0, bottom: 0 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="day" />
-                    <YAxis allowDecimals={false} />
-                    <Tooltip />
-                    <Line
-                      type="monotone"
-                      dataKey="total"
-                      stroke="#0f5a4a"
-                      strokeWidth={3}
-                      dot={{ r: 4 }}
-                      activeDot={{ r: 6 }}
-                      isAnimationActive
-                      animationDuration={700}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-          </motion.div>
+            <label className="cao-pill">
+              <span className="cao-pill-label">Date</span>
+              <input
+                className="cao-pill-input"
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(String(e.currentTarget.value ?? ""))}
+              />
+              <span className="cao-pill-icon" aria-hidden="true">
+                📅
+              </span>
+            </label>
 
-          <motion.div
-            className="admin-dash-chart-card"
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ ...cardSpring, delay: 0.16 }}
-          >
-            <div className="admin-dash-chart-head">
-              <div>
-                <div className="admin-dash-chart-title">Breakdown</div>
-                <div className="admin-dash-chart-sub">{prettyDate}</div>
-              </div>
+            <div className="cao-tools-row">
+              <button
+                className="cao-btn cao-btn-primary"
+                onClick={() => void fetchAddOns(selectedDate)}
+                disabled={loading}
+                type="button"
+              >
+                Refresh
+              </button>
             </div>
+          </div>
+        </section>
 
-            {pieTotal <= 0 ? (
-              <div className="admin-dash-chart-empty">No data for this date.</div>
-            ) : (
-              <div className="admin-dash-chart-body">
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={pieData}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={68}
-                      outerRadius={104}
-                      paddingAngle={3}
-                      isAnimationActive
-                      animationDuration={700}
-                    >
-                      {pieData.map((entry) => (
-                        <Cell
-                          key={`cell-${entry.name}`}
-                          fill={PIE_COLORS[entry.name]}
+        {loading ? (
+          <p className="cao-note">Loading...</p>
+        ) : groupedOrders.length === 0 ? (
+          <p className="cao-note">No add-ons found for this date</p>
+        ) : (
+          <div
+            className="cao-table-wrap"
+            key={selectedDate}
+            style={{ maxHeight: "560px", overflowY: "auto", overflowX: "auto" }}
+          >
+            <table className="cao-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Full Name</th>
+                  <th>Seat</th>
+                  <th>Items</th>
+                  <th>Grand Total</th>
+                  <th>Payment</th>
+                  <th>Paid?</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {groupedOrders.map((o) => {
+                  const due = round2(o.grand_total);
+                  const totalPaid = round2(o.gcash_amount + o.cash_amount);
+                  const diff = round2(totalPaid - due);
+                  const paid = toBool(o.is_paid);
+                  const busyCancel = cancellingKey === o.key;
+
+                  return (
+                    <tr key={o.key}>
+                      <td>{formatDateTime(o.created_at)}</td>
+                      <td>{o.full_name || "-"}</td>
+                      <td>{o.seat_number || "-"}</td>
+
+                      <td>
+                        <div className="cao-items-list">
+                          {o.items.map((it) => (
+                            <div key={it.id} className="cao-item-row">
+                              <div className="cao-item-left">
+                                <div className="cao-item-title">
+                                  {it.item_name}{" "}
+                                  <span className="cao-item-cat">
+                                    ({it.category}
+                                    {String(it.size ?? "").trim() ? ` • ${sizeText(it.size)}` : ""})
+                                  </span>
+                                </div>
+                                <div className="cao-item-sub">
+                                  Qty: {it.quantity} • {moneyText(it.price)}
+                                </div>
+                              </div>
+                              <div className="cao-item-total">{moneyText(it.total)}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </td>
+
+                      <td>
+                        <div className="cao-cell-stack">
+                          <span className="cao-cell-strong">{moneyText(due)}</span>
+                          <span className="cao-cell-muted">
+                            {diff >= 0
+                              ? `Change: ${moneyText(Math.abs(diff))}`
+                              : `Remaining: ${moneyText(Math.abs(diff))}`}
+                          </span>
+                        </div>
+                      </td>
+
+                      <td>
+                        <div className="cao-cell-stack cao-cell-center">
+                          <span className="cao-cell-strong">
+                            GCash {moneyText(o.gcash_amount)} / Cash {moneyText(o.cash_amount)}
+                          </span>
+                          <button
+                            className="cao-btn cao-btn-ghost"
+                            onClick={() => openPaymentModal(o)}
+                            disabled={due <= 0}
+                            title={due <= 0 ? "No amount due" : "Set Cash & GCash freely (no limit)"}
+                            type="button"
+                          >
+                            Payment
+                          </button>
+                        </div>
+                      </td>
+
+                      <td>
+                        <button
+                          className={`cao-btn cao-badge ${paid ? "cao-badge-paid" : "cao-badge-unpaid"}`}
+                          onClick={() => void togglePaid(o)}
+                          disabled={togglingPaidKey === o.key}
+                          title={paid ? "Tap to set UNPAID" : "Tap to set PAID"}
+                          type="button"
+                        >
+                          {togglingPaidKey === o.key ? "Updating..." : paid ? "PAID" : "UNPAID"}
+                        </button>
+                      </td>
+
+                      <td>
+                        <div className="cao-action-stack">
+                          <button
+                            className="cao-btn cao-btn-ghost"
+                            onClick={() => setSelectedOrder(o)}
+                            type="button"
+                          >
+                            View Receipt
+                          </button>
+
+                          <button
+                            className="cao-btn cao-btn-danger"
+                            disabled={busyCancel}
+                            onClick={() => openCancelModal(o)}
+                            type="button"
+                          >
+                            {busyCancel ? "Cancelling..." : "Cancel"}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <FixedCenterModal
+          open={!!paymentTarget}
+          title="Payment"
+          size="sm"
+          onClose={() => setPaymentTarget(null)}
+        >
+          {paymentTarget && (
+            <>
+              <div className="cao-modal-head">
+                <h3 className="cao-modal-title">PAYMENT</h3>
+                <p className="cao-modal-subtitle">{paymentTarget.full_name}</p>
+              </div>
+
+              <hr className="cao-line" />
+
+              {(() => {
+                const due = round2(Math.max(0, paymentTarget.grand_total));
+                const g = round2(Math.max(0, toNumber(gcashInput)));
+                const c = round2(Math.max(0, toNumber(cashInput)));
+                const totalPaid = round2(g + c);
+                const diff = round2(totalPaid - due);
+                const isPaidAuto = due <= 0 ? true : totalPaid >= due;
+
+                return (
+                  <>
+                    <div className="cao-payment-grid">
+                      <div className="cao-payment-summary">
+                        <div className="cao-payment-summary-row">
+                          <span>Payment Due</span>
+                          <strong>{moneyText(due)}</strong>
+                        </div>
+                      </div>
+
+                      <div className="cao-payment-row">
+                        <label htmlFor="cao-gcash">GCash</label>
+                        <input
+                          id="cao-gcash"
+                          className="cao-money-input cao-money-input-compact"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={gcashInput}
+                          onChange={(e) => setGcashInput(e.currentTarget.value)}
                         />
-                      ))}
-                    </Pie>
+                      </div>
 
-                    <Tooltip
-                      formatter={(value: unknown, name: unknown) => {
-                        const v = typeof value === "number" ? value : Number(value);
-                        const label = String(name);
-                        const pv = Number.isFinite(v) ? v : 0;
-                        return [`${pv} (${formatPct(pct(pv, pieTotal))})`, label];
-                      }}
-                    />
+                      <div className="cao-payment-row">
+                        <label htmlFor="cao-cash">Cash</label>
+                        <input
+                          id="cao-cash"
+                          className="cao-money-input cao-money-input-compact"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={cashInput}
+                          onChange={(e) => setCashInput(e.currentTarget.value)}
+                        />
+                      </div>
+                    </div>
 
-                    <Legend verticalAlign="bottom" />
-                  </PieChart>
-                </ResponsiveContainer>
+                    <hr className="cao-line" />
 
-                <div className="admin-dash-chart-center">
-                  <div className="admin-dash-chart-center-label">Total</div>
-                  <AnimatePresence mode="popLayout">
-                    <motion.div
-                      key={`pieTotal-${pulseKey}-${pieTotal}`}
-                      className="admin-dash-chart-center-value"
-                      initial={{ scale: 0.92, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      exit={{ scale: 0.92, opacity: 0 }}
-                      transition={numberSpring}
-                    >
-                      {pieTotal}
-                    </motion.div>
-                  </AnimatePresence>
+                    <div className="cao-payment-summary">
+                      <div className="cao-payment-summary-row">
+                        <span>Total Paid</span>
+                        <strong>{moneyText(totalPaid)}</strong>
+                      </div>
+
+                      <div className="cao-payment-summary-row">
+                        <span>{diff >= 0 ? "Change" : "Remaining"}</span>
+                        <strong>{moneyText(Math.abs(diff))}</strong>
+                      </div>
+
+                      <div className="cao-payment-summary-row">
+                        <span>Auto Status</span>
+                        <strong className={`cao-status-text ${isPaidAuto ? "is-paid" : "is-unpaid"}`}>
+                          {isPaidAuto ? "PAID" : "UNPAID"}
+                        </strong>
+                      </div>
+                    </div>
+
+                    <div className="cao-modal-actions cao-modal-actions-payment">
+                      <button
+                        className="cao-btn cao-btn-ghost"
+                        onClick={() => setPaymentTarget(null)}
+                        disabled={savingPayment}
+                        type="button"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        className="cao-btn cao-btn-primary"
+                        onClick={() => void savePayment()}
+                        disabled={savingPayment}
+                        type="button"
+                      >
+                        {savingPayment ? "Saving..." : "Save"}
+                      </button>
+                    </div>
+                  </>
+                );
+              })()}
+            </>
+          )}
+        </FixedCenterModal>
+
+        <FixedCenterModal
+          open={!!cancelTarget}
+          title="Cancel Order"
+          size="md"
+          onClose={() => (cancellingKey ? undefined : setCancelTarget(null))}
+        >
+          {cancelTarget && (
+            <>
+              <div className="cao-modal-head">
+                <h3 className="cao-modal-title">CANCEL ORDER</h3>
+                <p className="cao-modal-subtitle">
+                  {cancelTarget.full_name} • Seat {cancelTarget.seat_number}
+                </p>
+              </div>
+
+              <hr className="cao-line" />
+
+              <div className="cao-text-strong">Required: Description / Reason</div>
+
+              <textarea
+                className="cao-textarea"
+                value={cancelDesc}
+                onChange={(e) => setCancelDesc(e.currentTarget.value)}
+                placeholder="Example: Customer changed mind / wrong item / duplicate order..."
+                disabled={cancellingKey === cancelTarget.key}
+              />
+
+              <div className="cao-warning-text">
+                ⚠️ Cancel will archive this order to the cancel table and reverse SOLD.
+              </div>
+
+              <div className="cao-modal-actions">
+                <button
+                  className="cao-btn cao-btn-ghost"
+                  onClick={() => setCancelTarget(null)}
+                  disabled={cancellingKey === cancelTarget.key}
+                  type="button"
+                >
+                  Close
+                </button>
+                <button
+                  className="cao-btn cao-btn-danger"
+                  onClick={() => void submitCancel()}
+                  disabled={cancellingKey === cancelTarget.key || cancelDesc.trim().length === 0}
+                  title={cancelDesc.trim().length === 0 ? "Description required" : "Submit cancel"}
+                  type="button"
+                >
+                  {cancellingKey === cancelTarget.key ? "Cancelling..." : "Submit Cancel"}
+                </button>
+              </div>
+            </>
+          )}
+        </FixedCenterModal>
+
+        <FixedCenterModal
+          open={!!selectedOrder}
+          title="Official Receipt"
+          size="lg"
+          onClose={() => setSelectedOrder(null)}
+        >
+          {selectedOrder && (
+            <>
+              <img src={logo} alt="Me Tyme Lounge" className="cao-receipt-logo" />
+
+              <div className="cao-modal-head cao-modal-head-center">
+                <h3 className="cao-modal-title">ME TYME LOUNGE</h3>
+                <p className="cao-modal-subtitle">OFFICIAL RECEIPT</p>
+              </div>
+
+              <hr className="cao-line" />
+
+              <div className="cao-receipt-meta">
+                <div className="cao-receipt-meta-row">
+                  <span>Date</span>
+                  <strong>{formatDateTime(selectedOrder.created_at)}</strong>
+                </div>
+
+                <div className="cao-receipt-meta-row">
+                  <span>Customer</span>
+                  <strong>{selectedOrder.full_name}</strong>
+                </div>
+
+                <div className="cao-receipt-meta-row">
+                  <span>Seat</span>
+                  <strong>{selectedOrder.seat_number}</strong>
                 </div>
               </div>
-            )}
-          </motion.div>
-        </div>
-      </div>
 
-      {openCalendar && (
-        <div className="admin-dash-calendar-overlay" onClick={() => setOpenCalendar(false)}>
-          <div
-            className="admin-dash-calendar-card"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="admin-dash-calendar-head">
-              <h3>Select Date</h3>
+              <hr className="cao-line" />
+
+              <div className="cao-items-receipt">
+                {selectedOrder.items.map((it) => (
+                  <div key={it.id} className="cao-receipt-item-row">
+                    <div className="cao-receipt-item-left">
+                      <div className="cao-receipt-item-title">
+                        {it.item_name}{" "}
+                        <span className="cao-item-cat">
+                          ({it.category}
+                          {String(it.size ?? "").trim() ? ` • ${sizeText(it.size)}` : ""})
+                        </span>
+                      </div>
+                      <div className="cao-receipt-item-sub">
+                        {it.quantity} × {moneyText(it.price)}
+                      </div>
+                    </div>
+                    <div className="cao-receipt-item-total">{moneyText(it.total)}</div>
+                  </div>
+                ))}
+              </div>
+
+              <hr className="cao-line" />
+
+              {(() => {
+                const due = round2(Math.max(0, selectedOrder.grand_total));
+                const gcash = round2(Math.max(0, selectedOrder.gcash_amount));
+                const cash = round2(Math.max(0, selectedOrder.cash_amount));
+                const totalPaid = round2(gcash + cash);
+                const diff = round2(totalPaid - due);
+                const paid = toBool(selectedOrder.is_paid);
+
+                return (
+                  <>
+                    <div className="cao-receipt-meta">
+                      <div className="cao-receipt-meta-row">
+                        <span>Total</span>
+                        <strong>{moneyText(due)}</strong>
+                      </div>
+
+                      <div className="cao-receipt-meta-row">
+                        <span>GCash</span>
+                        <strong>{moneyText(gcash)}</strong>
+                      </div>
+
+                      <div className="cao-receipt-meta-row">
+                        <span>Cash</span>
+                        <strong>{moneyText(cash)}</strong>
+                      </div>
+
+                      <div className="cao-receipt-meta-row">
+                        <span>Total Paid</span>
+                        <strong>{moneyText(totalPaid)}</strong>
+                      </div>
+
+                      <div className="cao-receipt-meta-row">
+                        <span>{diff >= 0 ? "Change" : "Remaining Balance"}</span>
+                        <strong>{moneyText(Math.abs(diff))}</strong>
+                      </div>
+
+                      <div className="cao-receipt-meta-row">
+                        <span>Status</span>
+                        <strong className={`cao-status-text ${paid ? "is-paid" : "is-unpaid"}`}>
+                          {paid ? "PAID" : "UNPAID"}
+                        </strong>
+                      </div>
+
+                      {paid && (
+                        <div className="cao-receipt-meta-row">
+                          <span>Paid at</span>
+                          <strong>{selectedOrder.paid_at ? formatDateTime(selectedOrder.paid_at) : "-"}</strong>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="cao-receipt-total">
+                      <span>TOTAL</span>
+                      <span>{moneyText(due)}</span>
+                    </div>
+                  </>
+                );
+              })()}
+
+              <p className="cao-receipt-footer">
+                Thank you for choosing <br />
+                <strong>Me Tyme Lounge</strong>
+              </p>
+
               <button
+                className="cao-btn cao-btn-primary cao-close-btn"
+                onClick={() => setSelectedOrder(null)}
                 type="button"
-                className="admin-dash-calendar-close"
-                onClick={() => setOpenCalendar(false)}
               >
                 Close
               </button>
-            </div>
-
-            <input
-              type="date"
-              className="admin-dash-calendar-input"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-            />
-
-            <div className="admin-dash-calendar-actions">
-              <button
-                type="button"
-                className="admin-dash-calendar-btn secondary"
-                onClick={() => setSelectedDate(todayYYYYMMDD)}
-              >
-                Today
-              </button>
-
-              <button
-                type="button"
-                className="admin-dash-calendar-btn primary"
-                onClick={() => setOpenCalendar(false)}
-              >
-                Done
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+            </>
+          )}
+        </FixedCenterModal>
+      </div>
     </div>
   );
 };
 
-export default Admin_Dashboard;
+export default Customer_Add_ons;
