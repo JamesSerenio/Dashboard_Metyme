@@ -14,7 +14,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import "../styles/admin_dashboard.css";
+import "../styles/staff_dashboard.css";
 
 import iconWalkin from "../assets/list.png";
 import iconReserve from "../assets/reserve.png";
@@ -108,7 +108,7 @@ const numberSpring = {
   mass: 0.6,
 };
 
-const Admin_Dashboard: React.FC = () => {
+const Staff_Dashboard: React.FC = () => {
   const todayYYYYMMDD = useMemo(() => toYYYYMMDD(new Date()), []);
 
   const [selectedDate, setSelectedDate] = useState<string>(todayYYYYMMDD);
@@ -244,18 +244,18 @@ const Admin_Dashboard: React.FC = () => {
   );
 
   return (
-    <div className="admin-dashboard-page">
-      <div className="admin-dashboard-wrap">
-        <div className="admin-dash-headline">
+    <div className="staff-dashboard-page">
+      <div className="staff-dashboard-wrap">
+        <div className="staff-dash-headline">
           <div>
-            <span className="admin-dash-badge">Metyme Lounge Performance</span>
-            <h2>Admin Dashboard</h2>
+            <span className="staff-dash-badge">Metyme Lounge Performance</span>
+            <h2>Staff Dashboard</h2>
             <p>Monitor walk-ins, reservations, promos, and weekly activity.</p>
           </div>
 
           <button
             type="button"
-            className="admin-dash-date-btn"
+            className="staff-dash-date-btn"
             onClick={() => setOpenCalendar(true)}
           >
             <img src={iconCalendar} alt="Calendar" />
@@ -263,21 +263,21 @@ const Admin_Dashboard: React.FC = () => {
           </button>
         </div>
 
-        <div className="admin-dash-totals-row">
+        <div className="staff-dash-totals-row">
           <motion.div
-            className="admin-dash-total-card admin-dash-total-card--walkin"
+            className="staff-dash-total-card staff-dash-total-card--walkin"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={cardSpring}
           >
-            <img className="admin-dash-total-icon" src={iconWalkin} alt="Walk-in" />
+            <img className="staff-dash-total-icon" src={iconWalkin} alt="Walk-in" />
 
-            <div className="admin-dash-total-meta">
-              <div className="admin-dash-total-label">Walk-in</div>
+            <div className="staff-dash-total-meta">
+              <div className="staff-dash-total-label">Walk-in</div>
               <AnimatePresence mode="popLayout">
                 <motion.div
                   key={`walkin-${pulseKey}-${totals.walkin}`}
-                  className="admin-dash-total-value"
+                  className="staff-dash-total-value"
                   initial={{ scale: 0.92, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
                   exit={{ scale: 0.92, opacity: 0 }}
@@ -288,30 +288,30 @@ const Admin_Dashboard: React.FC = () => {
               </AnimatePresence>
             </div>
 
-            <div className="admin-dash-total-percent">
+            <div className="staff-dash-total-percent">
               <strong>{walkinPct}</strong>
               <span>of total</span>
             </div>
           </motion.div>
 
           <motion.div
-            className="admin-dash-total-card admin-dash-total-card--reserve"
+            className="staff-dash-total-card staff-dash-total-card--reserve"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ ...cardSpring, delay: 0.03 }}
           >
             <img
-              className="admin-dash-total-icon"
+              className="staff-dash-total-icon"
               src={iconReserve}
               alt="Reservation"
             />
 
-            <div className="admin-dash-total-meta">
-              <div className="admin-dash-total-label">Reservation</div>
+            <div className="staff-dash-total-meta">
+              <div className="staff-dash-total-label">Reservation</div>
               <AnimatePresence mode="popLayout">
                 <motion.div
                   key={`reserve-${pulseKey}-${totals.reservation}`}
-                  className="admin-dash-total-value"
+                  className="staff-dash-total-value"
                   initial={{ scale: 0.92, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
                   exit={{ scale: 0.92, opacity: 0 }}
@@ -322,26 +322,26 @@ const Admin_Dashboard: React.FC = () => {
               </AnimatePresence>
             </div>
 
-            <div className="admin-dash-total-percent">
+            <div className="staff-dash-total-percent">
               <strong>{reservePct}</strong>
               <span>of total</span>
             </div>
           </motion.div>
 
           <motion.div
-            className="admin-dash-total-card admin-dash-total-card--promo"
+            className="staff-dash-total-card staff-dash-total-card--promo"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ ...cardSpring, delay: 0.06 }}
           >
-            <img className="admin-dash-total-icon" src={iconPromo} alt="Promo" />
+            <img className="staff-dash-total-icon" src={iconPromo} alt="Promo" />
 
-            <div className="admin-dash-total-meta">
-              <div className="admin-dash-total-label">Promo</div>
+            <div className="staff-dash-total-meta">
+              <div className="staff-dash-total-label">Promo</div>
               <AnimatePresence mode="popLayout">
                 <motion.div
                   key={`promo-${pulseKey}-${totals.promo}`}
-                  className="admin-dash-total-value"
+                  className="staff-dash-total-value"
                   initial={{ scale: 0.92, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
                   exit={{ scale: 0.92, opacity: 0 }}
@@ -352,26 +352,26 @@ const Admin_Dashboard: React.FC = () => {
               </AnimatePresence>
             </div>
 
-            <div className="admin-dash-total-percent">
+            <div className="staff-dash-total-percent">
               <strong>{promoPct}</strong>
               <span>of total</span>
             </div>
           </motion.div>
 
           <motion.div
-            className="admin-dash-total-card admin-dash-total-card--all"
+            className="staff-dash-total-card staff-dash-total-card--all"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ ...cardSpring, delay: 0.09 }}
           >
-            <img className="admin-dash-total-icon" src={iconAll} alt="All" />
+            <img className="staff-dash-total-icon" src={iconAll} alt="All" />
 
-            <div className="admin-dash-total-meta">
-              <div className="admin-dash-total-label">Total All</div>
+            <div className="staff-dash-total-meta">
+              <div className="staff-dash-total-label">Total All</div>
               <AnimatePresence mode="popLayout">
                 <motion.div
                   key={`all-${pulseKey}-${totals.all}`}
-                  className="admin-dash-total-value"
+                  className="staff-dash-total-value"
                   initial={{ scale: 0.92, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
                   exit={{ scale: 0.92, opacity: 0 }}
@@ -382,34 +382,34 @@ const Admin_Dashboard: React.FC = () => {
               </AnimatePresence>
             </div>
 
-            <div className="admin-dash-total-percent">
+            <div className="staff-dash-total-percent">
               <strong>100%</strong>
               <span>overview</span>
             </div>
           </motion.div>
         </div>
 
-        <div className="admin-dash-charts-grid">
+        <div className="staff-dash-charts-grid">
           <motion.div
-            className="admin-dash-chart-card"
+            className="staff-dash-chart-card"
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ ...cardSpring, delay: 0.12 }}
           >
-            <div className="admin-dash-chart-head">
+            <div className="staff-dash-chart-head">
               <div>
-                <div className="admin-dash-chart-title">Total All (7 days)</div>
-                <div className="admin-dash-chart-sub">{weekRangeLabel}</div>
+                <div className="staff-dash-chart-title">Total All (7 days)</div>
+                <div className="staff-dash-chart-sub">{weekRangeLabel}</div>
               </div>
             </div>
 
             {weekLoading ? (
-              <div className="admin-dash-chart-loading">
-                <div className="admin-dash-loader" />
+              <div className="staff-dash-chart-loading">
+                <div className="staff-dash-loader" />
                 <div>Loading...</div>
               </div>
             ) : (
-              <div className="admin-dash-line-wrap">
+              <div className="staff-dash-line-wrap">
                 <ResponsiveContainer width="100%" height={300}>
                   <LineChart
                     data={weekSeries}
@@ -436,22 +436,22 @@ const Admin_Dashboard: React.FC = () => {
           </motion.div>
 
           <motion.div
-            className="admin-dash-chart-card"
+            className="staff-dash-chart-card"
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ ...cardSpring, delay: 0.16 }}
           >
-            <div className="admin-dash-chart-head">
+            <div className="staff-dash-chart-head">
               <div>
-                <div className="admin-dash-chart-title">Breakdown</div>
-                <div className="admin-dash-chart-sub">{prettyDate}</div>
+                <div className="staff-dash-chart-title">Breakdown</div>
+                <div className="staff-dash-chart-sub">{prettyDate}</div>
               </div>
             </div>
 
             {pieTotal <= 0 ? (
-              <div className="admin-dash-chart-empty">No data for this date.</div>
+              <div className="staff-dash-chart-empty">No data for this date.</div>
             ) : (
-              <div className="admin-dash-chart-body">
+              <div className="staff-dash-chart-body">
                 <ResponsiveContainer width="100%" height={300}>
                   <PieChart>
                     <Pie
@@ -487,12 +487,12 @@ const Admin_Dashboard: React.FC = () => {
                   </PieChart>
                 </ResponsiveContainer>
 
-                <div className="admin-dash-chart-center">
-                  <div className="admin-dash-chart-center-label">Total</div>
+                <div className="staff-dash-chart-center">
+                  <div className="staff-dash-chart-center-label">Total</div>
                   <AnimatePresence mode="popLayout">
                     <motion.div
                       key={`pieTotal-${pulseKey}-${pieTotal}`}
-                      className="admin-dash-chart-center-value"
+                      className="staff-dash-chart-center-value"
                       initial={{ scale: 0.92, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
                       exit={{ scale: 0.92, opacity: 0 }}
@@ -509,16 +509,16 @@ const Admin_Dashboard: React.FC = () => {
       </div>
 
       {openCalendar && (
-        <div className="admin-dash-calendar-overlay" onClick={() => setOpenCalendar(false)}>
+        <div className="staff-dash-calendar-overlay" onClick={() => setOpenCalendar(false)}>
           <div
-            className="admin-dash-calendar-card"
+            className="staff-dash-calendar-card"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="admin-dash-calendar-head">
+            <div className="staff-dash-calendar-head">
               <h3>Select Date</h3>
               <button
                 type="button"
-                className="admin-dash-calendar-close"
+                className="staff-dash-calendar-close"
                 onClick={() => setOpenCalendar(false)}
               >
                 Close
@@ -527,15 +527,15 @@ const Admin_Dashboard: React.FC = () => {
 
             <input
               type="date"
-              className="admin-dash-calendar-input"
+              className="staff-dash-calendar-input"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
             />
 
-            <div className="admin-dash-calendar-actions">
+            <div className="staff-dash-calendar-actions">
               <button
                 type="button"
-                className="admin-dash-calendar-btn secondary"
+                className="staff-dash-calendar-btn secondary"
                 onClick={() => setSelectedDate(todayYYYYMMDD)}
               >
                 Today
@@ -543,7 +543,7 @@ const Admin_Dashboard: React.FC = () => {
 
               <button
                 type="button"
-                className="admin-dash-calendar-btn primary"
+                className="staff-dash-calendar-btn primary"
                 onClick={() => setOpenCalendar(false)}
               >
                 Done
@@ -556,4 +556,4 @@ const Admin_Dashboard: React.FC = () => {
   );
 };
 
-export default Admin_Dashboard;
+export default Staff_Dashboard;
