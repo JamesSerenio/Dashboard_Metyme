@@ -595,7 +595,7 @@ const allocateAmountsAcrossOrders = (
       source: p.source,
       gcash_amount: useGcash,
       cash_amount: useCash,
-      is_paid,
+      is_paid: isPaid,
       paid_at: isPaid ? new Date().toISOString() : null,
     });
   });
@@ -639,12 +639,6 @@ const FixedModal: React.FC<{
         className={`acdl-modal-card acdl-modal-${size}`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="acdl-modal-head">
-          <h3>{title}</h3>
-          <button className="acdl-modal-close" onClick={onClose} type="button">
-            ×
-          </button>
-        </div>
         <div className="acdl-modal-body">{children}</div>
       </div>
     </div>,
@@ -1487,195 +1481,309 @@ const Admin_Customer_Discount_List: React.FC = () => {
     }
   };
 
-  const openPaymentModal = (r: PromoBookingRow): void => {
-    setPaymentTarget(r);
-    setGcashInput(String(round2(Math.max(0, toNumber(r.gcash_amount)))));
-    setCashInput(String(round2(Math.max(0, toNumber(r.cash_amount)))));
-  };
+    const openPaymentModal = (r: PromoBookingRow): void => {
+      setPaymentTarget(r);
+      setGcashInput(String(round2(Math.max(0, toNumber(r.gcash_amount)))));
+      setCashInput(String(round2(Math.max(0, toNumber(r.cash_amount)))));
+    };
 
-  const savePayment = async (): Promise<void> => {
-    if (!paymentTarget) return;
+    const savePayment = async (): Promise<void> => {
+      if (!paymentTarget) return;
 
-    const due = getSystemDue(paymentTarget);
-    const g = moneyFromStr(gcashInput);
-    const c = moneyFromStr(cashInput);
-    const totalPaid = round2(g + c);
-    const systemPaidAuto = due <= 0 ? true : totalPaid >= due;
+      const due = getSystemDue(paymentTarget);
+      const g = moneyFromStr(gcashInput);
+      const c = moneyFromStr(cashInput);
+      const totalPaid = round2(g + c);
+      const systemPaidAuto = due <= 0 ? true : totalPaid >= due;
 
-    try {
-      setSavingPayment(true);
+      try {
+        setSavingPayment(true);
 
-      const dbRow = await updateBookingThenFetch(
-        paymentTarget.id,
-        {
-          gcash_amount: g,
-          cash_amount: c,
-          is_paid: false,
-          paid_at:
-            systemPaidAuto && !hasOrder(paymentTarget.promo_code)
-              ? new Date().toISOString()
-              : null,
-        },
-        selectPromoBookings
-      );
+        const dbRow = await updateBookingThenFetch(
+          paymentTarget.id,
+          {
+            gcash_amount: g,
+            cash_amount: c,
+            is_paid: false,
+            paid_at:
+              systemPaidAuto && !hasOrder(paymentTarget.promo_code)
+                ? new Date().toISOString()
+                : null,
+          },
+          selectPromoBookings
+        );
 
-      const updated = normalizeRow(dbRow);
-      setRows((prev) => prev.map((x) => (x.id === paymentTarget.id ? updated : x)));
-      setSelected((prev) => (prev?.id === paymentTarget.id ? updated : prev));
-      setSelectedOrderBooking((prev) =>
-        prev?.id === paymentTarget.id ? updated : prev
-      );
-      setPaymentTarget(null);
+        const updated = normalizeRow(dbRow);
 
-      await syncPromoFinalPaid(updated.id);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Save payment failed.";
-      alert(`Save payment error: ${msg}`);
-    } finally {
-      setSavingPayment(false);
-    }
-  };
+        setRows((prev) =>
+          prev.map((x) => (x.id === paymentTarget.id ? updated : x))
+        );
 
-  const openOrderPaymentModal = (r: PromoBookingRow): void => {
-    const pi = getOrderPaidInfo(r.promo_code);
-    setOrderPaymentTarget(r);
-    setOrderGcashInput(String(pi.gcash));
-    setOrderCashInput(String(pi.cash));
-  };
+        setSelected((prev) =>
+          prev?.id === paymentTarget.id ? updated : prev
+        );
 
-  const saveOrderPayment = async (): Promise<void> => {
-    if (!orderPaymentTarget) return;
+        setSelectedOrderBooking((prev) =>
+          prev?.id === paymentTarget.id ? updated : prev
+        );
 
-    const code = orderPaymentTarget.promo_code;
-    if (!code) {
-      alert("Promo code not found.");
-      return;
-    }
+        setPaymentTarget(null);
 
-    const parents = getOrderParents(code);
-    if (parents.length === 0) {
-      alert("No order found for this promo code.");
-      return;
-    }
+        await syncPromoFinalPaid(updated.id);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Save payment failed.";
+        alert(`Save payment error: ${msg}`);
+      } finally {
+        setSavingPayment(false);
+      }
+    };
 
-    const g = moneyFromStr(orderGcashInput);
-    const c = moneyFromStr(orderCashInput);
+    const openOrderPaymentModal = async (r: PromoBookingRow): Promise<void> => {
+      const code = String(r.promo_code ?? "").trim();
 
-    try {
-      setSavingOrderPayment(true);
-
-      const allocations = allocateAmountsAcrossOrders(parents, g, c);
-
-      for (const alloc of allocations) {
-        const tableName =
-          alloc.source === "addon_orders" ? "addon_orders" : "consignment_orders";
-
-        const { error } = await supabase
-          .from(tableName)
-          .update({
-            gcash_amount: alloc.gcash_amount,
-            cash_amount: alloc.cash_amount,
-            is_paid: alloc.is_paid,
-            paid_at: alloc.paid_at,
-          })
-          .eq("id", alloc.id);
-
-        if (error) {
-          alert(`Save order payment error: ${error.message}`);
-          return;
-        }
+      if (!code) {
+        alert("Promo code not found.");
+        return;
       }
 
-      const nextParents: PromoOrderParentRow[] = parents.map((p) => {
-        const found = allocations.find((a) => a.id === p.id && a.source === p.source);
-        if (!found) return p;
-        return {
-          ...p,
-          gcash_amount: found.gcash_amount,
-          cash_amount: found.cash_amount,
-          is_paid: found.is_paid,
-          paid_at: found.paid_at,
-        };
-      });
+      try {
+        await fetchOrdersForPromoCodes([code]);
 
-      setOrderParentsMap((prev) => ({
-        ...prev,
-        [code]: nextParents,
-      }));
+        const parents =
+          orderParentsMap[code] ??
+          [];
 
-      setOrderPaymentTarget(null);
+        const refreshedParents = parents.length > 0
+          ? parents
+          : (() => {
+              const localParents = (orderParentsMap[code] ?? []);
+              return localParents;
+            })();
 
-      await fetchOrdersForPromoCodes(rows.map((r) => String(r.promo_code ?? "")));
-      await syncPromoFinalPaid(orderPaymentTarget.id);
-    } catch (e) {
-      console.error(e);
-      alert("Save order payment failed.");
-    } finally {
-      setSavingOrderPayment(false);
-    }
-  };
+        const localPaid = getOrderPaidInfo(code);
 
-  const openDiscountModal = (r: PromoBookingRow): void => {
-    setDiscountTarget(r);
-    setDiscountKind(r.discount_kind ?? "none");
-    setDiscountValueInput(String(round2(toNumber(r.discount_value))));
-    setDiscountReasonInput(String(r.discount_reason ?? ""));
-    setGcashInput(String(round2(Math.max(0, toNumber(r.gcash_amount)))));
-    setCashInput(String(round2(Math.max(0, toNumber(r.cash_amount)))));
-  };
+        setOrderPaymentTarget(r);
+        setOrderGcashInput(String(localPaid.gcash));
+        setOrderCashInput(String(localPaid.cash));
 
-  const saveDiscount = async (): Promise<void> => {
-    if (!discountTarget) return;
+        if (refreshedParents.length === 0 && getOrderItems(code).length === 0) {
+          const [addonParentsRes, consignmentParentsRes] = await Promise.all([
+            supabase
+              .from("addon_orders")
+              .select("id, booking_code, total_amount, gcash_amount, cash_amount, is_paid, paid_at")
+              .eq("booking_code", code),
+            supabase
+              .from("consignment_orders")
+              .select("id, booking_code, total_amount, gcash_amount, cash_amount, is_paid, paid_at")
+              .eq("booking_code", code),
+          ]);
 
-    const base = round2(Math.max(0, toNumber(discountTarget.price)));
-    const rawVal = toNumber(discountValueInput);
-    const cleanVal = round2(Math.max(0, rawVal));
-    const finalVal = discountKind === "percent" ? clamp(cleanVal, 0, 100) : cleanVal;
+          const addonParents = normalizeOrderParents(
+            (addonParentsRes.data ?? []) as AddonOrderParentDBRow[],
+            "addon_orders"
+          );
 
-    const calc = applyDiscount(base, discountKind, finalVal);
-    const newDue = round2(calc.discountedCost);
+          const consignmentParents = normalizeOrderParents(
+            (consignmentParentsRes.data ?? []) as ConsignmentOrderParentDBRow[],
+            "consignment_orders"
+          );
 
-    const g = moneyFromStr(gcashInput);
-    const c = moneyFromStr(cashInput);
-    const totalPaid = round2(g + c);
-    const systemPaidAuto = newDue <= 0 ? true : totalPaid >= newDue;
+          const merged = [...addonParents, ...consignmentParents];
 
-    try {
-      setSavingDiscount(true);
+          if (merged.length === 0) {
+            alert("No order found for this promo code.");
+            setOrderPaymentTarget(null);
+            return;
+          }
 
-      const dbRow = await updateBookingThenFetch(
-        discountTarget.id,
-        {
-          discount_kind: discountKind,
-          discount_value: finalVal,
-          discount_reason: discountReasonInput.trim() || null,
-          gcash_amount: g,
-          cash_amount: c,
-          is_paid: false,
-          paid_at:
-            systemPaidAuto && !hasOrder(discountTarget.promo_code)
-              ? new Date().toISOString()
-              : null,
-        },
-        selectPromoBookings
-      );
+          setOrderParentsMap((prev) => ({
+            ...prev,
+            [code]: merged,
+          }));
 
-      const updated = normalizeRow(dbRow);
-      setRows((prev) => prev.map((x) => (x.id === discountTarget.id ? updated : x)));
-      setSelected((prev) => (prev?.id === discountTarget.id ? updated : prev));
-      setSelectedOrderBooking((prev) =>
-        prev?.id === discountTarget.id ? updated : prev
-      );
-      setDiscountTarget(null);
+          const gcash = round2(
+            merged.reduce((sum, row) => sum + round2(Math.max(0, row.gcash_amount)), 0)
+          );
+          const cash = round2(
+            merged.reduce((sum, row) => sum + round2(Math.max(0, row.cash_amount)), 0)
+          );
 
-      await syncPromoFinalPaid(updated.id);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Save discount failed.";
-      alert(`Save discount error: ${msg}`);
-    } finally {
-      setSavingDiscount(false);
-    }
-  };
+          setOrderPaymentTarget(r);
+          setOrderGcashInput(String(gcash));
+          setOrderCashInput(String(cash));
+        }
+      } catch (e) {
+        console.error(e);
+        alert("Failed to open order payment.");
+      }
+    };
+
+    const saveOrderPayment = async (): Promise<void> => {
+      if (!orderPaymentTarget) return;
+
+      const code = String(orderPaymentTarget.promo_code ?? "").trim();
+      if (!code) {
+        alert("Promo code not found.");
+        return;
+      }
+
+      const g = moneyFromStr(orderGcashInput);
+      const c = moneyFromStr(orderCashInput);
+
+      try {
+        setSavingOrderPayment(true);
+
+        await fetchOrdersForPromoCodes([code]);
+
+        let parents = getOrderParents(code);
+
+        if (parents.length === 0) {
+          const [addonParentsRes, consignmentParentsRes] = await Promise.all([
+            supabase
+              .from("addon_orders")
+              .select("id, booking_code, total_amount, gcash_amount, cash_amount, is_paid, paid_at")
+              .eq("booking_code", code),
+            supabase
+              .from("consignment_orders")
+              .select("id, booking_code, total_amount, gcash_amount, cash_amount, is_paid, paid_at")
+              .eq("booking_code", code),
+          ]);
+
+          const addonParents = normalizeOrderParents(
+            (addonParentsRes.data ?? []) as AddonOrderParentDBRow[],
+            "addon_orders"
+          );
+
+          const consignmentParents = normalizeOrderParents(
+            (consignmentParentsRes.data ?? []) as ConsignmentOrderParentDBRow[],
+            "consignment_orders"
+          );
+
+          parents = [...addonParents, ...consignmentParents];
+
+          if (parents.length === 0) {
+            alert("No order found for this promo code.");
+            return;
+          }
+
+          setOrderParentsMap((prev) => ({
+            ...prev,
+            [code]: parents,
+          }));
+        }
+
+        const allocations = allocateAmountsAcrossOrders(parents, g, c);
+
+        for (const alloc of allocations) {
+          const tableName =
+            alloc.source === "addon_orders" ? "addon_orders" : "consignment_orders";
+
+          const { error } = await supabase
+            .from(tableName)
+            .update({
+              gcash_amount: alloc.gcash_amount,
+              cash_amount: alloc.cash_amount,
+              is_paid: alloc.is_paid,
+              paid_at: alloc.paid_at,
+            })
+            .eq("id", alloc.id);
+
+          if (error) {
+            alert(`Save order payment error: ${error.message}`);
+            return;
+          }
+        }
+
+        const nextParents: PromoOrderParentRow[] = parents.map((p) => {
+          const found = allocations.find((a) => a.id === p.id && a.source === p.source);
+          if (!found) return p;
+          return {
+            ...p,
+            gcash_amount: found.gcash_amount,
+            cash_amount: found.cash_amount,
+            is_paid: found.is_paid,
+            paid_at: found.paid_at,
+          };
+        });
+
+        setOrderParentsMap((prev) => ({
+          ...prev,
+          [code]: nextParents,
+        }));
+
+        setOrderPaymentTarget(null);
+
+        await fetchOrdersForPromoCodes(rows.map((r) => String(r.promo_code ?? "")));
+        await syncPromoFinalPaid(orderPaymentTarget.id);
+      } catch (e) {
+        console.error(e);
+        alert("Save order payment failed.");
+      } finally {
+        setSavingOrderPayment(false);
+      }
+    };
+
+      const openDiscountModal = (r: PromoBookingRow): void => {
+        setDiscountTarget(r);
+        setDiscountKind(r.discount_kind ?? "none");
+        setDiscountValueInput(String(round2(toNumber(r.discount_value))));
+        setDiscountReasonInput(String(r.discount_reason ?? ""));
+        setGcashInput(String(round2(Math.max(0, toNumber(r.gcash_amount)))));
+        setCashInput(String(round2(Math.max(0, toNumber(r.cash_amount)))));
+      };
+
+      const saveDiscount = async (): Promise<void> => {
+        if (!discountTarget) return;
+
+        const base = round2(Math.max(0, toNumber(discountTarget.price)));
+        const rawVal = toNumber(discountValueInput);
+        const cleanVal = round2(Math.max(0, rawVal));
+        const finalVal = discountKind === "percent" ? clamp(cleanVal, 0, 100) : cleanVal;
+
+        const calc = applyDiscount(base, discountKind, finalVal);
+        const newDue = round2(calc.discountedCost);
+
+        const g = moneyFromStr(gcashInput);
+        const c = moneyFromStr(cashInput);
+        const totalPaid = round2(g + c);
+        const systemPaidAuto = newDue <= 0 ? true : totalPaid >= newDue;
+
+        try {
+          setSavingDiscount(true);
+
+          const dbRow = await updateBookingThenFetch(
+            discountTarget.id,
+            {
+              discount_kind: discountKind,
+              discount_value: finalVal,
+              discount_reason: discountReasonInput.trim() || null,
+              gcash_amount: g,
+              cash_amount: c,
+              is_paid: false,
+              paid_at:
+                systemPaidAuto && !hasOrder(discountTarget.promo_code)
+                  ? new Date().toISOString()
+                  : null,
+            },
+            selectPromoBookings
+          );
+
+          const updated = normalizeRow(dbRow);
+          setRows((prev) => prev.map((x) => (x.id === discountTarget.id ? updated : x)));
+          setSelected((prev) => (prev?.id === discountTarget.id ? updated : prev));
+          setSelectedOrderBooking((prev) =>
+            prev?.id === discountTarget.id ? updated : prev
+          );
+          setDiscountTarget(null);
+
+          await syncPromoFinalPaid(updated.id);
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : "Save discount failed.";
+          alert(`Save discount error: ${msg}`);
+        } finally {
+          setSavingDiscount(false);
+        }
+      };
 
   const togglePaid = async (r: PromoBookingRow): Promise<void> => {
     try {
@@ -2496,11 +2604,85 @@ const Admin_Customer_Discount_List: React.FC = () => {
         </div>
 
         <FixedModal
-          open={!!paymentTarget}
-          title="System Payment"
-          size="sm"
-          onClose={() => setPaymentTarget(null)}
+  open={!!paymentTarget}
+  title="System Payment"
+  size="sm"
+  onClose={() => setPaymentTarget(null)}
+>
+  {paymentTarget ? (
+    <div className="acdl-form-stack">
+      <div className="acdl-form-field">
+        <label>Customer</label>
+        <input value={paymentTarget.full_name} readOnly />
+      </div>
+
+      <div className="acdl-form-field">
+        <label>Area</label>
+        <input value={prettyArea(paymentTarget.area)} readOnly />
+      </div>
+
+      <div className="acdl-form-field">
+        <label>Seat</label>
+        <input value={seatLabel(paymentTarget)} readOnly />
+      </div>
+
+      <div className="acdl-form-field">
+        <label>System Due</label>
+        <input value={getSystemDue(paymentTarget).toFixed(2)} readOnly />
+      </div>
+
+      <div className="acdl-form-grid">
+        <div className="acdl-form-field">
+          <label>GCash</label>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value={gcashInput}
+            onChange={(e) => setGcashInput(e.currentTarget.value)}
+          />
+        </div>
+
+        <div className="acdl-form-field">
+          <label>Cash</label>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value={cashInput}
+            onChange={(e) => setCashInput(e.currentTarget.value)}
+          />
+        </div>
+      </div>
+
+      <div className="acdl-modal-actions">
+        <button
+          className="acdl-btn acdl-btn-light"
+          type="button"
+          onClick={() => setPaymentTarget(null)}
         >
+          Close
+        </button>
+
+        <button
+          className="acdl-btn acdl-btn-dark"
+          type="button"
+          onClick={() => void savePayment()}
+          disabled={savingPayment}
+        >
+          {savingPayment ? "Saving..." : "Save Payment"}
+        </button>
+      </div>
+    </div>
+  ) : null}
+</FixedModal>
+
+      <FixedModal
+        open={!!selected}
+        title=""
+        size="md"
+        onClose={() => setSelected(null)}
+      >
           <div className="acdl-form-stack">
             <div className="acdl-form-field">
               <label>GCash</label>
@@ -2859,190 +3041,161 @@ const Admin_Customer_Discount_List: React.FC = () => {
 
         <FixedModal
           open={!!selected}
-          title="Receipt"
-          size="lg"
+          title=""
+          size="md"
           onClose={() => setSelected(null)}
         >
-          {selected ? (
-            <div className="receipt-container-custom">
-              <div className="receipt-head-brand">
-                <img src={logo} alt="Study Hub" className="receipt-brand-logo" />
-                <div>
-                  <h4>Me Tyme Lounge</h4>
-                  <p>Promo Receipt</p>
+          {selected ? (() => {
+            const discountText = getDiscountTextFrom(selected.discount_kind, selected.discount_value);
+            const orderItems = getOrderItems(selected.promo_code);
+            const ordersTotal = getOrderDue(selected.promo_code);
+            const systemDue = getSystemDue(selected);
+            const systemPaid = getSystemPaidInfo(selected);
+            const orderPaid = getOrderPaidInfo(selected.promo_code);
+            const grandDue = getGrandDue(selected);
+            const grandPaid = getGrandPaid(selected);
+            const grandChange = Math.max(0, round2(grandPaid - grandDue));
+
+            return (
+              <div className="acdl-plain-receipt">
+                <div className="acdl-plain-receipt-head">
+                  <img src={logo} alt="Logo" className="acdl-plain-receipt-logo" />
+                  <h2>ME TYME LOUNGE</h2>
+                  <p>OFFICIAL RECEIPT</p>
+                </div>
+
+                <div className="acdl-plain-divider" />
+
+                <div className="acdl-plain-info">
+                  <div className="acdl-plain-row">
+                    <span>Date</span>
+                    <strong>{new Date().toLocaleString()}</strong>
+                  </div>
+                  <div className="acdl-plain-row">
+                    <span>Customer</span>
+                    <strong>{selected.full_name}</strong>
+                  </div>
+                  <div className="acdl-plain-row">
+                    <span>Area</span>
+                    <strong>{prettyArea(selected.area)}</strong>
+                  </div>
+                  <div className="acdl-plain-row">
+                    <span>Seat</span>
+                    <strong>{seatLabel(selected)}</strong>
+                  </div>
+                  {selected.promo_code && (
+                    <div className="acdl-plain-row">
+                      <span>Promo Code</span>
+                      <strong>{selected.promo_code}</strong>
+                    </div>
+                  )}
+                </div>
+
+                <div className="acdl-plain-divider" />
+
+                <div className="acdl-plain-items">
+                  {orderItems.length > 0 ? (
+                    orderItems.map((item) => (
+                      <div className="acdl-plain-item-card" key={item.id}>
+                        <div className="acdl-plain-item-left">
+                          <div className="acdl-plain-item-name">
+                            {item.name}
+                            {item.size ? ` (${item.size})` : ""}
+                          </div>
+                          <div className="acdl-plain-item-sub">
+                            {item.quantity} × ₱{item.price.toFixed(2)}
+                          </div>
+                        </div>
+                        <div className="acdl-plain-item-total">₱{item.subtotal.toFixed(2)}</div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="acdl-plain-item-card">
+                      <div className="acdl-plain-item-left">
+                        <div className="acdl-plain-item-name">
+                          {selected.packages?.title || "Promo Booking"}
+                        </div>
+                        <div className="acdl-plain-item-sub">
+                          {selected.package_options?.option_name ||
+                            (selected.package_options?.duration_value && selected.package_options?.duration_unit
+                              ? formatDuration(
+                                  selected.package_options.duration_value,
+                                  selected.package_options.duration_unit
+                                )
+                              : "Package")}
+                        </div>
+                      </div>
+                      <div className="acdl-plain-item-total">₱{systemDue.toFixed(2)}</div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="acdl-plain-divider" />
+
+                <div className="acdl-plain-summary">
+                  <div className="acdl-plain-row">
+                    <span>System Cost</span>
+                    <strong>₱{systemDue.toFixed(2)}</strong>
+                  </div>
+                  <div className="acdl-plain-row">
+                    <span>Discount</span>
+                    <strong>{discountText}</strong>
+                  </div>
+                  <div className="acdl-plain-row">
+                    <span>Orders Total</span>
+                    <strong>₱{ordersTotal.toFixed(2)}</strong>
+                  </div>
+                  <div className="acdl-plain-row">
+                    <span>GCash</span>
+                    <strong>₱{(systemPaid.gcash + orderPaid.gcash).toFixed(2)}</strong>
+                  </div>
+                  <div className="acdl-plain-row">
+                    <span>Cash</span>
+                    <strong>₱{(systemPaid.cash + orderPaid.cash).toFixed(2)}</strong>
+                  </div>
+                  <div className="acdl-plain-row">
+                    <span>Total Paid</span>
+                    <strong>₱{grandPaid.toFixed(2)}</strong>
+                  </div>
+                  <div className="acdl-plain-row">
+                    <span>Change</span>
+                    <strong>₱{grandChange.toFixed(2)}</strong>
+                  </div>
+                  <div className="acdl-plain-row">
+                    <span>Status</span>
+                    <strong className={isFinalPaidRow(selected) ? "acdl-paid-green" : "acdl-paid-gold"}>
+                      {isFinalPaidRow(selected) ? "PAID" : "UNPAID"}
+                    </strong>
+                  </div>
+                  <div className="acdl-plain-row">
+                    <span>Paid at</span>
+                    <strong>{selected.paid_at ? fmtPH(selected.paid_at) : "—"}</strong>
+                  </div>
+                </div>
+
+                <div className="acdl-plain-total-box">
+                  <span>TOTAL</span>
+                  <strong>₱{grandDue.toFixed(2)}</strong>
+                </div>
+
+                <p className="acdl-plain-thankyou">
+                  Thank you for choosing
+                  <br />
+                  <strong>Me Tyme Lounge</strong>
+                </p>
+
+                <div className="acdl-plain-close-full">
+                  <button
+                    className="acdl-plain-close-btn-full"
+                    onClick={() => setSelected(null)}
+                    type="button"
+                  >
+                    Close
+                  </button>
                 </div>
               </div>
-
-              <div className="receipt-block">
-                <div className="receipt-row">
-                  <span>Name</span>
-                  <span>{selected.full_name}</span>
-                </div>
-                <div className="receipt-row">
-                  <span>Phone</span>
-                  <span>{safePhone(selected.phone_number)}</span>
-                </div>
-                <div className="receipt-row">
-                  <span>Area</span>
-                  <span>{prettyArea(selected.area)}</span>
-                </div>
-                <div className="receipt-row">
-                  <span>Seat</span>
-                  <span>{seatLabel(selected)}</span>
-                </div>
-                <div className="receipt-row">
-                  <span>Package</span>
-                  <span>{selected.packages?.title || "—"}</span>
-                </div>
-                <div className="receipt-row">
-                  <span>Option</span>
-                  <span>
-                    {selected.package_options?.option_name &&
-                    selected.package_options?.duration_value &&
-                    selected.package_options?.duration_unit
-                      ? `${selected.package_options.option_name} • ${formatDuration(
-                          Number(selected.package_options.duration_value),
-                          selected.package_options.duration_unit
-                        )}`
-                      : selected.package_options?.option_name || "—"}
-                  </span>
-                </div>
-                <div className="receipt-row">
-                  <span>Start</span>
-                  <span>{fmtPH(selected.start_at)}</span>
-                </div>
-                <div className="receipt-row">
-                  <span>End</span>
-                  <span>{fmtPH(selected.end_at)}</span>
-                </div>
-                <div className="receipt-row">
-                  <span>Promo Code</span>
-                  <span>{selected.promo_code || "—"}</span>
-                </div>
-              </div>
-
-              <div className="receipt-block">
-                {(() => {
-                  const finalPaid = toBool(selected.is_paid);
-                  const systemDue = getSystemDue(selected);
-                  const systemPaid = getSystemPaidInfo(selected);
-                  const systemBalance = getSystemRemainingInfo(selected);
-
-                  const orderDue = getOrderDue(selected.promo_code);
-                  const orderPaid = getOrderPaidInfo(selected.promo_code);
-                  const orderBalance = getOrderRemainingInfo(selected.promo_code);
-
-                  return (
-                    <>
-                      <div className="receipt-section-title">System Payment</div>
-                      <div className="receipt-row">
-                        <span>System Cost</span>
-                        <span>₱{systemDue.toFixed(2)}</span>
-                      </div>
-                      <div className="receipt-row">
-                        <span>Discount</span>
-                        <span>{getDiscountTextFrom(selected.discount_kind, selected.discount_value)}</span>
-                      </div>
-                      <div className="receipt-row">
-                        <span>System GCash</span>
-                        <span>₱{systemPaid.gcash.toFixed(2)}</span>
-                      </div>
-                      <div className="receipt-row">
-                        <span>System Cash</span>
-                        <span>₱{systemPaid.cash.toFixed(2)}</span>
-                      </div>
-                      <div className="receipt-row">
-                        <span>{systemBalance.label}</span>
-                        <span>
-                          ₱
-                          {(systemBalance.label === "Remaining"
-                            ? systemBalance.remaining
-                            : systemBalance.change
-                          ).toFixed(2)}
-                        </span>
-                      </div>
-
-                      {hasOrder(selected.promo_code) ? (
-                        <>
-                          <hr />
-                          <div className="receipt-section-title">Order Payment</div>
-                          <div className="receipt-row">
-                            <span>Total Order</span>
-                            <span>₱{orderDue.toFixed(2)}</span>
-                          </div>
-                          <div className="receipt-row">
-                            <span>Order GCash</span>
-                            <span>₱{orderPaid.gcash.toFixed(2)}</span>
-                          </div>
-                          <div className="receipt-row">
-                            <span>Order Cash</span>
-                            <span>₱{orderPaid.cash.toFixed(2)}</span>
-                          </div>
-                          <div className="receipt-row">
-                            <span>{orderBalance.label}</span>
-                            <span>
-                              ₱
-                              {(orderBalance.label === "Remaining"
-                                ? orderBalance.remaining
-                                : orderBalance.change
-                              ).toFixed(2)}
-                            </span>
-                          </div>
-                        </>
-                      ) : null}
-
-                      <hr />
-
-                      <div className="receipt-row">
-                        <span>Paid Status</span>
-                        <span className="receipt-status">
-                          {finalPaid ? "PAID" : "UNPAID"}
-                        </span>
-                      </div>
-
-                      <div className="receipt-total">
-                        <span>TOTAL SYSTEM COST</span>
-                        <span>₱{systemDue.toFixed(2)}</span>
-                      </div>
-
-                      <div className="receipt-total" style={{ marginTop: 8 }}>
-                        <span>TOTAL ORDER</span>
-                        <span>₱{orderDue.toFixed(2)}</span>
-                      </div>
-
-                      <hr />
-
-                      <div className="receipt-row">
-                        <span>Overall Paid</span>
-                        <span>₱{getGrandPaid(selected).toFixed(2)}</span>
-                      </div>
-
-                      <div className="receipt-row">
-                        <span>{getGrandBalanceInfo(selected).label}</span>
-                        <span>
-                          ₱
-                          {(
-                            getGrandBalanceInfo(selected).label === "Overall Remaining"
-                              ? getGrandBalanceInfo(selected).remaining
-                              : getGrandBalanceInfo(selected).change
-                          ).toFixed(2)}
-                        </span>
-                      </div>
-
-                      <div className="receipt-total" style={{ marginTop: 8 }}>
-                        <span>GRAND TOTAL</span>
-                        <span>₱{getGrandDue(selected).toFixed(2)}</span>
-                      </div>
-                    </>
-                  );
-                })()}
-              </div>
-
-              <button className="close-btn" onClick={() => setSelected(null)} type="button">
-                Close
-              </button>
-            </div>
-          ) : null}
+            );
+          })() : null}
         </FixedModal>
       </div>
     </div>

@@ -3,7 +3,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* your custom css imports */
+/* Admin.css */
 @import "./styles/login.css";
 @import "./styles/admin_menu.css";
 @import "./styles/admin_dashboard.css";
@@ -23,3 +23,7 @@
 @import "./styles/Admin_customer_reservation.css";
 @import "./styles/Admin_Customer_Cancelled.css";
 @import "./styles/Admin_Customer_Discount_List.css";
+
+
+/* staff.css */
+@import "./styles/staff_menu.css";
