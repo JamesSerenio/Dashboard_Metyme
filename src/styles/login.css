@@ -77,10 +77,121 @@ body {
   box-shadow: var(--login-shadow);
   opacity: 0;
   transform: translateY(18px) scale(0.985);
+  overflow: hidden;
 }
 
 .login-card.is-mounted {
   animation: loginCardIn 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+/* FLOWERS NASA LOOB NG CARD */
+.login-form-flower-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.login-form-flower {
+  position: absolute;
+  object-fit: contain;
+  opacity: 0;
+  filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.08));
+  animation: flowerCollapse 6.6s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+.lff-top-left {
+  width: 56px;
+  top: 12px;
+  left: 18px;
+}
+
+.lff-top-mid-left {
+  width: 44px;
+  top: 34px;
+  left: 118px;
+}
+
+.lff-top-right {
+  width: 58px;
+  top: 18px;
+  right: 26px;
+}
+
+.lff-left-upper {
+  width: 48px;
+  top: 148px;
+  left: 8px;
+}
+
+.lff-left-lower {
+  width: 40px;
+  top: 326px;
+  left: 24px;
+}
+
+.lff-right-upper {
+  width: 46px;
+  top: 126px;
+  right: 16px;
+}
+
+.lff-right-lower {
+  width: 52px;
+  top: 382px;
+  right: 12px;
+}
+
+.lff-bottom-left {
+  width: 62px;
+  bottom: 18px;
+  left: 26px;
+}
+
+.lff-bottom-mid {
+  width: 42px;
+  bottom: 62px;
+  left: 218px;
+}
+
+.lff-bottom-right {
+  width: 58px;
+  bottom: 16px;
+  right: 30px;
+}
+
+.lff-inner-top-left {
+  width: 34px;
+  top: 74px;
+  left: 64px;
+}
+
+.lff-inner-top-right {
+  width: 36px;
+  top: 82px;
+  right: 96px;
+}
+
+.lff-inner-bottom-left {
+  width: 34px;
+  bottom: 108px;
+  left: 86px;
+}
+
+.lff-inner-bottom-right {
+  width: 36px;
+  bottom: 126px;
+  right: 92px;
+}
+
+/* CONTENT SA ITAAS NG FLOWERS */
+.login-header,
+.login-divider,
+.login-form {
+  position: relative;
+  z-index: 2;
 }
 
 .login-header {
@@ -362,12 +473,13 @@ body {
   flex: 0 0 auto;
 }
 
+/* LEAVES */
 .leaf {
   position: absolute;
   width: clamp(88px, 18vw, 150px);
   opacity: 0.9;
   pointer-events: none;
-  z-index: 3;
+  z-index: 4;
   filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.1));
 }
 
@@ -428,6 +540,33 @@ body {
   }
   100% {
     transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes flowerCollapse {
+  0% {
+    opacity: 0;
+    transform: scale(0.28) translateY(10px);
+  }
+  18% {
+    opacity: 0.35;
+    transform: scale(0.62) translateY(3px);
+  }
+  40% {
+    opacity: 0.92;
+    transform: scale(1) translateY(-2px);
+  }
+  62% {
+    opacity: 0.7;
+    transform: scale(0.86) translateY(0);
+  }
+  82% {
+    opacity: 0.22;
+    transform: scale(0.52) translateY(8px);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.24) translateY(14px);
   }
 }
 
@@ -525,6 +664,31 @@ body {
   .leaf {
     width: clamp(70px, 19vw, 110px);
   }
+
+  .lff-top-left,
+  .lff-top-mid-left,
+  .lff-top-right,
+  .lff-left-upper,
+  .lff-left-lower,
+  .lff-right-upper,
+  .lff-right-lower,
+  .lff-bottom-left,
+  .lff-bottom-mid,
+  .lff-bottom-right {
+    width: 34px;
+  }
+
+  .lff-inner-top-left,
+  .lff-inner-top-right,
+  .lff-inner-bottom-left,
+  .lff-inner-bottom-right {
+    width: 24px;
+  }
+
+  .lff-bottom-mid {
+    left: 50%;
+    transform: translateX(-50%);
+  }
 }
 
 @media (max-width: 420px) {
@@ -553,6 +717,12 @@ body {
     width: calc(100vw - 24px);
     padding: 0 16px;
   }
+
+  .lff-top-mid-left,
+  .lff-inner-top-right,
+  .lff-inner-bottom-right {
+    display: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -560,7 +730,8 @@ body {
   .login-card-wrap,
   .login-button,
   .login-button-glow,
-  .leaf-img {
+  .leaf-img,
+  .login-form-flower {
     animation: none !important;
     transition: none !important;
   }

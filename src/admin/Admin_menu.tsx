@@ -1,4 +1,3 @@
-// src/admin/Admin_menu.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../utils/supabaseClient";
@@ -40,6 +39,7 @@ import studyHubLogo from "../assets/study_hub.png";
 import staffConsignmentIcon from "../assets/staff_consignment.png";
 import customerConsignmentIcon from "../assets/consignment_record.png";
 import approvedIcon from "../assets/approved.png";
+import flowerImg from "../assets/flower.png";
 
 type MenuKey =
   | "dashboard"
@@ -63,6 +63,15 @@ type MenuItem = {
   name: string;
   key: MenuKey;
   icon: string;
+};
+
+type FlowerStatic = {
+  id: string;
+  left: string;
+  top: string;
+  size: string;
+  opacity: number;
+  rotateDeg?: number;
 };
 
 const Admin_menu: React.FC = () => {
@@ -155,6 +164,28 @@ const Admin_menu: React.FC = () => {
     []
   );
 
+  const sidebarFlowers: FlowerStatic[] = useMemo(
+    () => [
+      { id: "asb-1", left: "58%", top: "7%", size: "140px", opacity: 0.12, rotateDeg: -8 },
+      { id: "asb-2", left: "-8%", top: "24%", size: "180px", opacity: 0.12, rotateDeg: 12 },
+      { id: "asb-3", left: "62%", top: "43%", size: "120px", opacity: 0.11, rotateDeg: -10 },
+      { id: "asb-4", left: "50%", top: "67%", size: "150px", opacity: 0.1, rotateDeg: 8 },
+      { id: "asb-5", left: "-10%", top: "80%", size: "170px", opacity: 0.12, rotateDeg: -14 },
+    ],
+    []
+  );
+
+  const mainFlowers: FlowerStatic[] = useMemo(
+    () => [
+      { id: "amn-1", left: "74%", top: "3%", size: "180px", opacity: 0.08, rotateDeg: 10 },
+      { id: "amn-2", left: "84%", top: "30%", size: "130px", opacity: 0.07, rotateDeg: -8 },
+      { id: "amn-3", left: "70%", top: "58%", size: "160px", opacity: 0.07, rotateDeg: 12 },
+      { id: "amn-4", left: "6%", top: "75%", size: "170px", opacity: 0.06, rotateDeg: -10 },
+      { id: "amn-5", left: "88%", top: "82%", size: "120px", opacity: 0.06, rotateDeg: 14 },
+    ],
+    []
+  );
+
   const activeMenu = menuItems.find((m) => m.key === active);
 
   const renderContent = (): React.ReactNode => {
@@ -219,6 +250,26 @@ const Admin_menu: React.FC = () => {
   return (
     <div className={`admin-page ${mounted ? "is-mounted" : ""}`}>
       <aside className={`admin-sidebar ${collapsed ? "collapsed" : ""}`}>
+        <div className="admin-sidebar-bg-flowers" aria-hidden="true">
+          {sidebarFlowers.map((f) => (
+            <img
+              key={f.id}
+              src={flowerImg}
+              alt=""
+              className="admin-sidebar-flower"
+              draggable={false}
+              style={{
+                left: f.left,
+                top: f.top,
+                width: f.size,
+                height: f.size,
+                opacity: f.opacity,
+                transform: `rotate(${f.rotateDeg ?? 0}deg)`,
+              }}
+            />
+          ))}
+        </div>
+
         <div className="admin-sidebar-inner">
           <div className="admin-sidebar-top">
             <button
@@ -290,6 +341,26 @@ const Admin_menu: React.FC = () => {
       </aside>
 
       <main className="admin-main">
+        <div className="admin-main-bg-flowers" aria-hidden="true">
+          {mainFlowers.map((f) => (
+            <img
+              key={f.id}
+              src={flowerImg}
+              alt=""
+              className="admin-main-flower"
+              draggable={false}
+              style={{
+                left: f.left,
+                top: f.top,
+                width: f.size,
+                height: f.size,
+                opacity: f.opacity,
+                transform: `rotate(${f.rotateDeg ?? 0}deg)`,
+              }}
+            />
+          ))}
+        </div>
+
         <div className="admin-content">{renderContent()}</div>
       </main>
     </div>

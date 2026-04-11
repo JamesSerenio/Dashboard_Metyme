@@ -3,10 +3,17 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "../utils/supabaseClient";
 import studyHubLogo from "../assets/study_hub.png";
 import leaves from "../assets/leave.png";
+import flowerImg from "../assets/flower.png";
 import "../styles/login.css";
 
 type ProfileRow = {
   role: string;
+};
+
+type FlowerItem = {
+  id: string;
+  className: string;
+  delay: number;
 };
 
 const Login: React.FC = () => {
@@ -141,6 +148,30 @@ const Login: React.FC = () => {
     [],
   );
 
+  const flowerItems = useMemo<FlowerItem[]>(
+    () => [
+      { id: "f1", className: "login-form-flower lff-top-left", delay: 0 },
+      { id: "f2", className: "login-form-flower lff-top-mid-left", delay: 0.5 },
+      { id: "f3", className: "login-form-flower lff-top-right", delay: 1.1 },
+
+      { id: "f4", className: "login-form-flower lff-left-upper", delay: 0.35 },
+      { id: "f5", className: "login-form-flower lff-left-lower", delay: 1.35 },
+
+      { id: "f6", className: "login-form-flower lff-right-upper", delay: 0.8 },
+      { id: "f7", className: "login-form-flower lff-right-lower", delay: 1.7 },
+
+      { id: "f8", className: "login-form-flower lff-bottom-left", delay: 0.65 },
+      { id: "f9", className: "login-form-flower lff-bottom-mid", delay: 1.45 },
+      { id: "f10", className: "login-form-flower lff-bottom-right", delay: 2.1 },
+
+      { id: "f11", className: "login-form-flower lff-inner-top-left", delay: 0.25 },
+      { id: "f12", className: "login-form-flower lff-inner-top-right", delay: 1.0 },
+      { id: "f13", className: "login-form-flower lff-inner-bottom-left", delay: 1.55 },
+      { id: "f14", className: "login-form-flower lff-inner-bottom-right", delay: 2.25 },
+    ],
+    [],
+  );
+
   return (
     <div className="login-page">
       <div className="login-shell">
@@ -157,6 +188,18 @@ const Login: React.FC = () => {
           ))}
 
           <div className={`login-card ${mounted ? "is-mounted" : ""}`}>
+            <div className="login-form-flower-layer" aria-hidden="true">
+              {flowerItems.map((item) => (
+                <img
+                  key={item.id}
+                  src={flowerImg}
+                  alt=""
+                  className={item.className}
+                  style={{ animationDelay: `${item.delay}s` }}
+                />
+              ))}
+            </div>
+
             <div className="login-header">
               <div className="login-brand">
                 <div className="login-logo-wrap">

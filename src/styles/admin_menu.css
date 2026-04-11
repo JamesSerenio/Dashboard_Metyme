@@ -95,6 +95,7 @@ body {
   transition:
     width 0.28s ease,
     min-width 0.28s ease;
+  overflow: hidden;
 }
 
 .admin-sidebar.collapsed {
@@ -102,7 +103,33 @@ body {
   min-width: var(--admin-sidebar-collapsed-width);
 }
 
+.admin-sidebar-bg-flowers {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 0;
+}
+
+.admin-sidebar-flower {
+  position: absolute;
+  object-fit: contain;
+  user-select: none;
+  animation: adminFlowerFloat 8s ease-in-out infinite;
+  filter: blur(0.2px);
+}
+
+.admin-sidebar-flower:nth-child(2n) {
+  animation-duration: 10s;
+}
+
+.admin-sidebar-flower:nth-child(3n) {
+  animation-duration: 12s;
+}
+
 .admin-sidebar-inner {
+  position: relative;
+  z-index: 2;
   display: flex;
   flex-direction: column;
   height: 100vh;
@@ -454,6 +481,30 @@ body {
   margin-left: var(--admin-sidebar-collapsed-width);
 }
 
+.admin-main-bg-flowers {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 0;
+}
+
+.admin-main-flower {
+  position: absolute;
+  object-fit: contain;
+  user-select: none;
+  animation: adminFlowerFloatMain 12s ease-in-out infinite;
+  filter: blur(0.3px);
+}
+
+.admin-main-flower:nth-child(2n) {
+  animation-duration: 14s;
+}
+
+.admin-main-flower:nth-child(3n) {
+  animation-duration: 16s;
+}
+
 .admin-topbar {
   margin-bottom: 18px;
   padding: 18px 22px;
@@ -472,6 +523,8 @@ body {
 }
 
 .admin-content {
+  position: relative;
+  z-index: 2;
   animation: adminFadeInUp 0.45s ease both;
 }
 
@@ -498,6 +551,26 @@ body {
   to {
     opacity: 1;
     transform: translateX(0);
+  }
+}
+
+@keyframes adminFlowerFloat {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-12px) rotate(4deg);
+  }
+}
+
+@keyframes adminFlowerFloatMain {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-16px) rotate(5deg);
   }
 }
 
