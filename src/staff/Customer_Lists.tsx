@@ -1729,7 +1729,6 @@ const Customer_Lists: React.FC = () => {
         is_paid: toBool(row.is_paid),
         paid_at: row.paid_at ?? null,
         down_payment: toMoney(row.down_payment ?? 0),
-        expected_end_at: row.expected_end_at ?? null,
         booking_code: row.booking_code ?? null,
       };
 
