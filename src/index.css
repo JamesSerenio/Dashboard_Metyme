@@ -38,3 +38,5 @@
 @import "./styles/Staff_Consignment.css";
 @import "./styles/Staff_Consignment_Record.css";
 @import "./styles/Customer_Consignment_Record.css";
+@import "./styles/AddOnCodeAlertModal.css";
+@import "./styles/TimeAlertModal.css";

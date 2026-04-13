@@ -1,0 +1,260 @@
+.addon-alert-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(16, 18, 12, 0.24);
+  backdrop-filter: blur(4px);
+  animation: addonAlertFadeIn 0.2s ease;
+}
+
+.addon-alert-wrapper {
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  box-sizing: border-box;
+}
+
+.addon-alert-stack {
+  display: grid;
+  gap: 14px;
+  width: min(100%, 420px);
+}
+
+.addon-alert-card {
+  position: relative;
+  overflow: hidden;
+  background: #ffffff;
+  border-radius: 22px;
+  padding: 18px 16px 16px;
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.16);
+  animation: addonAlertPopIn 0.22s ease;
+  border: 2px solid #39a84b;
+}
+
+.addon-alert-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at top right, rgba(57, 168, 75, 0.08), transparent 30%),
+    linear-gradient(180deg, rgba(57, 168, 75, 0.04), transparent 35%);
+}
+
+.addon-alert-card--addons {
+  border-color: #39a84b;
+}
+
+.addon-alert-card--consignment {
+  border-color: #4e8df5;
+}
+
+.addon-alert-top {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.addon-alert-title-wrap {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+}
+
+.addon-alert-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  background: rgba(57, 168, 75, 0.12);
+  color: #2f8f3f;
+  font-size: 22px;
+  font-weight: 900;
+  flex-shrink: 0;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.45);
+}
+
+.addon-alert-card--consignment .addon-alert-icon {
+  background: rgba(78, 141, 245, 0.12);
+  color: #2f69d9;
+}
+
+.addon-alert-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(57, 168, 75, 0.12);
+  color: #2f8f3f;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  margin-bottom: 6px;
+}
+
+.addon-alert-card--consignment .addon-alert-badge {
+  background: rgba(78, 141, 245, 0.12);
+  color: #2f69d9;
+}
+
+.addon-alert-title {
+  font-size: 20px;
+  font-weight: 900;
+  color: #111111;
+  line-height: 1.1;
+}
+
+.addon-alert-close {
+  border: none;
+  background: transparent;
+  color: #111111;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  flex-shrink: 0;
+  transition: background 0.18s ease;
+}
+
+.addon-alert-close:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.addon-alert-body {
+  position: relative;
+  z-index: 1;
+  color: #222222;
+  font-size: 15px;
+  line-height: 1.7;
+  background: rgba(249, 251, 248, 0.88);
+  border: 1px solid rgba(57, 168, 75, 0.08);
+  border-radius: 16px;
+  padding: 12px 14px;
+}
+
+.addon-alert-card--consignment .addon-alert-body {
+  background: rgba(248, 250, 255, 0.9);
+  border-color: rgba(78, 141, 245, 0.08);
+}
+
+.addon-alert-row {
+  margin-bottom: 4px;
+  word-break: break-word;
+}
+
+.addon-alert-row:last-child {
+  margin-bottom: 0;
+}
+
+.addon-alert-row strong {
+  font-weight: 800;
+  color: #111111;
+}
+
+.addon-alert-btn {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  border: none;
+  background: linear-gradient(180deg, #39a84b, #2f8f3f);
+  color: #ffffff;
+  border-radius: 14px;
+  font-weight: 800;
+  height: 46px;
+  margin-top: 14px;
+  cursor: pointer;
+  font-size: 14px;
+  box-shadow: 0 10px 22px rgba(57, 168, 75, 0.2);
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    filter 0.18s ease;
+}
+
+.addon-alert-btn:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.03);
+  box-shadow: 0 14px 26px rgba(57, 168, 75, 0.24);
+}
+
+.addon-alert-card--consignment .addon-alert-btn {
+  background: linear-gradient(180deg, #4e8df5, #2f69d9);
+  box-shadow: 0 10px 22px rgba(78, 141, 245, 0.2);
+}
+
+.addon-alert-card--consignment .addon-alert-btn:hover {
+  box-shadow: 0 14px 26px rgba(78, 141, 245, 0.24);
+}
+
+.addon-alert-close-all {
+  border: none;
+  background: transparent;
+  color: #444444;
+  font-weight: 700;
+  height: 42px;
+  cursor: pointer;
+  border-radius: 12px;
+  font-size: 14px;
+  transition: background 0.18s ease;
+}
+
+.addon-alert-close-all:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+@keyframes addonAlertFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes addonAlertPopIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (max-width: 480px) {
+  .addon-alert-wrapper {
+    padding: 14px;
+  }
+
+  .addon-alert-card {
+    border-radius: 20px;
+    padding: 16px 14px 14px;
+  }
+
+  .addon-alert-title {
+    font-size: 18px;
+  }
+
+  .addon-alert-body {
+    font-size: 14px;
+  }
+
+  .addon-alert-icon {
+    width: 38px;
+    height: 38px;
+    font-size: 20px;
+  }
+}
