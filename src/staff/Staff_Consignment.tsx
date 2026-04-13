@@ -1,559 +1,520 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../utils/supabaseClient";
-import { motion, AnimatePresence } from "framer-motion";
-import {
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  Tooltip,
-  Legend,
-  LineChart,
-  Line,
-  CartesianGrid,
-  XAxis,
-  YAxis,
-} from "recharts";
-import "../styles/admin_dashboard.css";
+import "../styles/Staff_Consignment.css";
 
-import iconWalkin from "../assets/list.png";
-import iconReserve from "../assets/reserve.png";
-import iconPromo from "../assets/discount.png";
-import iconAll from "../assets/all.png";
-import iconCalendar from "../assets/calendar.png";
+type Profile = { role: string };
 
-type Totals = {
-  walkin: number;
-  reservation: number;
-  promo: number;
-  all: number;
+type AddOnSize =
+  | "None"
+  | "XS"
+  | "S"
+  | "M"
+  | "L"
+  | "XL"
+  | "2XL"
+  | "3XL"
+  | "4XL"
+  | "5XL";
+
+const SIZE_OPTIONS: AddOnSize[] = [
+  "None",
+  "XS",
+  "S",
+  "M",
+  "L",
+  "XL",
+  "2XL",
+  "3XL",
+  "4XL",
+  "5XL",
+];
+
+const normalizeSize = (v: string): string => v.trim();
+const normalizeText = (v: string): string => v.trim().replace(/\s+/g, " ");
+
+type CategoryRow = { id: string };
+
+type ConsignmentSuggestRow = {
+  full_name: string | null;
+  category: string | null;
 };
 
-type PieName = "Walk-in" | "Reservation" | "Promo";
-
-type PieRow = {
-  name: PieName;
-  value: number;
+type ToastState = {
+  open: boolean;
+  message: string;
+  tone: "success" | "error";
 };
 
-type LineRow = {
-  day: string;
-  total: number;
-};
+const Staff_Consignment: React.FC = () => {
+  const [fullName, setFullName] = useState<string>("");
+  const [category, setCategory] = useState<string>("");
+  const [itemName, setItemName] = useState<string>("");
+  const [size, setSize] = useState<AddOnSize>("None");
 
-const PIE_COLORS: Record<PieName, string> = {
-  "Walk-in": "#2f3b2f",
-  Reservation: "#6a3fb5",
-  Promo: "#c04b1a",
-};
+  const [restocked, setRestocked] = useState<number | "">("");
+  const [price, setPrice] = useState<number | "">("");
+  const [imageFile, setImageFile] = useState<File | null>(null);
 
-const pad2 = (n: number): string => String(n).padStart(2, "0");
-
-const toYYYYMMDD = (d: Date): string => {
-  const y = d.getFullYear();
-  const m = pad2(d.getMonth() + 1);
-  const day = pad2(d.getDate());
-  return `${y}-${m}-${day}`;
-};
-
-const formatPretty = (yyyyMmDd: string): string => {
-  const [y, m, d] = yyyyMmDd.split("-").map(Number);
-  const dt = new Date(y, m - 1, d);
-  return dt.toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "2-digit",
-  });
-};
-
-const formatShort = (yyyyMmDd: string): string => {
-  const [y, m, d] = yyyyMmDd.split("-").map(Number);
-  const dt = new Date(y, m - 1, d);
-  return dt.toLocaleDateString("en-US", {
-    month: "short",
-    day: "2-digit",
-  });
-};
-
-const addDaysYYYYMMDD = (yyyyMmDd: string, delta: number): string => {
-  const [y, m, d] = yyyyMmDd.split("-").map(Number);
-  const dt = new Date(y, m - 1, d);
-  dt.setDate(dt.getDate() + delta);
-  return toYYYYMMDD(dt);
-};
-
-const pct = (part: number, total: number): number => {
-  if (!Number.isFinite(part) || !Number.isFinite(total) || total <= 0) return 0;
-  return (part / total) * 100;
-};
-
-const formatPct = (n: number): string => {
-  if (!Number.isFinite(n)) return "0%";
-  const rounded1 = Math.round(n * 10) / 10;
-  const isInt = Math.abs(rounded1 - Math.round(rounded1)) < 1e-9;
-  return `${isInt ? Math.round(rounded1) : rounded1}%`;
-};
-
-const cardSpring = {
-  type: "spring" as const,
-  stiffness: 180,
-  damping: 18,
-  mass: 0.9,
-};
-
-const numberSpring = {
-  type: "spring" as const,
-  stiffness: 260,
-  damping: 20,
-  mass: 0.6,
-};
-
-const Admin_Dashboard: React.FC = () => {
-  const todayYYYYMMDD = useMemo(() => toYYYYMMDD(new Date()), []);
-
-  const [selectedDate, setSelectedDate] = useState<string>(todayYYYYMMDD);
-  const [openCalendar, setOpenCalendar] = useState<boolean>(false);
-
-  const [totals, setTotals] = useState<Totals>({
-    walkin: 0,
-    reservation: 0,
-    promo: 0,
-    all: 0,
+  const [toast, setToast] = useState<ToastState>({
+    open: false,
+    message: "",
+    tone: "success",
   });
 
-  const [pulseKey, setPulseKey] = useState<number>(0);
-  const [weekSeries, setWeekSeries] = useState<LineRow[]>([]);
-  const [weekLoading, setWeekLoading] = useState<boolean>(false);
+  const [allFullNames, setAllFullNames] = useState<string[]>([]);
+  const [allCategories, setAllCategories] = useState<string[]>([]);
 
-  const prettyDate = useMemo(() => formatPretty(selectedDate), [selectedDate]);
-  const weekStart = useMemo(
-    () => addDaysYYYYMMDD(selectedDate, -6),
-    [selectedDate],
-  );
+  const [fullOpen, setFullOpen] = useState<boolean>(false);
+  const [catOpen, setCatOpen] = useState<boolean>(false);
 
-  const weekRangeLabel = useMemo(() => {
-    return `${formatPretty(weekStart)} – ${formatPretty(selectedDate)}`;
-  }, [weekStart, selectedDate]);
+  const [consignmentCategoryId, setConsignmentCategoryId] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState<boolean>(false);
 
-  const fetchTotalsForDate = async (dateYYYYMMDD: string): Promise<Totals> => {
-    const walkinQ = supabase
-      .from("customer_sessions")
-      .select("id", { count: "exact", head: true })
-      .eq("date", dateYYYYMMDD)
-      .eq("reservation", "no");
+  const fullWrapRef = useRef<HTMLDivElement | null>(null);
+  const catWrapRef = useRef<HTMLDivElement | null>(null);
+  const toastTimerRef = useRef<number | null>(null);
 
-    const reservationQ = supabase
-      .from("customer_sessions")
-      .select("id", { count: "exact", head: true })
-      .eq("date", dateYYYYMMDD)
-      .eq("reservation", "yes");
-
-    const startOfDay = new Date(`${dateYYYYMMDD}T00:00:00`);
-    const endOfDay = new Date(`${dateYYYYMMDD}T23:59:59`);
-
-    const promoQ = supabase
-      .from("promo_bookings")
-      .select("id", { count: "exact", head: true })
-      .gte("start_at", startOfDay.toISOString())
-      .lte("start_at", endOfDay.toISOString());
-
-    const [walkinRes, reservationRes, promoRes] = await Promise.all([
-      walkinQ,
-      reservationQ,
-      promoQ,
-    ]);
-
-    const walkin = walkinRes.count ?? 0;
-    const reservation = reservationRes.count ?? 0;
-    const promo = promoRes.count ?? 0;
-
-    return {
-      walkin,
-      reservation,
-      promo,
-      all: walkin + reservation + promo,
-    };
+  const showToast = (message: string, tone: "success" | "error" = "success"): void => {
+    if (toastTimerRef.current) {
+      window.clearTimeout(toastTimerRef.current);
+    }
+    setToast({ open: true, message, tone });
+    toastTimerRef.current = window.setTimeout(() => {
+      setToast((prev) => ({ ...prev, open: false }));
+    }, 2200);
   };
 
   useEffect(() => {
-    let alive = true;
+    const loadPrereqs = async (): Promise<void> => {
+      const { data: catRow, error: catErr } = await supabase
+        .from("addon_categories")
+        .select("id")
+        .ilike("name", "Consignment")
+        .limit(1);
 
-    const run = async (): Promise<void> => {
-      const t = await fetchTotalsForDate(selectedDate);
-      if (!alive) return;
+      if (catErr) {
+        console.error("Load addon_categories error:", catErr);
+        showToast("Failed to load addon_categories.", "error");
+      } else {
+        const id: string | null = (catRow?.[0] as CategoryRow | undefined)?.id ?? null;
+        setConsignmentCategoryId(id);
+      }
 
-      setTotals(t);
-      setPulseKey((k) => k + 1);
+      const { data, error } = await supabase
+        .from("consignment")
+        .select("full_name, category");
 
-      setWeekLoading(true);
+      if (error) {
+        console.error("Load suggestions error:", error);
+        return;
+      }
 
-      try {
-        const days: string[] = Array.from({ length: 7 }, (_, i) =>
-          addDaysYYYYMMDD(selectedDate, i - 6),
-        );
+      const rows: ConsignmentSuggestRow[] = (data ?? []) as ConsignmentSuggestRow[];
 
-        const results = await Promise.all(
-          days.map(async (d) => {
-            const tt = await fetchTotalsForDate(d);
-            return {
-              day: formatShort(d),
-              total: tt.all,
-            };
-          }),
-        );
+      const uniqFull: string[] = Array.from(
+        new Set(
+          rows
+            .map((r) => normalizeText(r.full_name ?? ""))
+            .filter((v) => v.length > 0)
+        )
+      ).sort((a, b) => a.localeCompare(b));
 
-        if (!alive) return;
-        setWeekSeries(results);
-      } finally {
-        if (alive) setWeekLoading(false);
+      const uniqCat: string[] = Array.from(
+        new Set(
+          rows
+            .map((r) => normalizeText(r.category ?? ""))
+            .filter((v) => v.length > 0)
+        )
+      ).sort((a, b) => a.localeCompare(b));
+
+      setAllFullNames(uniqFull);
+      setAllCategories(uniqCat);
+    };
+
+    void loadPrereqs();
+
+    return () => {
+      if (toastTimerRef.current) {
+        window.clearTimeout(toastTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const onClickOutside = (e: MouseEvent): void => {
+      const target = e.target as Node;
+
+      if (fullWrapRef.current && !fullWrapRef.current.contains(target)) {
+        setFullOpen(false);
+      }
+
+      if (catWrapRef.current && !catWrapRef.current.contains(target)) {
+        setCatOpen(false);
       }
     };
 
-    void run();
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, []);
 
-    return () => {
-      alive = false;
-    };
-  }, [selectedDate]);
+  const shownFullNames = useMemo(() => allFullNames.slice(0, 30), [allFullNames]);
+  const shownCategories = useMemo(() => allCategories.slice(0, 30), [allCategories]);
 
-  const pieData: PieRow[] = useMemo(
-    () => [
-      { name: "Walk-in", value: totals.walkin },
-      { name: "Reservation", value: totals.reservation },
-      { name: "Promo", value: totals.promo },
-    ],
-    [totals.walkin, totals.reservation, totals.promo],
-  );
+  const handlePickFullName = (picked: string): void => {
+    setFullName(picked);
+    setFullOpen(false);
+  };
 
-  const pieTotal = useMemo(
-    () => totals.walkin + totals.reservation + totals.promo,
-    [totals.walkin, totals.reservation, totals.promo],
-  );
+  const handlePickCategory = (picked: string): void => {
+    setCategory(picked);
+    setCatOpen(false);
+  };
 
-  const walkinPct = useMemo(
-    () => formatPct(pct(totals.walkin, totals.all)),
-    [totals.walkin, totals.all],
-  );
-  const reservePct = useMemo(
-    () => formatPct(pct(totals.reservation, totals.all)),
-    [totals.reservation, totals.all],
-  );
-  const promoPct = useMemo(
-    () => formatPct(pct(totals.promo, totals.all)),
-    [totals.promo, totals.all],
-  );
+  const handleSubmit = async (): Promise<void> => {
+    const fullNameFinal = normalizeText(fullName);
+    const categoryFinal = normalizeText(category);
+    const itemNameFinal = normalizeText(itemName);
+
+    if (
+      !fullNameFinal ||
+      !categoryFinal ||
+      !itemNameFinal ||
+      restocked === "" ||
+      price === ""
+    ) {
+      showToast("Please fill in all required fields!", "error");
+      return;
+    }
+
+    if (!consignmentCategoryId) {
+      showToast(
+        "Consignment category not found. Add 'Consignment' in addon_categories first.",
+        "error"
+      );
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+
+      const { data: userRes, error: userErr } = await supabase.auth.getUser();
+      if (userErr) throw userErr;
+      if (!userRes?.user) throw new Error("Not logged in");
+
+      const userId: string = userRes.user.id;
+
+      const { data: profile, error: profErr } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", userId)
+        .single<Profile>();
+
+      if (profErr) throw profErr;
+
+      const role = (profile?.role ?? "").toLowerCase();
+      if (role !== "admin" && role !== "staff") {
+        throw new Error("Admin/Staff only");
+      }
+
+      let imageUrl: string | null = null;
+
+      if (imageFile) {
+        const extRaw: string | undefined = imageFile.name.split(".").pop();
+        const fileExt: string = (extRaw ? extRaw.toLowerCase() : "jpg").trim();
+        const fileName: string = `${Date.now()}.${fileExt}`;
+        const filePath: string = `${userId}/${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from("consignment")
+          .upload(filePath, imageFile, {
+            contentType: imageFile.type,
+            upsert: false,
+          });
+
+        if (uploadError) throw uploadError;
+
+        const { data: urlData } = supabase.storage
+          .from("consignment")
+          .getPublicUrl(filePath);
+
+        imageUrl = urlData.publicUrl;
+      }
+
+      const sizeFinal = normalizeSize(size);
+      const sizeDb: string | null = sizeFinal === "None" ? null : sizeFinal;
+
+      const { error: insertConsErr } = await supabase.from("consignment").insert([
+        {
+          created_by: userId,
+          category_id: consignmentCategoryId,
+          full_name: fullNameFinal,
+          category: categoryFinal,
+          item_name: itemNameFinal,
+          size: sizeDb,
+          restocked: Number(restocked),
+          price: Number(price),
+          image_url: imageUrl,
+          approval_status: "pending",
+        },
+      ]);
+
+      if (insertConsErr) throw insertConsErr;
+
+      setAllFullNames((prev) => {
+        if (prev.some((n) => n.toLowerCase() === fullNameFinal.toLowerCase())) return prev;
+        return [...prev, fullNameFinal].sort((a, b) => a.localeCompare(b));
+      });
+
+      setAllCategories((prev) => {
+        if (prev.some((c) => c.toLowerCase() === categoryFinal.toLowerCase())) return prev;
+        return [...prev, categoryFinal].sort((a, b) => a.localeCompare(b));
+      });
+
+      setFullName("");
+      setCategory("");
+      setItemName("");
+      setSize("None");
+      setRestocked("");
+      setPrice("");
+      setImageFile(null);
+      setFullOpen(false);
+      setCatOpen(false);
+
+      showToast("Consignment item submitted for admin approval!", "success");
+    } catch (err: unknown) {
+      console.error(err);
+      showToast(err instanceof Error ? err.message : "Unexpected error occurred", "error");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const fileLabel = imageFile ? imageFile.name : "Choose image (optional)";
 
   return (
-    <div className="admin-dashboard-page">
-      <div className="admin-dashboard-wrap">
-        <div className="admin-dash-headline">
-          <div>
-            <span className="admin-dash-badge">Metyme Lounge Performance</span>
-            <h2>Admin Dashboard</h2>
-            <p>Monitor walk-ins, reservations, promos, and weekly activity.</p>
+    <div className="staff-cons-page">
+      <div className="staff-cons-wrap">
+        <div className="staff-cons-card">
+          <div className="staff-cons-card-head">
+            <div>
+              <div className="staff-cons-card-title">Add Consignment Item</div>
+              <div className="staff-cons-card-sub">
+                Fill the details below to add a consignment product.
+              </div>
+            </div>
           </div>
 
-          <button
-            type="button"
-            className="admin-dash-date-btn"
-            onClick={() => setOpenCalendar(true)}
-          >
-            <img src={iconCalendar} alt="Calendar" />
-            <span>{prettyDate}</span>
-          </button>
-        </div>
+          <div className="staff-cons-grid">
+            <div className="staff-cons-col">
+              <div className="staff-cons-field-block" ref={fullWrapRef}>
+                <label className="staff-cons-label">
+                  Full Name <span className="staff-cons-req">*</span>
+                </label>
 
-        <div className="admin-dash-totals-row">
-          <motion.div
-            className="admin-dash-total-card admin-dash-total-card--walkin"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={cardSpring}
-          >
-            <img className="admin-dash-total-icon" src={iconWalkin} alt="Walk-in" />
-
-            <div className="admin-dash-total-meta">
-              <div className="admin-dash-total-label">Walk-in</div>
-              <AnimatePresence mode="popLayout">
-                <motion.div
-                  key={`walkin-${pulseKey}-${totals.walkin}`}
-                  className="admin-dash-total-value"
-                  initial={{ scale: 0.92, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.92, opacity: 0 }}
-                  transition={numberSpring}
-                >
-                  {totals.walkin}
-                </motion.div>
-              </AnimatePresence>
-            </div>
-
-            <div className="admin-dash-total-percent">
-              <strong>{walkinPct}</strong>
-              <span>of total</span>
-            </div>
-          </motion.div>
-
-          <motion.div
-            className="admin-dash-total-card admin-dash-total-card--reserve"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ ...cardSpring, delay: 0.03 }}
-          >
-            <img
-              className="admin-dash-total-icon"
-              src={iconReserve}
-              alt="Reservation"
-            />
-
-            <div className="admin-dash-total-meta">
-              <div className="admin-dash-total-label">Reservation</div>
-              <AnimatePresence mode="popLayout">
-                <motion.div
-                  key={`reserve-${pulseKey}-${totals.reservation}`}
-                  className="admin-dash-total-value"
-                  initial={{ scale: 0.92, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.92, opacity: 0 }}
-                  transition={numberSpring}
-                >
-                  {totals.reservation}
-                </motion.div>
-              </AnimatePresence>
-            </div>
-
-            <div className="admin-dash-total-percent">
-              <strong>{reservePct}</strong>
-              <span>of total</span>
-            </div>
-          </motion.div>
-
-          <motion.div
-            className="admin-dash-total-card admin-dash-total-card--promo"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ ...cardSpring, delay: 0.06 }}
-          >
-            <img className="admin-dash-total-icon" src={iconPromo} alt="Promo" />
-
-            <div className="admin-dash-total-meta">
-              <div className="admin-dash-total-label">Promo</div>
-              <AnimatePresence mode="popLayout">
-                <motion.div
-                  key={`promo-${pulseKey}-${totals.promo}`}
-                  className="admin-dash-total-value"
-                  initial={{ scale: 0.92, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.92, opacity: 0 }}
-                  transition={numberSpring}
-                >
-                  {totals.promo}
-                </motion.div>
-              </AnimatePresence>
-            </div>
-
-            <div className="admin-dash-total-percent">
-              <strong>{promoPct}</strong>
-              <span>of total</span>
-            </div>
-          </motion.div>
-
-          <motion.div
-            className="admin-dash-total-card admin-dash-total-card--all"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ ...cardSpring, delay: 0.09 }}
-          >
-            <img className="admin-dash-total-icon" src={iconAll} alt="All" />
-
-            <div className="admin-dash-total-meta">
-              <div className="admin-dash-total-label">Total All</div>
-              <AnimatePresence mode="popLayout">
-                <motion.div
-                  key={`all-${pulseKey}-${totals.all}`}
-                  className="admin-dash-total-value"
-                  initial={{ scale: 0.92, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.92, opacity: 0 }}
-                  transition={numberSpring}
-                >
-                  {totals.all}
-                </motion.div>
-              </AnimatePresence>
-            </div>
-
-            <div className="admin-dash-total-percent">
-              <strong>100%</strong>
-              <span>overview</span>
-            </div>
-          </motion.div>
-        </div>
-
-        <div className="admin-dash-charts-grid">
-          <motion.div
-            className="admin-dash-chart-card"
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ ...cardSpring, delay: 0.12 }}
-          >
-            <div className="admin-dash-chart-head">
-              <div>
-                <div className="admin-dash-chart-title">Total All (7 days)</div>
-                <div className="admin-dash-chart-sub">{weekRangeLabel}</div>
-              </div>
-            </div>
-
-            {weekLoading ? (
-              <div className="admin-dash-chart-loading">
-                <div className="admin-dash-loader" />
-                <div>Loading...</div>
-              </div>
-            ) : (
-              <div className="admin-dash-line-wrap">
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart
-                    data={weekSeries}
-                    margin={{ top: 10, right: 18, left: 0, bottom: 0 }}
+                <div className="staff-cons-input-wrap">
+                  <input
+                    className="staff-cons-input"
+                    value={fullName}
+                    placeholder="Tap to choose full name"
+                    onChange={(e) => setFullName(e.target.value)}
+                    onFocus={() => setFullOpen(false)}
+                  />
+                  <button
+                    type="button"
+                    className="staff-cons-dropbtn"
+                    onClick={() => setFullOpen((prev) => !prev)}
+                    aria-label="Open full name suggestions"
                   >
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="day" />
-                    <YAxis allowDecimals={false} />
-                    <Tooltip />
-                    <Line
-                      type="monotone"
-                      dataKey="total"
-                      stroke="#0f5a4a"
-                      strokeWidth={3}
-                      dot={{ r: 4 }}
-                      activeDot={{ r: 6 }}
-                      isAnimationActive
-                      animationDuration={700}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-          </motion.div>
+                    ▼
+                  </button>
+                </div>
 
-          <motion.div
-            className="admin-dash-chart-card"
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ ...cardSpring, delay: 0.16 }}
-          >
-            <div className="admin-dash-chart-head">
-              <div>
-                <div className="admin-dash-chart-title">Breakdown</div>
-                <div className="admin-dash-chart-sub">{prettyDate}</div>
-              </div>
-            </div>
-
-            {pieTotal <= 0 ? (
-              <div className="admin-dash-chart-empty">No data for this date.</div>
-            ) : (
-              <div className="admin-dash-chart-body">
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={pieData}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={68}
-                      outerRadius={104}
-                      paddingAngle={3}
-                      isAnimationActive
-                      animationDuration={700}
-                    >
-                      {pieData.map((entry) => (
-                        <Cell
-                          key={`cell-${entry.name}`}
-                          fill={PIE_COLORS[entry.name]}
-                        />
+                {fullOpen && (
+                  <div className="staff-cons-popover">
+                    <div className="staff-cons-popover-hint">Suggestions (tap to select)</div>
+                    <div className="staff-cons-popover-scroll">
+                      {shownFullNames.map((n) => (
+                        <button
+                          type="button"
+                          key={n}
+                          className="staff-cons-popover-item"
+                          onClick={() => handlePickFullName(n)}
+                        >
+                          {n}
+                        </button>
                       ))}
-                    </Pie>
+                    </div>
+                  </div>
+                )}
+              </div>
 
-                    <Tooltip
-                      formatter={(value: unknown, name: unknown) => {
-                        const v = typeof value === "number" ? value : Number(value);
-                        const label = String(name);
-                        const pv = Number.isFinite(v) ? v : 0;
-                        return [`${pv} (${formatPct(pct(pv, pieTotal))})`, label];
-                      }}
-                    />
+              <div className="staff-cons-field-block" ref={catWrapRef}>
+                <label className="staff-cons-label">
+                  Category <span className="staff-cons-req">*</span>
+                </label>
 
-                    <Legend verticalAlign="bottom" />
-                  </PieChart>
-                </ResponsiveContainer>
+                <div className="staff-cons-input-wrap">
+                  <input
+                    className="staff-cons-input"
+                    value={category}
+                    placeholder="Tap to choose category"
+                    onChange={(e) => setCategory(e.target.value)}
+                    onFocus={() => setCatOpen(false)}
+                  />
+                  <button
+                    type="button"
+                    className="staff-cons-dropbtn"
+                    onClick={() => setCatOpen((prev) => !prev)}
+                    aria-label="Open category suggestions"
+                  >
+                    ▼
+                  </button>
+                </div>
 
-                <div className="admin-dash-chart-center">
-                  <div className="admin-dash-chart-center-label">Total</div>
-                  <AnimatePresence mode="popLayout">
-                    <motion.div
-                      key={`pieTotal-${pulseKey}-${pieTotal}`}
-                      className="admin-dash-chart-center-value"
-                      initial={{ scale: 0.92, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      exit={{ scale: 0.92, opacity: 0 }}
-                      transition={numberSpring}
-                    >
-                      {pieTotal}
-                    </motion.div>
-                  </AnimatePresence>
+                {catOpen && (
+                  <div className="staff-cons-popover">
+                    <div className="staff-cons-popover-hint">Suggestions (tap to select)</div>
+                    <div className="staff-cons-popover-scroll">
+                      {shownCategories.map((n) => (
+                        <button
+                          type="button"
+                          key={n}
+                          className="staff-cons-popover-item"
+                          onClick={() => handlePickCategory(n)}
+                        >
+                          {n}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="staff-cons-field-block">
+                <label className="staff-cons-label">
+                  Size <span className="staff-cons-opt">(optional)</span>
+                </label>
+
+                <select
+                  className="staff-cons-input"
+                  value={size}
+                  onChange={(e) => setSize(e.target.value as AddOnSize)}
+                >
+                  {SIZE_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
+
+                <div className="staff-cons-help">
+                  Choose size if applicable. If not, keep None.
                 </div>
               </div>
-            )}
-          </motion.div>
+
+              <div className="staff-cons-field-block">
+                <label className="staff-cons-label">
+                  Item Name <span className="staff-cons-req">*</span>
+                </label>
+                <input
+                  className="staff-cons-input"
+                  value={itemName}
+                  placeholder="Example: Nike Shoes"
+                  onChange={(e) => setItemName(e.target.value)}
+                />
+              </div>
+
+              <div className="staff-cons-field-block">
+                <label className="staff-cons-label">Image</label>
+
+                <label className="staff-cons-file">
+                  <span className="staff-cons-file-icon">🖼</span>
+                  <span className="staff-cons-file-text">{fileLabel}</span>
+                  <input
+                    className="staff-cons-file-input"
+                    type="file"
+                    accept="image/*"
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                      const fileList: FileList | null = e.target.files;
+                      setImageFile(fileList && fileList.length > 0 ? fileList[0] : null);
+                    }}
+                  />
+                </label>
+
+                <div className="staff-cons-help">
+                  Tip: image is optional. You can add later too.
+                </div>
+              </div>
+            </div>
+
+            <div className="staff-cons-col">
+              <div className="staff-cons-side-card">
+                <div className="staff-cons-side-title">Pricing & Stock</div>
+                <div className="staff-cons-side-sub">Set quantity and price here.</div>
+
+                <div className="staff-cons-field-block staff-cons-field-block--compact">
+                  <label className="staff-cons-label">
+                    Restocked Quantity <span className="staff-cons-req">*</span>
+                  </label>
+                  <input
+                    className="staff-cons-input"
+                    inputMode="numeric"
+                    type="number"
+                    value={restocked}
+                    placeholder="e.g. 50"
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setRestocked(v === "" ? "" : Number(v));
+                    }}
+                  />
+                </div>
+
+                <div className="staff-cons-field-block staff-cons-field-block--compact">
+                  <label className="staff-cons-label">
+                    Price <span className="staff-cons-req">*</span>
+                  </label>
+                  <input
+                    className="staff-cons-input"
+                    inputMode="decimal"
+                    type="number"
+                    value={price}
+                    placeholder="e.g. 25"
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setPrice(v === "" ? "" : Number(v));
+                    }}
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  className="staff-cons-submit-btn"
+                  onClick={() => void handleSubmit()}
+                  disabled={submitting}
+                >
+                  {submitting ? "Submitting..." : "Submit for Approval"}
+                </button>
+
+                <div className="staff-cons-footnote">
+                  Item will only display after admin approval.
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
-      {openCalendar && (
-        <div className="admin-dash-calendar-overlay" onClick={() => setOpenCalendar(false)}>
-          <div
-            className="admin-dash-calendar-card"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="admin-dash-calendar-head">
-              <h3>Select Date</h3>
-              <button
-                type="button"
-                className="admin-dash-calendar-close"
-                onClick={() => setOpenCalendar(false)}
-              >
-                Close
-              </button>
-            </div>
-
-            <input
-              type="date"
-              className="admin-dash-calendar-input"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-            />
-
-            <div className="admin-dash-calendar-actions">
-              <button
-                type="button"
-                className="admin-dash-calendar-btn secondary"
-                onClick={() => setSelectedDate(todayYYYYMMDD)}
-              >
-                Today
-              </button>
-
-              <button
-                type="button"
-                className="admin-dash-calendar-btn primary"
-                onClick={() => setOpenCalendar(false)}
-              >
-                Done
-              </button>
-            </div>
-          </div>
+      {toast.open && (
+        <div
+          className={`staff-cons-toast ${
+            toast.tone === "error" ? "staff-cons-toast--error" : ""
+          }`}
+        >
+          {toast.message}
         </div>
       )}
     </div>
   );
 };
 
-export default Admin_Dashboard;
+export default Staff_Consignment;
