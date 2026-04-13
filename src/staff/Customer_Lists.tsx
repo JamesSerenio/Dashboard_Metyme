@@ -1524,29 +1524,29 @@ const Customer_Lists: React.FC = () => {
       if (item.source === "addon") {
         const systemPaid = getSystemPaymentInfo(session);
 
-        const addonPayload = {
-          original_id: item.id,
-          original_created_at: item.created_at,
-          add_on_id: item.source_item_id,
-          quantity: item.qty,
-          price: item.price,
-          total: item.subtotal,
-          full_name: session.full_name,
-          seat_number: session.seat_number,
-          gcash_amount: systemPaid.gcash,
-          cash_amount: systemPaid.cash,
-          is_paid: toBool(session.is_paid),
-          paid_at: session.paid_at ?? null,
-          was_voided: false,
-          voided_at: null,
-          void_note: null,
-          item_name: item.name,
-          category: item.category,
-          size: item.size,
-          image_url: item.image_url,
-          cancel_note: note,
-          stock_returned: true,
-        };
+      const addonPayload = {
+        original_id: item.id,
+        original_created_at: item.created_at,
+        add_on_id: item.source_item_id,
+        quantity: item.qty,
+        price: item.price,
+        total: item.subtotal,
+        full_name: session.full_name,
+        seat_number: session.seat_number,
+        gcash_amount: systemPaid.gcash,
+        cash_amount: systemPaid.cash,
+        is_paid: toBool(session.is_paid),
+        paid_at: session.paid_at ?? null,
+        was_voided: false,
+        voided_at: null,
+        void_note: null,
+        item_name: item.name,
+        category: item.category,
+        size: item.size,
+        image_url: item.image_url,
+        description: note,
+        stock_returned: true,
+      };
 
         const { error: insertErr } = await supabase.from("customer_session_add_ons_cancelled").insert(addonPayload);
         if (insertErr) {
