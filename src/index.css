@@ -1,6 +1,6 @@
 @import "./styles/login.css";
 @import "./styles/admin_menu.css";
-@import "./styles/admin_dashboard.css";
+@import "./styles/Admin_Dashboard.css";
 @import "./styles/Admin_Add_Ons.css";
 @import "./styles/Admin_Item_Lists.css";
 @import "./styles/Admin_Restock_Record.css";
@@ -16,7 +16,7 @@
 @import "./styles/Admin_customer_reservation.css";
 @import "./styles/Admin_Customer_Cancelled.css";
 @import "./styles/Admin_Customer_Discount_List.css";
-@import "./styles/staff_menu.css";
+@import "./styles/Staff_menu.css";
 @import "./styles/Customer_Lists.css";
 @import "./styles/staff_dashboard.css";
 @import "./styles/Customer_Reservations.css";
