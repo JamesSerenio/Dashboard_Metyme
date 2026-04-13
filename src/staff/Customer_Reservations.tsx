@@ -1977,11 +1977,10 @@ const Customer_Reservations: React.FC = () => {
         is_paid: toBool(row.is_paid),
         paid_at: row.paid_at ?? null,
         down_payment: toMoney(row.down_payment ?? 0),
-        expected_end_at: row.expected_end_at ?? null,
         booking_code: row.booking_code ?? null,
       };
 
-      const { error: insertErr } = await supabase.from("customer_cancelled").insert(cancelPayload);
+      const { error: insertErr } = await supabase.from("customer_sessions_cancelled").insert(cancelPayload);
 
       if (insertErr) {
         alert(`Cancel failed: ${insertErr.message}`);
