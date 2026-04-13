@@ -1733,7 +1733,7 @@ const Customer_Lists: React.FC = () => {
         booking_code: row.booking_code ?? null,
       };
 
-      const { error: insertErr } = await supabase.from("customer_cancelled").insert(cancelPayload);
+      const { error: insertErr } = await supabase.from("customer_sessions_cancelled").insert(cancelPayload);
 
       if (insertErr) {
         alert(`Cancel failed: ${insertErr.message}`);
