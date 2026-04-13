@@ -14,7 +14,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import "../styles/admin_dashboard.css";
+import "../styles/Admin_Dashboard.css";
 
 import iconWalkin from "../assets/list.png";
 import iconReserve from "../assets/reserve.png";
