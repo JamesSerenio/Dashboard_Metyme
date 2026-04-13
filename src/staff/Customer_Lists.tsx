@@ -1548,7 +1548,7 @@ const Customer_Lists: React.FC = () => {
           stock_returned: true,
         };
 
-        const { error: insertErr } = await supabase.from("addon_cancelled").insert(addonPayload);
+        const { error: insertErr } = await supabase.from("customer_session_add_ons_cancelled").insert(addonPayload);
         if (insertErr) {
           alert(`Cancel add-on failed: ${insertErr.message}`);
           return;
