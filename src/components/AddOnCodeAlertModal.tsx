@@ -110,9 +110,6 @@ const AddOnCodeAlertModal: React.FC<Props> = ({
                   <strong>Type:</strong> {getModeLabel(a.mode)}
                 </div>
                 <div className="addon-alert-row">
-                  <strong>Booking Code:</strong> {a.booking_code || "-"}
-                </div>
-                <div className="addon-alert-row">
                   <strong>Order:</strong> {a.order_text || "-"}
                 </div>
               </div>
