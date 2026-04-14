@@ -1,560 +1,524 @@
-:root {
-  --dash-page-bg: #f7f2e8;
-  --dash-page-bg-soft: #f2eadc;
-
-  --dash-card: rgba(255, 250, 243, 0.88);
-  --dash-card-strong: #fffaf2;
-  --dash-card-soft: #f8efe3;
-
-  --dash-text: #1f1a14;
-  --dash-text-soft: #7b6d59;
-  --dash-text-muted: #9a8a75;
-
-  --dash-line: rgba(110, 88, 57, 0.12);
-  --dash-line-strong: rgba(110, 88, 57, 0.18);
-
-  --dash-gold: #c89b52;
-  --dash-gold-deep: #a57b3d;
-  --dash-brown: #5d4629;
-  --dash-brown-2: #7b6040;
-  --dash-green: #46634c;
-  --dash-green-2: #23473d;
-  --dash-purple: #7754b3;
-  --dash-orange: #c46b2d;
-
-  --dash-shadow-lg: 0 24px 60px rgba(90, 69, 42, 0.12);
-  --dash-shadow-md: 0 18px 38px rgba(90, 69, 42, 0.1);
-  --dash-shadow-sm: 0 10px 24px rgba(90, 69, 42, 0.08);
-
-  --dash-radius-xl: 30px;
-  --dash-radius-lg: 24px;
-  --dash-radius-md: 18px;
-  --dash-radius-sm: 14px;
-}
-
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
-
 .staff-dashboard-page {
   width: 100%;
   min-height: 100%;
-  background:
-    radial-gradient(900px 420px at 100% 0%, rgba(200, 155, 82, 0.09), transparent 55%),
-    radial-gradient(720px 420px at 0% 100%, rgba(123, 96, 64, 0.07), transparent 55%),
-    linear-gradient(180deg, var(--dash-page-bg) 0%, var(--dash-page-bg-soft) 100%);
-  border-radius: 34px;
-  padding: 8px;
 }
 
-.staff-dashboard-wrap {
-  width: 100%;
-  display: grid;
-  gap: 22px;
+/* =========================
+   STAFF DASHBOARD BACKGROUND
+========================= */
+.staff-content {
+  min-height: 100vh;
+  background: #b2c197;
 }
 
-.staff-dash-headline {
+/* ✅ Make sure the seat card always fits the screen (no scroll) */
+.seatmap-wrap {
+  height: 100%;
+  min-height: 100vh;
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 18px;
-  padding: 10px 4px 6px;
+  justify-content: center;
+  align-items: center;
+  padding: clamp(8px, 1.6vw, 16px);
+  box-sizing: border-box;
+  overflow: visible;
 }
 
-.staff-dash-badge {
-  display: inline-flex;
+.seatmap-container {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: min(100%, 980px);
+  padding-left: clamp(56px, 10vw, 190px);
+  padding-right: clamp(56px, 10vw, 210px);
+}
+
+/* card */
+.seatmap-card {
+  position: relative;
+  z-index: 10;
+  width: min(92vw, 450px);
+  border-radius: 18px;
+  background: rgb(245, 239, 230);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+  padding: clamp(10px, 1.4vw, 14px);
+  box-sizing: border-box;
+  max-height: calc(100vh - 16px);
+  animation: fadeUp 420ms ease-out both;
+}
+
+.seatmap-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.seatmap-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 0.2px;
+  opacity: 0.9;
+}
+
+.seatmap-date {
+  font-size: 12px;
+  font-weight: 800;
+  opacity: 0.75;
+  white-space: nowrap;
+}
+
+/* stage */
+.seatmap-stage {
+  position: relative;
+  width: 100%;
+  border-radius: 16px;
+  overflow: hidden;
+  animation: fadeInSoft 520ms ease-out both;
+  animation-delay: 80ms;
+}
+
+.seatmap-img {
+  width: 100%;
+  height: auto;
+  display: block;
+  max-height: calc(100vh - 230px);
+}
+
+/* pins */
+.seat-pin {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  border: 0;
+  width: 13px;
+  height: 13px;
+  padding: 0;
+  border-radius: 999px;
+  font-weight: 900;
+  font-size: 7px;
+  line-height: 15px;
+  text-align: center;
+  color: #141414;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.18);
+  outline: 2px solid rgba(255, 255, 255, 0.95);
+  cursor: pointer;
+  opacity: 0;
+  animation: fadeUp 360ms ease-out both;
+  animation-delay: calc(var(--i, 0) * 18ms + 120ms);
+}
+
+.seat-pin.room {
+  width: 128px;
+  height: 24px;
+  line-height: 24px;
+  font-size: 10px;
+  padding: 0 10px;
+}
+
+.seat-pin.selected {
+  outline: 2px solid rgba(0, 0, 0, 0.65);
+}
+
+.seat-pin--readonly {
+  cursor: default;
+}
+
+/* status colors */
+.seat-green {
+  background: #00d75a;
+}
+
+.seat-yellow {
+  background: #f4c542;
+}
+
+.seat-orange {
+  background: red;
+}
+
+.seat-purple {
+  background: #b55cff;
+}
+
+/* legend */
+.seatmap-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px 14px;
+  margin-top: 10px;
+  padding: 8px 6px 2px;
+  opacity: 0.9;
+}
+
+.legend-item {
+  display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 10px;
-  min-height: 40px;
-  padding: 0 16px;
+  font-size: 12px;
+}
+
+.legend-dot {
+  width: 10px;
+  height: 10px;
   border-radius: 999px;
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: #fff7eb;
-  background: linear-gradient(135deg, #5b4529 0%, #7b6040 45%, #a88652 100%);
-  border: 1px solid rgba(255, 230, 191, 0.3);
-  box-shadow:
-    0 12px 26px rgba(91, 69, 41, 0.22),
-    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  display: inline-block;
+  outline: 2px solid rgba(0, 0, 0, 0.06);
 }
 
-.staff-dash-headline h2 {
-  margin: 0;
-  font-size: clamp(30px, 3vw, 42px);
-  line-height: 0.98;
-  font-weight: 1000;
-  letter-spacing: -0.05em;
-  color: var(--dash-text);
+.seatmap-hint {
+  margin-top: 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #333;
 }
 
-.staff-dash-headline p {
-  margin: 12px 0 0;
-  color: var(--dash-text-soft);
-  font-size: 15px;
-  line-height: 1.8;
-  font-weight: 600;
-  max-width: 620px;
-}
-
-.staff-dash-date-btn {
-  min-height: 54px;
-  padding: 0 18px;
-  border: 1px solid rgba(255, 235, 204, 0.22);
-  border-radius: 18px;
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  background: linear-gradient(135deg, #17110b 0%, #4f3b22 45%, #8d6b41 100%);
-  color: #fffaf2;
-  font-size: 13px;
-  font-weight: 900;
-  box-shadow: 0 16px 30px rgba(79, 59, 34, 0.24);
+.seatmap-reset-btn {
+  margin-left: 8px;
+  border: 0;
+  border-radius: 10px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 800;
+  background: #e6e0d2;
+  color: #333;
   cursor: pointer;
-  transition:
-    transform 0.22s ease,
-    box-shadow 0.22s ease,
-    filter 0.22s ease;
 }
 
-.staff-dash-date-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 20px 34px rgba(79, 59, 34, 0.28);
-  filter: brightness(1.04);
-}
+/* =========================
+   OUTSIDE DECORATIONS
+========================= */
 
-.staff-dash-date-btn img {
-  width: 18px;
-  height: 18px;
-  object-fit: contain;
-  filter: brightness(0) invert(1);
-}
-
-.staff-dash-totals-row {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 16px;
-}
-
-.staff-dash-total-card {
-  position: relative;
-  width: 100%;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 20px 18px;
-  border-radius: 24px;
-  background: linear-gradient(
-    180deg,
-    rgba(255, 250, 243, 0.92) 0%,
-    rgba(248, 240, 229, 0.88) 100%
-  );
-  box-shadow: var(--dash-shadow-md);
-  border: 1px solid var(--dash-line);
-  backdrop-filter: blur(10px);
-  overflow: hidden;
-  transition:
-    transform 0.24s ease,
-    box-shadow 0.24s ease,
-    border-color 0.24s ease;
-}
-
-.staff-dash-total-card::before {
-  content: "";
+.seatmap-bear-outside {
   position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(circle at top right, rgba(255, 255, 255, 0.42), transparent 34%);
+  left: clamp(-265px, -22vw, -120px);
+  bottom: clamp(350px, 12vh, 170px);
+  width: clamp(110px, 18vw, 300px);
+  height: auto;
   pointer-events: none;
+  user-select: none;
+  z-index: 999;
+  opacity: 0.98;
+  animation: fadeInSoft 650ms ease-out both, floatSoft 3.6s ease-in-out infinite;
+  animation-delay: 140ms, 800ms;
 }
 
-.staff-dash-total-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 24px 46px rgba(92, 76, 56, 0.15);
-  border-color: var(--dash-line-strong);
-}
-
-.staff-dash-total-card--walkin {
-  border-left: 6px solid var(--dash-green-2);
-}
-
-.staff-dash-total-card--reserve {
-  border-left: 6px solid var(--dash-purple);
-}
-
-.staff-dash-total-card--promo {
-  border-left: 6px solid var(--dash-orange);
-}
-
-.staff-dash-total-card--all {
-  border-left: 6px solid var(--dash-gold-deep);
-}
-
-.staff-dash-total-icon {
-  width: 48px;
-  height: 48px;
-  flex: 0 0 48px;
-  object-fit: contain;
-}
-
-.staff-dash-total-meta {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  position: relative;
-  z-index: 1;
-}
-
-.staff-dash-total-label {
-  font-size: 12px;
-  font-weight: 900;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: rgba(45, 34, 23, 0.62);
-}
-
-.staff-dash-total-value {
-  margin-top: 6px;
-  font-size: 32px;
-  line-height: 1;
-  font-weight: 1000;
-  color: var(--dash-text);
-}
-
-.staff-dash-total-percent {
-  margin-left: auto;
-  text-align: right;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
-  position: relative;
-  z-index: 1;
-}
-
-.staff-dash-total-percent strong {
-  font-size: 20px;
-  line-height: 1;
-  font-weight: 1000;
-  color: var(--dash-text);
-}
-
-.staff-dash-total-percent span {
-  font-size: 11px;
-  font-weight: 800;
-  color: rgba(45, 34, 23, 0.5);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
-.staff-dash-charts-grid {
-  display: grid;
-  grid-template-columns: 1.1fr 0.9fr;
-  gap: 18px;
-}
-
-.staff-dash-chart-card {
-  position: relative;
-  padding: 22px;
-  border-radius: 28px;
-  background: linear-gradient(
-    180deg,
-    rgba(255, 250, 243, 0.94) 0%,
-    rgba(245, 236, 223, 0.9) 100%
-  );
-  box-shadow: var(--dash-shadow-lg);
-  border: 1px solid var(--dash-line);
-  overflow: hidden;
-}
-
-.staff-dash-chart-card::before {
-  content: "";
+.seatmap-grass-outside {
   position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(circle at top right, rgba(200, 155, 82, 0.12), transparent 28%);
+  right: clamp(-217px, -24vw, -130px);
+  top: clamp(-140px, -12vh, 10px);
+  width: clamp(300px, 20vw, 330px);
+  height: auto;
   pointer-events: none;
+  user-select: none;
+  z-index: 5;
+  opacity: 0.95;
+  animation: fadeInSoft 650ms ease-out both, floatSoft 3.6s ease-in-out infinite;
+  animation-delay: 140ms, 800ms;
 }
 
-.staff-dash-chart-head {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 16px;
-}
+/* =========================
+   MODAL
+========================= */
 
-.staff-dash-chart-title {
-  font-size: 18px;
-  font-weight: 1000;
-  color: var(--dash-text);
-}
-
-.staff-dash-chart-sub {
-  margin-top: 4px;
-  font-size: 12px;
-  font-weight: 900;
-  color: rgba(45, 34, 23, 0.58);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
-.staff-dash-line-wrap {
-  position: relative;
-  z-index: 1;
-  width: 100%;
-  border-radius: 20px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.58) 0%, rgba(255, 250, 243, 0.42) 100%);
-  border: 1px solid rgba(110, 88, 57, 0.08);
-  padding: 12px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
-}
-
-.staff-dash-chart-body {
-  position: relative;
-  width: 100%;
-  z-index: 1;
-}
-
-.staff-dash-chart-center {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  pointer-events: none;
-  align-items: center;
-  justify-content: center;
-  flex-direction: column;
-}
-
-.staff-dash-chart-center-label {
-  font-size: 12px;
-  font-weight: 900;
-  color: rgba(45, 34, 23, 0.54);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
-.staff-dash-chart-center-value {
-  margin-top: 4px;
-  font-size: 32px;
-  line-height: 1;
-  font-weight: 1000;
-  color: var(--dash-text);
-}
-
-.staff-dash-chart-empty {
-  min-height: 300px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 20px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.5) 0%, rgba(248, 240, 228, 0.44) 100%);
-  font-weight: 800;
-  color: rgba(45, 34, 23, 0.58);
-  text-align: center;
-  padding: 16px;
-  border: 1px solid rgba(110, 88, 57, 0.07);
-}
-
-.staff-dash-chart-loading {
-  min-height: 300px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  border-radius: 20px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.5) 0%, rgba(248, 240, 228, 0.44) 100%);
-  color: rgba(45, 34, 23, 0.66);
-  font-weight: 900;
-  border: 1px solid rgba(110, 88, 57, 0.07);
-}
-
-.staff-dash-loader {
-  width: 18px;
-  height: 18px;
-  border: 2px solid rgba(93, 70, 41, 0.18);
-  border-top-color: var(--dash-brown);
-  border-radius: 999px;
-  animation: staffDashSpin 0.8s linear infinite;
-}
-
-.staff-dash-calendar-overlay {
+.seat-modal-overlay {
   position: fixed;
   inset: 0;
-  z-index: 70;
-  background: rgba(29, 21, 12, 0.42);
-  backdrop-filter: blur(4px);
-  display: grid;
-  place-items: center;
-  padding: 18px;
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(3px);
 }
 
-.staff-dash-calendar-card {
-  width: min(100%, 420px);
-  border-radius: 26px;
-  background: linear-gradient(
-    180deg,
-    rgba(255, 250, 243, 0.98) 0%,
-    rgba(245, 236, 223, 0.96) 100%
-  );
-  box-shadow: 0 28px 56px rgba(48, 35, 20, 0.2);
-  padding: 22px;
-  border: 1px solid rgba(110, 88, 57, 0.1);
-  animation: staffDashPopIn 0.22s ease;
+.seat-manage-modal {
+  width: clamp(300px, 92vw, 520px);
+  height: auto;
+  max-height: 80vh;
+  overflow: auto;
+  border-radius: 18px;
+  background: rgba(248, 238, 220, 0.98);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.22);
+  animation: seatModalPop 0.25s ease-out;
 }
 
-.staff-dash-calendar-head {
+.seat-modal-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin-bottom: 16px;
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
 }
 
-.staff-dash-calendar-head h3 {
+.seat-modal-title {
   margin: 0;
   font-size: 18px;
-  font-weight: 1000;
-  color: var(--dash-text);
+  font-weight: 900;
+  color: #1f1f1f;
 }
 
-.staff-dash-calendar-close {
-  min-height: 40px;
-  padding: 0 14px;
-  border: 1px solid rgba(110, 88, 57, 0.08);
+.seat-modal-close {
+  width: 38px;
+  height: 38px;
+  border: 0;
   border-radius: 12px;
-  background: rgba(110, 88, 57, 0.08);
-  color: var(--dash-text);
-  font-weight: 800;
+  background: rgba(255, 255, 255, 0.8);
+  font-size: 18px;
+  font-weight: 900;
   cursor: pointer;
-  transition: background 0.2s ease;
 }
 
-.staff-dash-calendar-close:hover {
-  background: rgba(110, 88, 57, 0.14);
+.seat-modal-body {
+  padding: 16px;
 }
 
-.staff-dash-calendar-input {
-  width: 100%;
-  min-height: 54px;
+.bookadd-card {
+  background: rgba(255, 255, 255, 0.78);
   border-radius: 16px;
-  border: 1px solid rgba(110, 88, 57, 0.16);
-  padding: 0 14px;
-  font-size: 14px;
-  font-weight: 800;
-  background: rgba(255, 255, 255, 0.74);
-  color: var(--dash-text);
-  outline: none;
-  transition:
-    border-color 0.2s ease,
-    box-shadow 0.2s ease;
+  padding: clamp(12px, 2.5vw, 16px);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.14);
+  max-width: 100%;
 }
 
-.staff-dash-calendar-input:focus {
-  border-color: rgba(139, 107, 63, 0.45);
-  box-shadow: 0 0 0 4px rgba(200, 155, 82, 0.12);
+.form-item {
+  margin-bottom: 10px;
 }
 
-.staff-dash-calendar-actions {
-  margin-top: 16px;
+.form-item-toggle {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: clamp(12px, 3.3vw, 14px);
+  font-weight: 800;
+  color: #333;
+}
+
+.form-input {
+  width: 100%;
+  min-height: 44px;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  padding: 10px 12px;
+  font-size: 14px;
+  background: #fff;
+  color: #222;
+  box-sizing: border-box;
+}
+
+.toggle-wrap {
+  display: flex;
+  align-items: center;
   gap: 10px;
 }
 
-.staff-dash-calendar-btn {
-  min-height: 44px;
-  padding: 0 16px;
+.toggle-label {
+  font-size: 14px;
+  font-weight: 700;
+  color: #333;
+}
+
+.seat-modal-btn {
+  width: 100%;
   border: 0;
   border-radius: 14px;
-  font-weight: 900;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  margin-top: 8px;
+  height: clamp(44px, 6.2vh, 50px);
+  white-space: normal;
   cursor: pointer;
-  transition:
-    transform 0.2s ease,
-    box-shadow 0.2s ease,
-    filter 0.2s ease;
+  transition: transform 0.18s ease, filter 0.18s ease;
 }
 
-.staff-dash-calendar-btn:hover {
-  transform: translateY(-1px);
+.seat-modal-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
 }
 
-.staff-dash-calendar-btn.secondary {
-  background: rgba(110, 88, 57, 0.08);
-  color: var(--dash-text);
-  border: 1px solid rgba(110, 88, 57, 0.08);
+.seat-modal-btn--clear {
+  background: #e6e0d2;
+  color: #333;
 }
 
-.staff-dash-calendar-btn.primary {
-  background: linear-gradient(135deg, #17110b 0%, #4f3b22 45%, #8d6b41 100%);
-  color: #ffffff;
-  box-shadow: 0 12px 22px rgba(79, 59, 34, 0.18);
+.seat-modal-btn--temp {
+  background: #f5c84c;
+  color: #000;
 }
 
-@keyframes staffDashSpin {
-  to {
-    transform: rotate(360deg);
+.seat-modal-btn--occupied {
+  background: #d9534f;
+  color: #fff;
+}
+
+.seat-modal-btn--reserved {
+  background: #7b5fcf;
+  color: #fff;
+}
+
+.seat-modal-btn:hover {
+  filter: brightness(1.05);
+}
+
+.seat-modal-btn:active {
+  transform: scale(0.985);
+}
+
+/* =========================
+   RESPONSIVE
+========================= */
+
+@media (max-width: 420px) {
+  .seatmap-card {
+    width: 94vw;
+    max-height: calc(100vh - 10px);
+  }
+
+  .seatmap-img {
+    max-height: calc(100vh - 250px);
+  }
+
+  .seat-pin {
+    width: 14px;
+    height: 14px;
+    font-size: 8px;
+    line-height: 16px;
+  }
+
+  .seat-pin.room {
+    width: 112px;
+    height: 22px;
+    line-height: 22px;
+    font-size: 9px;
+  }
+
+  .seatmap-bear-outside {
+    left: -125px;
+    bottom: 300px;
+    width: 140px;
+  }
+
+  .seatmap-grass-outside {
+    right: -105px;
+    top: -65px;
+    width: 160px;
+    height: 655px;
+  }
+
+  .seat-manage-modal {
+    width: 94vw;
+    max-height: 88vh;
+  }
+
+  .bookadd-card {
+    padding: 10px;
   }
 }
 
-@keyframes staffDashPopIn {
+@media (min-width: 600px) and (max-width: 1023px) {
+  .seatmap-card {
+    width: min(88vw, 300px);
+  }
+
+  .seatmap-bear-outside {
+    left: -125px;
+    bottom: 300px;
+    width: 140px;
+  }
+
+  .seatmap-grass-outside {
+    right: -105px;
+    top: -65px;
+    width: 160px;
+    height: 660px;
+  }
+
+  .seat-pin {
+    width: 12px;
+    height: 12px;
+    font-size: 6px;
+    line-height: 14px;
+  }
+
+  .seat-pin.room {
+    width: 80px;
+    height: 15px;
+    line-height: 16px;
+    font-size: 6px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .seatmap-img {
+    max-height: 650px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .seatmap-card,
+  .seatmap-stage,
+  .seat-pin,
+  .seatmap-bear-outside,
+  .seatmap-grass-outside,
+  .seat-manage-modal {
+    animation: none !important;
+    opacity: 1 !important;
+  }
+}
+
+/* =========================
+   ANIMATIONS
+========================= */
+
+@keyframes fadeUp {
   from {
     opacity: 0;
-    transform: scale(0.96) translateY(8px);
+    transform: translateY(14px);
   }
   to {
     opacity: 1;
-    transform: scale(1) translateY(0);
+    transform: translateY(0);
   }
 }
 
-@media (max-width: 1280px) {
-  .staff-dash-totals-row {
-    grid-template-columns: 1fr 1fr;
+@keyframes fadeInSoft {
+  from {
+    opacity: 0;
   }
-
-  .staff-dash-charts-grid {
-    grid-template-columns: 1fr;
+  to {
+    opacity: 1;
   }
 }
 
-@media (max-width: 680px) {
-  .staff-dashboard-page {
-    border-radius: 24px;
-    padding: 4px;
+@keyframes floatSoft {
+  0% {
+    transform: translateY(0);
   }
-
-  .staff-dash-headline {
-    flex-direction: column;
-    align-items: flex-start;
+  50% {
+    transform: translateY(-6px);
   }
-
-  .staff-dash-totals-row {
-    grid-template-columns: 1fr;
+  100% {
+    transform: translateY(0);
   }
+}
 
-  .staff-dash-total-card {
-    padding: 16px 14px;
+@keyframes seatModalPop {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.97);
   }
-
-  .staff-dash-chart-card {
-    padding: 18px;
-    border-radius: 22px;
-  }
-
-  .staff-dash-headline h2 {
-    font-size: 26px;
-  }
-
-  .staff-dash-date-btn {
-    width: 100%;
-    justify-content: center;
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
   }
 }
