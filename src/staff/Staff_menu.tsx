@@ -78,12 +78,17 @@ type NoisyNotifRow = {
   read_at: string | null;
 };
 
+type FoodNotifMode = "add_ons" | "consignment";
+
 type FoodNotifRow = {
   id: string;
+  source_id: string;
+  mode: FoodNotifMode;
   created_at: string;
   full_name: string;
+  phone_number: string;
   seat_number: string;
-  add_on_name: string;
+  item_name: string;
   quantity: number;
   total: number;
   is_read: boolean;
@@ -131,9 +136,10 @@ const Staff_menu: React.FC = () => {
   const suspendRefreshRef = useRef<boolean>(false);
 
   /* =========================
-      🍔 Food Notifications
+      🍔 Unified Food Notifications
   ========================= */
-  const FOOD_NOTIF_TABLE = "add_on_notifications";
+  const ADDON_NOTIF_TABLE = "add_on_notifications";
+  const CONSIGNMENT_NOTIF_TABLE = "consignment_notifications";
 
   const [foodNotifOpen, setFoodNotifOpen] = useState<boolean>(false);
   const foodNotifOpenRef = useRef<boolean>(false);
@@ -217,26 +223,64 @@ const Staff_menu: React.FC = () => {
 
   const pickNumber = (row: LooseRecord, keys: string[]): number => {
     for (const key of keys) {
-      const v = row[key];
-      const n = toNumber(v);
-      if (n || n === 0) return n;
+      const raw = row[key];
+      if (raw !== undefined && raw !== null && raw !== "") {
+        return toNumber(raw);
+      }
     }
     return 0;
   };
 
-  const mapFoodNotifRow = (row: LooseRecord): FoodNotifRow => {
+  const mapAddOnNotifRow = (row: LooseRecord): FoodNotifRow => {
     return {
-      id: toText(row.id) || crypto.randomUUID(),
+      id: `addon-${toText(row.id) || crypto.randomUUID()}`,
+      source_id: toText(row.id) || crypto.randomUUID(),
+      mode: "add_ons",
       created_at: toText(row.created_at) || new Date().toISOString(),
       full_name: pickText(row, ["full_name", "name", "customer_name", "customer"]),
+      phone_number: pickText(row, [
+        "phone_number",
+        "phone",
+        "contact_number",
+        "mobile_number",
+        "contact_no",
+      ]),
       seat_number: pickText(row, ["seat_number", "seat", "table_no"]),
-      add_on_name: pickText(row, [
+      item_name: pickText(row, [
         "add_on_name",
         "addon_name",
         "item_name",
         "product_name",
         "food_name",
         "name_of_addon",
+      ]),
+      quantity: pickNumber(row, ["quantity", "qty"]),
+      total: pickNumber(row, ["total", "total_amount", "amount", "subtotal"]),
+      is_read: Boolean(row.is_read),
+      read_at: toText(row.read_at) || null,
+    };
+  };
+
+  const mapConsignmentNotifRow = (row: LooseRecord): FoodNotifRow => {
+    return {
+      id: `consignment-${toText(row.id) || crypto.randomUUID()}`,
+      source_id: toText(row.id) || crypto.randomUUID(),
+      mode: "consignment",
+      created_at: toText(row.created_at) || new Date().toISOString(),
+      full_name: pickText(row, ["full_name", "name", "customer_name", "customer"]),
+      phone_number: pickText(row, [
+        "phone_number",
+        "phone",
+        "contact_number",
+        "mobile_number",
+        "contact_no",
+      ]),
+      seat_number: pickText(row, ["seat_number", "seat", "table_no"]),
+      item_name: pickText(row, [
+        "consignment_name",
+        "item_name",
+        "product_name",
+        "name",
       ]),
       quantity: pickNumber(row, ["quantity", "qty"]),
       total: pickNumber(row, ["total", "total_amount", "amount", "subtotal"]),
@@ -273,6 +317,10 @@ const Staff_menu: React.FC = () => {
 
   const getMessageText = (row: NoisyNotifRow): string => {
     return String(row.message ?? row.concern ?? "").trim() || "No message.";
+  };
+
+  const getFoodModeLabel = (mode: FoodNotifMode): string => {
+    return mode === "add_ons" ? "Add-On" : "Consignment";
   };
 
   /* =========================
@@ -413,7 +461,7 @@ const Staff_menu: React.FC = () => {
   };
 
   /* =========================
-      Food notif helpers
+      Unified food notif helpers
   ========================= */
   const cancelFoodScheduledRefresh = (): void => {
     if (foodRefreshTimerRef.current !== null) {
@@ -433,12 +481,23 @@ const Staff_menu: React.FC = () => {
   };
 
   const fetchFoodUnreadCount = async (): Promise<number> => {
-    const result = await supabase
-      .from(FOOD_NOTIF_TABLE)
-      .select("id", { count: "exact", head: true })
-      .eq("is_read", false);
+    const [addonResult, consignmentResult] = await Promise.all([
+      supabase
+        .from(ADDON_NOTIF_TABLE)
+        .select("id", { count: "exact", head: true })
+        .eq("is_read", false),
+      supabase
+        .from(CONSIGNMENT_NOTIF_TABLE)
+        .select("id", { count: "exact", head: true })
+        .eq("is_read", false),
+    ]);
 
-    const total = result.error ? 0 : Number(result.count ?? 0);
+    const addonTotal = addonResult.error ? 0 : Number(addonResult.count ?? 0);
+    const consignmentTotal = consignmentResult.error
+      ? 0
+      : Number(consignmentResult.count ?? 0);
+
+    const total = addonTotal + consignmentTotal;
     setFoodUnreadCount(total);
     return total;
   };
@@ -446,21 +505,45 @@ const Staff_menu: React.FC = () => {
   const fetchFoodNotifications = async (): Promise<void> => {
     setFoodNotifLoading(true);
 
-    const { data, error } = await supabase
-      .from(FOOD_NOTIF_TABLE)
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(50);
+    const [addonRes, consignmentRes] = await Promise.all([
+      supabase
+        .from(ADDON_NOTIF_TABLE)
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(50),
+      supabase
+        .from(CONSIGNMENT_NOTIF_TABLE)
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(50),
+    ]);
 
     setFoodNotifLoading(false);
 
-    if (error) {
-      console.warn("fetch food notifications:", error.message);
-      return;
+    if (addonRes.error) {
+      console.warn("fetch add_on_notifications:", addonRes.error.message);
     }
 
-    const mapped = ((data as LooseRecord[] | null) ?? []).map(mapFoodNotifRow);
-    setFoodNotifItems(mapped);
+    if (consignmentRes.error) {
+      console.warn(
+        "fetch consignment_notifications:",
+        consignmentRes.error.message
+      );
+    }
+
+    const addonItems = ((addonRes.data as LooseRecord[] | null) ?? []).map(
+      mapAddOnNotifRow
+    );
+    const consignmentItems = (
+      (consignmentRes.data as LooseRecord[] | null) ?? []
+    ).map(mapConsignmentNotifRow);
+
+    const merged = [...addonItems, ...consignmentItems].sort(
+      (a, b) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+
+    setFoodNotifItems(merged.slice(0, 100));
   };
 
   const markAllFoodAsReadSilent = async (): Promise<void> => {
@@ -480,13 +563,28 @@ const Staff_menu: React.FC = () => {
       }))
     );
 
-    const { error } = await supabase
-      .from(FOOD_NOTIF_TABLE)
-      .update({ is_read: true, read_at: nowIso })
-      .eq("is_read", false);
+    const [addonUpdate, consignmentUpdate] = await Promise.all([
+      supabase
+        .from(ADDON_NOTIF_TABLE)
+        .update({ is_read: true, read_at: nowIso })
+        .eq("is_read", false),
+      supabase
+        .from(CONSIGNMENT_NOTIF_TABLE)
+        .update({ is_read: true, read_at: nowIso })
+        .eq("is_read", false),
+    ]);
 
-    if (error) {
-      console.warn("markAllFoodAsReadSilent:", error.message);
+    if (addonUpdate.error || consignmentUpdate.error) {
+      if (addonUpdate.error) {
+        console.warn("markAll add_on_notifications:", addonUpdate.error.message);
+      }
+      if (consignmentUpdate.error) {
+        console.warn(
+          "markAll consignment_notifications:",
+          consignmentUpdate.error.message
+        );
+      }
+
       await fetchFoodUnreadCount();
       if (foodNotifOpenRef.current) {
         await fetchFoodNotifications();
@@ -496,22 +594,28 @@ const Staff_menu: React.FC = () => {
     foodSuspendRefreshRef.current = false;
   };
 
-  const handleDeleteFoodNotification = async (id: string): Promise<void> => {
+  const handleDeleteFoodNotification = async (
+    item: FoodNotifRow
+  ): Promise<void> => {
     const ok = window.confirm("Delete this food notification?");
     if (!ok) return;
 
-    const current = foodNotifItems.find((x) => x.id === id);
+    const table =
+      item.mode === "add_ons" ? ADDON_NOTIF_TABLE : CONSIGNMENT_NOTIF_TABLE;
 
-    const { error } = await supabase.from(FOOD_NOTIF_TABLE).delete().eq("id", id);
+    const { error } = await supabase
+      .from(table)
+      .delete()
+      .eq("id", item.source_id);
 
     if (error) {
       alert(`Delete failed: ${error.message}`);
       return;
     }
 
-    setFoodNotifItems((prev) => prev.filter((x) => x.id !== id));
+    setFoodNotifItems((prev) => prev.filter((x) => x.id !== item.id));
 
-    if (current && !current.is_read) {
+    if (!item.is_read) {
       setFoodUnreadCount((c) => Math.max(0, c - 1));
     } else {
       void fetchFoodUnreadCount();
@@ -656,14 +760,14 @@ const Staff_menu: React.FC = () => {
     void fetchFoodUnreadCount();
     void fetchFoodNotifications();
 
-    const ch = supabase
+    const chAddOn = supabase
       .channel("realtime_add_on_notifications")
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: FOOD_NOTIF_TABLE },
+        { event: "INSERT", schema: "public", table: ADDON_NOTIF_TABLE },
         (payload: unknown) => {
           const raw = (payload as RealtimeInsertPayload<LooseRecord>).new;
-          const row = mapFoodNotifRow(raw);
+          const row = mapAddOnNotifRow(raw);
 
           setFoodNotifItems((prev) => {
             if (prev.some((x) => x.id === row.id)) return prev;
@@ -672,7 +776,7 @@ const Staff_menu: React.FC = () => {
                 new Date(b.created_at).getTime() -
                 new Date(a.created_at).getTime()
             );
-            return merged.slice(0, 50);
+            return merged.slice(0, 100);
           });
 
           if (foodNotifOpenRef.current) {
@@ -685,10 +789,10 @@ const Staff_menu: React.FC = () => {
       )
       .on(
         "postgres_changes",
-        { event: "UPDATE", schema: "public", table: FOOD_NOTIF_TABLE },
+        { event: "UPDATE", schema: "public", table: ADDON_NOTIF_TABLE },
         (payload: unknown) => {
           const p = payload as RealtimeUpdatePayload<LooseRecord>;
-          const newRow = mapFoodNotifRow(p.new as LooseRecord);
+          const newRow = mapAddOnNotifRow(p.new as LooseRecord);
 
           setFoodNotifItems((prev) => {
             const idx = prev.findIndex((x) => x.id === newRow.id);
@@ -712,7 +816,7 @@ const Staff_menu: React.FC = () => {
       )
       .on(
         "postgres_changes",
-        { event: "DELETE", schema: "public", table: FOOD_NOTIF_TABLE },
+        { event: "DELETE", schema: "public", table: ADDON_NOTIF_TABLE },
         () => {
           if (!foodNotifOpenRef.current) {
             scheduleFoodRecount(250);
@@ -722,7 +826,76 @@ const Staff_menu: React.FC = () => {
         }
       )
       .subscribe((status) => {
-        console.log("FOOD NOTIF CHANNEL:", status);
+        console.log("ADDON FOOD NOTIF CHANNEL:", status);
+      });
+
+    const chConsignment = supabase
+      .channel("realtime_consignment_notifications")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: CONSIGNMENT_NOTIF_TABLE },
+        (payload: unknown) => {
+          const raw = (payload as RealtimeInsertPayload<LooseRecord>).new;
+          const row = mapConsignmentNotifRow(raw);
+
+          setFoodNotifItems((prev) => {
+            if (prev.some((x) => x.id === row.id)) return prev;
+            const merged = [row, ...prev].sort(
+              (a, b) =>
+                new Date(b.created_at).getTime() -
+                new Date(a.created_at).getTime()
+            );
+            return merged.slice(0, 100);
+          });
+
+          if (foodNotifOpenRef.current) {
+            void markAllFoodAsReadSilent();
+          } else if (!row.is_read) {
+            setFoodUnreadCount((c) => c + 1);
+            scheduleFoodRecount(600);
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: CONSIGNMENT_NOTIF_TABLE },
+        (payload: unknown) => {
+          const p = payload as RealtimeUpdatePayload<LooseRecord>;
+          const newRow = mapConsignmentNotifRow(p.new as LooseRecord);
+
+          setFoodNotifItems((prev) => {
+            const idx = prev.findIndex((x) => x.id === newRow.id);
+            if (idx === -1) return prev;
+            const copy = [...prev];
+            copy[idx] = newRow;
+            return copy;
+          });
+
+          if (foodNotifOpenRef.current) return;
+
+          const oldIsRead = Boolean((p.old as LooseRecord).is_read);
+          const isUnreadNow = !newRow.is_read;
+
+          if (!oldIsRead && !isUnreadNow) {
+            setFoodUnreadCount((c) => Math.max(0, c - 1));
+          } else if (oldIsRead && isUnreadNow) {
+            setFoodUnreadCount((c) => c + 1);
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: CONSIGNMENT_NOTIF_TABLE },
+        () => {
+          if (!foodNotifOpenRef.current) {
+            scheduleFoodRecount(250);
+          } else {
+            void fetchFoodUnreadCount();
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log("CONSIGNMENT FOOD NOTIF CHANNEL:", status);
       });
 
     const onFocusOrWake = (): void => {
@@ -741,7 +914,8 @@ const Staff_menu: React.FC = () => {
 
       cancelFoodScheduledRefresh();
       foodSuspendRefreshRef.current = false;
-      void supabase.removeChannel(ch);
+      void supabase.removeChannel(chAddOn);
+      void supabase.removeChannel(chConsignment);
     };
   }, []);
 
@@ -1061,14 +1235,24 @@ const Staff_menu: React.FC = () => {
 
                     <div className="food-notif-grid">
                       <div className="food-notif-row">
+                        <span className="food-notif-label">Type</span>
+                        <span className="food-notif-value">{getFoodModeLabel(n.mode)}</span>
+                      </div>
+
+                      <div className="food-notif-row">
+                        <span className="food-notif-label">Phone Number</span>
+                        <span className="food-notif-value">{n.phone_number || "-"}</span>
+                      </div>
+
+                      <div className="food-notif-row">
                         <span className="food-notif-label">Seat Number</span>
                         <span className="food-notif-value">{n.seat_number || "-"}</span>
                       </div>
 
                       <div className="food-notif-row">
-                        <span className="food-notif-label">Add Ons Name</span>
+                        <span className="food-notif-label">Item Name</span>
                         <span className="food-notif-value food-notif-value-wrap">
-                          {n.add_on_name || "-"}
+                          {n.item_name || "-"}
                         </span>
                       </div>
 
@@ -1091,7 +1275,7 @@ const Staff_menu: React.FC = () => {
                         className="notif-delete-btn"
                         onClick={(e) => {
                           e.stopPropagation();
-                          void handleDeleteFoodNotification(n.id);
+                          void handleDeleteFoodNotification(n);
                         }}
                       >
                         Delete
