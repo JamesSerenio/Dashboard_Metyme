@@ -364,35 +364,37 @@ const Customer_Add_ons: React.FC = () => {
     setCashInput(String(round2(Math.max(0, o.cash_amount))));
   };
 
-  const savePayment = async (): Promise<void> => {
-    if (!paymentTarget) return;
+    const savePayment = async (): Promise<void> => {
+      if (!paymentTarget) return;
 
-    const g = round2(Math.max(0, toNumber(gcashInput)));
-    const c = round2(Math.max(0, toNumber(cashInput)));
-    const itemIds = paymentTarget.items.map((x) => x.id);
-    if (itemIds.length === 0) return;
+      const g = round2(Math.max(0, toNumber(gcashInput)));
+      const c = round2(Math.max(0, toNumber(cashInput)));
+      const itemIds = paymentTarget.items.map((x) => x.id);
+      if (itemIds.length === 0) return;
 
-    try {
-      setSavingPayment(true);
+      try {
+        setSavingPayment(true);
 
-    const { error } = await supabase.rpc("pay_addon_order_by_booking_code", {
-      p_booking_code: paymentTarget.full_name ? undefined : undefined,
-    });
+        const { error } = await supabase.rpc("set_addon_payment", {
+          p_item_ids: itemIds,
+          p_gcash: g,
+          p_cash: c,
+        });
 
-      if (error) {
-        alert(`Save payment error: ${error.message}`);
-        return;
+        if (error) {
+          alert(`Save payment error: ${error.message}`);
+          return;
+        }
+
+        setPaymentTarget(null);
+        await fetchAddOns(selectedDate);
+      } catch (e) {
+        console.error(e);
+        alert("Save payment failed.");
+      } finally {
+        setSavingPayment(false);
       }
-
-      setPaymentTarget(null);
-      await fetchAddOns(selectedDate);
-    } catch (e) {
-      console.error(e);
-      alert("Save payment failed.");
-    } finally {
-      setSavingPayment(false);
-    }
-  };
+    };
 
   const togglePaid = async (o: OrderGroup): Promise<void> => {
     const itemIds = o.items.map((x) => x.id);
