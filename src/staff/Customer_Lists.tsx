@@ -1522,73 +1522,25 @@ const Customer_Lists: React.FC = () => {
       setCancellingOrderItemId(item.id);
 
       if (item.source === "addon") {
-        const systemPaid = getSystemPaymentInfo(session);
-
-        const addonPayload = {
-          original_id: item.id,
-          created_at: item.created_at,
-          add_on_id: item.source_item_id,
-          quantity: item.qty,
-          price: item.price,
-          full_name: session.full_name,
-          seat_number: session.seat_number,
-          gcash_amount: systemPaid.gcash,
-          cash_amount: systemPaid.cash,
-          is_paid: toBool(session.is_paid),
-          paid_at: session.paid_at ?? null,
-          description: note,
-        };
-
-        const { error: insertErr } = await supabase.from("customer_session_add_ons_cancelled").insert(addonPayload);
-        if (insertErr) {
-          alert(`Cancel add-on failed: ${insertErr.message}`);
+        if (!item.created_at) {
+          alert("Cannot cancel this add-on because created_at is missing.");
           return;
         }
 
-        let legacyDeleteQuery = supabase
-          .from("customer_session_add_ons")
-          .delete()
-          .eq("add_on_id", item.source_item_id)
-          .eq("full_name", session.full_name)
-          .eq("seat_number", session.seat_number);
+        const { error } = await supabase.rpc("cancel_add_on_order", {
+          p_full_name: session.full_name,
+          p_seat_number: session.seat_number,
+          p_add_on_id: item.source_item_id,
+          p_created_at: item.created_at,
+          p_description: note,
+        });
 
-        if (item.created_at) {
-          legacyDeleteQuery = legacyDeleteQuery.eq("created_at", item.created_at);
-        }
-
-        const { error: legacyDeleteErr } = await legacyDeleteQuery;
-
-        if (legacyDeleteErr) {
-          alert(`Cancelled copy saved, but legacy add-on delete failed: ${legacyDeleteErr.message}`);
+        if (error) {
+          alert(`Cancel add-on failed: ${error.message}`);
           return;
         }
-
-        const { error: deleteErr } = await supabase
-          .from("addon_order_items")
-          .delete()
-          .eq("id", item.id);
-
-        if (deleteErr) {
-          alert(`Cancelled copy saved, but item delete failed: ${deleteErr.message}`);
-          return;
-        }
-
-        const { data: addonRow, error: addonFetchErr } = await supabase
-          .from("add_ons")
-          .select("sold")
-          .eq("id", item.source_item_id)
-          .maybeSingle();
-
-        if (!addonFetchErr && addonRow) {
-          const nextSold = Math.max(
-            0,
-            wholePeso(toMoney((addonRow as { sold?: number | string | null }).sold) - item.qty)
-          );
-          await supabase.from("add_ons").update({ sold: nextSold }).eq("id", item.source_item_id);
-        }
-
-        await recalcAddonParentAfterDelete(item.parent_order_id);
       } else {
+        
         const systemPaid = getSystemPaymentInfo(session);
 
         const consignmentPayload = {

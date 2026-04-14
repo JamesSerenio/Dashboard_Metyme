@@ -429,44 +429,45 @@ const Customer_Add_ons: React.FC = () => {
     setCancelDesc("");
   };
 
-  const submitCancel = async (): Promise<void> => {
-    if (!cancelTarget) return;
+    const submitCancel = async (): Promise<void> => {
+      if (!cancelTarget) return;
 
-    const desc = cancelDesc.trim();
-    if (!desc) {
-      alert("Description is required before you can cancel.");
-      return;
-    }
-
-    const itemIds = cancelTarget.items.map((x) => x.id);
-    if (itemIds.length === 0) {
-      alert("Nothing to cancel.");
-      return;
-    }
-
-    try {
-      setCancellingKey(cancelTarget.key);
-
-      const { error } = await supabase.rpc("cancel_add_on_order", {
-        p_item_ids: itemIds,
-        p_description: desc,
-      });
-
-      if (error) {
-        alert(`Cancel error: ${error.message}`);
+      const desc = cancelDesc.trim();
+      if (!desc) {
+        alert("Description is required before you can cancel.");
         return;
       }
 
-      setCancelTarget(null);
-      setSelectedOrder(null);
-      await fetchAddOns(selectedDate);
-    } catch (e) {
-      console.error(e);
-      alert("Cancel failed.");
-    } finally {
-      setCancellingKey(null);
-    }
-  };
+      try {
+        setCancellingKey(cancelTarget.key);
+
+        for (const item of cancelTarget.items) {
+          const rowCreatedAt = cancelTarget.created_at;
+
+          const { error } = await supabase.rpc("cancel_add_on_order", {
+            p_full_name: cancelTarget.full_name,
+            p_seat_number: cancelTarget.seat_number,
+            p_add_on_id: item.add_on_id,
+            p_created_at: rowCreatedAt,
+            p_description: desc,
+          });
+
+          if (error) {
+            alert(`Cancel error: ${error.message}`);
+            return;
+          }
+        }
+
+        setCancelTarget(null);
+        setSelectedOrder(null);
+        await fetchAddOns(selectedDate);
+      } catch (e) {
+        console.error(e);
+        alert("Cancel failed.");
+      } finally {
+        setCancellingKey(null);
+      }
+    };
 
   return (
     <div className="cao-page">
