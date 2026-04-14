@@ -438,24 +438,23 @@ const Customer_Add_ons: React.FC = () => {
         return;
       }
 
+      const itemIds = cancelTarget.items.map((x) => x.id);
+      if (itemIds.length === 0) {
+        alert("Nothing to cancel.");
+        return;
+      }
+
       try {
         setCancellingKey(cancelTarget.key);
 
-        for (const item of cancelTarget.items) {
-          const rowCreatedAt = cancelTarget.created_at;
+        const { error } = await supabase.rpc("cancel_add_on_order", {
+          p_item_ids: itemIds,
+          p_description: desc,
+        });
 
-          const { error } = await supabase.rpc("cancel_add_on_order", {
-            p_full_name: cancelTarget.full_name,
-            p_seat_number: cancelTarget.seat_number,
-            p_add_on_id: item.add_on_id,
-            p_created_at: rowCreatedAt,
-            p_description: desc,
-          });
-
-          if (error) {
-            alert(`Cancel error: ${error.message}`);
-            return;
-          }
+        if (error) {
+          alert(`Cancel error: ${error.message}`);
+          return;
         }
 
         setCancelTarget(null);
