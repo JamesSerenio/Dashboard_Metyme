@@ -375,11 +375,9 @@ const Customer_Add_ons: React.FC = () => {
     try {
       setSavingPayment(true);
 
-      const { error } = await supabase.rpc("set_addon_payment", {
-        p_item_ids: itemIds,
-        p_gcash: g,
-        p_cash: c,
-      });
+    const { error } = await supabase.rpc("pay_addon_order_by_booking_code", {
+      p_booking_code: paymentTarget.full_name ? undefined : undefined,
+    });
 
       if (error) {
         alert(`Save payment error: ${error.message}`);
