@@ -63,6 +63,7 @@ type OrderGroup = {
   created_at: string;
   full_name: string;
   seat_number: string;
+  booking_code: string | null;
   items: OrderItem[];
   grand_total: number;
   gcash_amount: number;
@@ -305,18 +306,19 @@ const Customer_Add_ons: React.FC = () => {
       if (startNew) {
         const key = `${norm(row.full_name)}|${norm(row.seat_number)}|${ms(row.created_at)}`;
 
-        current = {
-          key,
-          created_at: row.created_at,
-          full_name: row.full_name,
-          seat_number: row.seat_number,
-          items: [],
-          grand_total: 0,
-          gcash_amount: 0,
-          cash_amount: 0,
-          is_paid: false,
-          paid_at: null,
-        };
+      current = {
+        key,
+        created_at: row.created_at,
+        full_name: row.full_name,
+        seat_number: row.seat_number,
+        booking_code: null,
+        items: [],
+        grand_total: 0,
+        gcash_amount: 0,
+        cash_amount: 0,
+        is_paid: false,
+        paid_at: null,
+      };
 
         groups.push(current);
       }
@@ -346,55 +348,106 @@ const Customer_Add_ons: React.FC = () => {
     return groups.sort((a, b) => ms(b.created_at) - ms(a.created_at));
   }, [records]);
 
-  const groupedOrders = useMemo<OrderGroup[]>(() => {
-    const q = searchText.trim().toLowerCase();
-    if (!q) return groupedOrdersAll;
+    const groupedOrders = useMemo<OrderGroup[]>(() => {
+      const q = searchText.trim().toLowerCase();
+      if (!q) return groupedOrdersAll;
 
-    return groupedOrdersAll.filter((o) => {
-      const name = String(o.full_name ?? "").toLowerCase();
-      const seat = String(o.seat_number ?? "").toLowerCase();
-      const items = o.items.some((it) => String(it.item_name ?? "").toLowerCase().includes(q));
-      return name.includes(q) || seat.includes(q) || items;
-    });
-  }, [groupedOrdersAll, searchText]);
+      return groupedOrdersAll.filter((o) => {
+        const name = String(o.full_name ?? "").toLowerCase();
+        const seat = String(o.seat_number ?? "").toLowerCase();
+        const items = o.items.some((it) => String(it.item_name ?? "").toLowerCase().includes(q));
+        return name.includes(q) || seat.includes(q) || items;
+      });
+    }, [groupedOrdersAll, searchText]);
 
-  const openPaymentModal = (o: OrderGroup): void => {
-    setPaymentTarget(o);
-    setGcashInput(String(round2(Math.max(0, o.gcash_amount))));
-    setCashInput(String(round2(Math.max(0, o.cash_amount))));
+    const openPaymentModal = (o: OrderGroup): void => {
+      setPaymentTarget(o);
+      setGcashInput(String(round2(Math.max(0, o.gcash_amount))));
+      setCashInput(String(round2(Math.max(0, o.cash_amount))));
+    };
+
+    const findBookingCodeForGroup = async (group: OrderGroup): Promise<string | null> => {
+    const { data, error } = await supabase
+      .from("addon_orders")
+      .select("booking_code, created_at, full_name, seat_number")
+      .eq("full_name", group.full_name)
+      .eq("seat_number", group.seat_number)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("findBookingCodeForGroup error:", error);
+      return null;
+    }
+
+    const rows = (data ?? []) as Array<{
+      booking_code?: string | null;
+      created_at?: string | null;
+      full_name?: string | null;
+      seat_number?: string | null;
+    }>;
+
+    if (rows.length === 0) return null;
+
+    const groupTime = new Date(group.created_at).getTime();
+
+    let best: { booking_code?: string | null; created_at?: string | null } | null = null;
+    let bestDiff = Number.POSITIVE_INFINITY;
+
+    for (const row of rows) {
+      const rowTime = new Date(String(row.created_at ?? "")).getTime();
+      if (!Number.isFinite(rowTime)) continue;
+
+      const diff = Math.abs(rowTime - groupTime);
+      if (diff < bestDiff) {
+        bestDiff = diff;
+        best = row;
+      }
+    }
+
+    const code = String(best?.booking_code ?? "").trim().toUpperCase();
+    return code || null;
   };
 
-    const savePayment = async (): Promise<void> => {
-      if (!paymentTarget) return;
+  const savePayment = async (): Promise<void> => {
+    if (!paymentTarget) return;
 
-      const g = round2(Math.max(0, toNumber(gcashInput)));
-      const c = round2(Math.max(0, toNumber(cashInput)));
-      const itemIds = paymentTarget.items.map((x) => x.id);
-      if (itemIds.length === 0) return;
+    const g = round2(Math.max(0, toNumber(gcashInput)));
+    const c = round2(Math.max(0, toNumber(cashInput)));
 
-      try {
-        setSavingPayment(true);
+    try {
+      setSavingPayment(true);
 
-        const { error } = await supabase.rpc("set_addon_payment", {
-          p_item_ids: itemIds,
-          p_gcash: g,
-          p_cash: c,
-        });
+      const bookingCode =
+        paymentTarget.booking_code ?? (await findBookingCodeForGroup(paymentTarget));
 
-        if (error) {
-          alert(`Save payment error: ${error.message}`);
-          return;
-        }
-
-        setPaymentTarget(null);
-        await fetchAddOns(selectedDate);
-      } catch (e) {
-        console.error(e);
-        alert("Save payment failed.");
-      } finally {
-        setSavingPayment(false);
+      if (!bookingCode) {
+        alert("No booking code found for this add-on order.");
+        return;
       }
-    };
+
+      const { error } = await supabase.rpc("pay_addon_order_by_booking_code", {
+        p_booking_code: bookingCode,
+        p_full_name: paymentTarget.full_name,
+        p_seat_number: paymentTarget.seat_number,
+        p_order_total: paymentTarget.grand_total,
+        p_gcash_amount: g,
+        p_cash_amount: c,
+      });
+
+      if (error) {
+        alert(`Save payment error: ${error.message}`);
+        return;
+      }
+
+      setPaymentTarget(null);
+      await fetchAddOns(selectedDate);
+    } catch (e) {
+      console.error(e);
+      alert("Save payment failed.");
+    } finally {
+      setSavingPayment(false);
+    }
+  };
 
   const togglePaid = async (o: OrderGroup): Promise<void> => {
     const itemIds = o.items.map((x) => x.id);
