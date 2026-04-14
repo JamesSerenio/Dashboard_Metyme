@@ -84,6 +84,7 @@ type FoodNotifRow = {
   id: string;
   source_id: string;
   mode: FoodNotifMode;
+  display_type: string;
   created_at: string;
   full_name: string;
   phone_number: string;
@@ -114,9 +115,6 @@ const Staff_menu: React.FC = () => {
   const [collapsed, setCollapsed] = useState<boolean>(false);
   const [boot, setBoot] = useState<boolean>(false);
 
-  /* =========================
-      🔔 Guest Notifications
-  ========================= */
   const NOISY_TABLE = "noisy_reports";
 
   const [notifOpen, setNotifOpen] = useState<boolean>(false);
@@ -136,9 +134,6 @@ const Staff_menu: React.FC = () => {
   const refreshTimerRef = useRef<number | null>(null);
   const suspendRefreshRef = useRef<boolean>(false);
 
-  /* =========================
-      🍔 Unified Food Notifications
-  ========================= */
   const ADDON_NOTIF_TABLE = "add_on_notifications";
   const CONSIGNMENT_NOTIF_TABLE = "consignment_notifications";
 
@@ -160,8 +155,6 @@ const Staff_menu: React.FC = () => {
   const foodSuspendRefreshRef = useRef<boolean>(false);
 
   const phoneCacheRef = useRef<Map<string, string>>(new Map());
-
-  /* request lock para isang fetch lang */
   const foodFetchInFlightRef = useRef<Promise<void> | null>(null);
   const foodFetchSeqRef = useRef(0);
 
@@ -331,6 +324,7 @@ const Staff_menu: React.FC = () => {
       id: `addon-${toText(row.id) || crypto.randomUUID()}`,
       source_id: toText(row.id) || crypto.randomUUID(),
       mode: "add_ons",
+      display_type: "Add-On",
       created_at: toText(row.created_at) || new Date().toISOString(),
       full_name: pickText(row, ["full_name", "name", "customer_name", "customer"]),
       phone_number: pickText(row, [
@@ -362,6 +356,7 @@ const Staff_menu: React.FC = () => {
       id: `consignment-${toText(row.id) || crypto.randomUUID()}`,
       source_id: toText(row.id) || crypto.randomUUID(),
       mode: "consignment",
+      display_type: "SPECIAL ITEM",
       created_at: toText(row.created_at) || new Date().toISOString(),
       full_name: pickText(row, ["full_name", "name", "customer_name", "customer"]),
       phone_number: pickText(row, [
@@ -439,13 +434,11 @@ const Staff_menu: React.FC = () => {
     return String(row.message ?? row.concern ?? "").trim() || "No message.";
   };
 
-  const getFoodModeLabel = (mode: FoodNotifMode): string => {
-    return mode === "add_ons" ? "Add-On" : "Consignment";
+  const getFoodModeLabel = (item: FoodNotifRow): string => {
+    if (item.display_type.trim()) return item.display_type;
+    return item.mode === "add_ons" ? "Add-On" : "SPECIAL ITEM";
   };
 
-  /* =========================
-      Guest notif helpers
-  ========================= */
   const cancelScheduledRefresh = (): void => {
     if (refreshTimerRef.current !== null) {
       window.clearTimeout(refreshTimerRef.current);
@@ -580,9 +573,6 @@ const Staff_menu: React.FC = () => {
     }
   };
 
-  /* =========================
-      Unified food notif helpers
-  ========================= */
   const cancelFoodScheduledRefresh = (): void => {
     if (foodRefreshTimerRef.current !== null) {
       window.clearTimeout(foodRefreshTimerRef.current);
@@ -671,7 +661,6 @@ const Staff_menu: React.FC = () => {
 
       const enriched = await enrichFoodPhoneNumbers(merged.slice(0, 100));
 
-      /* ignore old response */
       if (reqId !== foodFetchSeqRef.current) return;
 
       setFoodNotifItems(enriched);
@@ -746,7 +735,6 @@ const Staff_menu: React.FC = () => {
       }
     }
 
-    /* small delay para ma-ignore ang sariling realtime update burst */
     window.setTimeout(() => {
       foodSuspendRefreshRef.current = false;
     }, 350);
@@ -893,9 +881,7 @@ const Staff_menu: React.FC = () => {
           }
         }
       )
-      .subscribe((status) => {
-        console.log("NOISY NOTIF CHANNEL:", status);
-      });
+      .subscribe();
 
     const onFocusOrWake = (): void => {
       void fetchUnreadCount();
@@ -1006,9 +992,7 @@ const Staff_menu: React.FC = () => {
           }
         }
       )
-      .subscribe((status) => {
-        console.log("ADDON FOOD NOTIF CHANNEL:", status);
-      });
+      .subscribe();
 
     const chConsignment = supabase
       .channel("realtime_consignment_notifications")
@@ -1096,9 +1080,7 @@ const Staff_menu: React.FC = () => {
           }
         }
       )
-      .subscribe((status) => {
-        console.log("CONSIGNMENT FOOD NOTIF CHANNEL:", status);
-      });
+      .subscribe();
 
     const onFocusOrWake = (): void => {
       void fetchFoodUnreadCount();
@@ -1438,7 +1420,7 @@ const Staff_menu: React.FC = () => {
                     <div className="food-notif-grid">
                       <div className="food-notif-row">
                         <span className="food-notif-label">Type</span>
-                        <span className="food-notif-value">{getFoodModeLabel(n.mode)}</span>
+                        <span className="food-notif-value">{getFoodModeLabel(n)}</span>
                       </div>
 
                       <div className="food-notif-row">
