@@ -161,6 +161,10 @@ const Staff_menu: React.FC = () => {
 
   const phoneCacheRef = useRef<Map<string, string>>(new Map());
 
+  /* request lock para isang fetch lang */
+  const foodFetchInFlightRef = useRef<Promise<void> | null>(null);
+  const foodFetchSeqRef = useRef(0);
+
   useEffect(() => {
     notifOpenRef.current = notifOpen;
   }, [notifOpen]);
@@ -253,7 +257,7 @@ const Staff_menu: React.FC = () => {
   ): Promise<string> => {
     const cacheKey = buildPhoneCacheKey(bookingCode, fullName, seatNumber);
     const cached = phoneCacheRef.current.get(cacheKey);
-    if (cached) return cached;
+    if (cached !== undefined) return cached;
 
     const cleanBookingCode = bookingCode.trim();
     const cleanFullName = fullName.trim();
@@ -618,48 +622,83 @@ const Staff_menu: React.FC = () => {
     return total;
   };
 
-  const fetchFoodNotifications = async (): Promise<void> => {
-    setFoodNotifLoading(true);
+  const fetchFoodNotifications = async (
+    options?: { silent?: boolean }
+  ): Promise<void> => {
+    const silent = options?.silent === true;
+    const reqId = ++foodFetchSeqRef.current;
 
-    const [addonRes, consignmentRes] = await Promise.all([
-      supabase
-        .from(ADDON_NOTIF_TABLE)
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(50),
-      supabase
-        .from(CONSIGNMENT_NOTIF_TABLE)
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(50),
-    ]);
-
-    if (addonRes.error) {
-      console.warn("fetch add_on_notifications:", addonRes.error.message);
+    if (!silent) {
+      setFoodNotifLoading(true);
     }
 
-    if (consignmentRes.error) {
-      console.warn(
-        "fetch consignment_notifications:",
-        consignmentRes.error.message
+    try {
+      const [addonRes, consignmentRes] = await Promise.all([
+        supabase
+          .from(ADDON_NOTIF_TABLE)
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(50),
+        supabase
+          .from(CONSIGNMENT_NOTIF_TABLE)
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(50),
+      ]);
+
+      if (addonRes.error) {
+        console.warn("fetch add_on_notifications:", addonRes.error.message);
+      }
+
+      if (consignmentRes.error) {
+        console.warn(
+          "fetch consignment_notifications:",
+          consignmentRes.error.message
+        );
+      }
+
+      const addonItems = ((addonRes.data as LooseRecord[] | null) ?? []).map(
+        mapAddOnNotifRow
       );
+      const consignmentItems = (
+        (consignmentRes.data as LooseRecord[] | null) ?? []
+      ).map(mapConsignmentNotifRow);
+
+      const merged = [...addonItems, ...consignmentItems].sort(
+        (a, b) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+
+      const enriched = await enrichFoodPhoneNumbers(merged.slice(0, 100));
+
+      /* ignore old response */
+      if (reqId !== foodFetchSeqRef.current) return;
+
+      setFoodNotifItems(enriched);
+    } finally {
+      if (!silent && reqId === foodFetchSeqRef.current) {
+        setFoodNotifLoading(false);
+      }
+    }
+  };
+
+  const fetchFoodNotificationsLocked = async (
+    options?: { silent?: boolean }
+  ): Promise<void> => {
+    if (foodFetchInFlightRef.current) {
+      return foodFetchInFlightRef.current;
     }
 
-    const addonItems = ((addonRes.data as LooseRecord[] | null) ?? []).map(
-      mapAddOnNotifRow
-    );
-    const consignmentItems = (
-      (consignmentRes.data as LooseRecord[] | null) ?? []
-    ).map(mapConsignmentNotifRow);
+    const task = (async () => {
+      try {
+        await fetchFoodNotifications(options);
+      } finally {
+        foodFetchInFlightRef.current = null;
+      }
+    })();
 
-    const merged = [...addonItems, ...consignmentItems].sort(
-      (a, b) =>
-        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    );
-
-    const enriched = await enrichFoodPhoneNumbers(merged.slice(0, 100));
-    setFoodNotifItems(enriched);
-    setFoodNotifLoading(false);
+    foodFetchInFlightRef.current = task;
+    return task;
   };
 
   const markAllFoodAsReadSilent = async (): Promise<void> => {
@@ -703,11 +742,14 @@ const Staff_menu: React.FC = () => {
 
       await fetchFoodUnreadCount();
       if (foodNotifOpenRef.current) {
-        await fetchFoodNotifications();
+        await fetchFoodNotificationsLocked({ silent: true });
       }
     }
 
-    foodSuspendRefreshRef.current = false;
+    /* small delay para ma-ignore ang sariling realtime update burst */
+    window.setTimeout(() => {
+      foodSuspendRefreshRef.current = false;
+    }, 350);
   };
 
   const handleDeleteFoodNotification = async (
@@ -750,9 +792,12 @@ const Staff_menu: React.FC = () => {
 
   const openFoodBell = async (): Promise<void> => {
     if (notifOpen) setNotifOpen(false);
+    if (foodFetchInFlightRef.current) return;
+
     computeFoodPopoverPosition();
     setFoodNotifOpen(true);
-    await fetchFoodNotifications();
+
+    await fetchFoodNotificationsLocked();
     void markAllFoodAsReadSilent();
   };
 
@@ -874,7 +919,6 @@ const Staff_menu: React.FC = () => {
 
   useEffect(() => {
     void fetchFoodUnreadCount();
-    void fetchFoodNotifications();
 
     const chAddOn = supabase
       .channel("realtime_add_on_notifications")
@@ -917,6 +961,9 @@ const Staff_menu: React.FC = () => {
         { event: "UPDATE", schema: "public", table: ADDON_NOTIF_TABLE },
         async (payload: unknown) => {
           const p = payload as RealtimeUpdatePayload<LooseRecord>;
+
+          if (foodNotifOpenRef.current && foodSuspendRefreshRef.current) return;
+
           let newRow = mapAddOnNotifRow(p.new as LooseRecord);
 
           if (!newRow.phone_number) {
@@ -1004,6 +1051,9 @@ const Staff_menu: React.FC = () => {
         { event: "UPDATE", schema: "public", table: CONSIGNMENT_NOTIF_TABLE },
         async (payload: unknown) => {
           const p = payload as RealtimeUpdatePayload<LooseRecord>;
+
+          if (foodNotifOpenRef.current && foodSuspendRefreshRef.current) return;
+
           let newRow = mapConsignmentNotifRow(p.new as LooseRecord);
 
           if (!newRow.phone_number) {
