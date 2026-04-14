@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import "../styles/staff_dashboard.css";
 import seatsImage from "../assets/seats.png";
 import bearImage from "../assets/bear.png";
@@ -172,6 +173,192 @@ const isAutoReservationRow = (note: string | null): boolean => {
   return n === "reservation";
 };
 
+type SeatManageModalProps = {
+  isOpen: boolean;
+  selectedSeat: string;
+  selectedKind: PinKind;
+  currentStatus: SeatStatus;
+  openTime: boolean;
+  durationInput: string;
+  saving: boolean;
+  onChangeOpenTime: (checked: boolean) => void;
+  onChangeDuration: (value: string) => void;
+  onBlurDuration: () => void;
+  onClose: () => void;
+  onClearNow: () => void;
+  onTemp: () => void;
+  onOccupied: () => void;
+  onReserved: () => void;
+};
+
+const SeatManageModal: React.FC<SeatManageModalProps> = ({
+  isOpen,
+  selectedSeat,
+  selectedKind,
+  currentStatus,
+  openTime,
+  durationInput,
+  saving,
+  onChangeOpenTime,
+  onChangeDuration,
+  onBlurDuration,
+  onClose,
+  onClearNow,
+  onTemp,
+  onOccupied,
+  onReserved,
+}) => {
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const prevHtmlOverflow = document.documentElement.style.overflow;
+    const prevBodyOverflow = document.body.style.overflow;
+    const prevBodyTouchAction = document.body.style.touchAction;
+
+    document.documentElement.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
+    document.body.style.touchAction = "none";
+
+    const handleKeyDown = (e: KeyboardEvent): void => {
+      if (e.key === "Escape") onClose();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.documentElement.style.overflow = prevHtmlOverflow;
+      document.body.style.overflow = prevBodyOverflow;
+      document.body.style.touchAction = prevBodyTouchAction;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen, onClose]);
+
+  if (!isOpen) return null;
+
+  const isConference = selectedSeat === CONFERENCE_ID;
+  const modal = (
+    <div
+      className="seat-modal-overlay"
+      onMouseDown={onClose}
+      aria-modal="true"
+      role="dialog"
+    >
+      <div
+        className="seat-modal-center-anchor"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <div className="seat-manage-modal">
+          <div className="seat-modal-header">
+            <h2 className="seat-modal-title">Seat Status</h2>
+            <button
+              type="button"
+              className="seat-modal-close"
+              onClick={onClose}
+              aria-label="Close"
+            >
+              ✕
+            </button>
+          </div>
+
+          <div className="seat-modal-body">
+            <div className="bookadd-card">
+              <div className="form-item">
+                <label className="form-label">Target</label>
+                <input
+                  className="form-input"
+                  value={
+                    isConference ? "CONFERENCE ROOM" : `SEAT ${selectedSeat}`
+                  }
+                  readOnly
+                />
+              </div>
+
+              <div className="form-item">
+                <label className="form-label">Current Status</label>
+                <input
+                  className="form-input"
+                  value={currentStatus.replaceAll("_", " ").toUpperCase()}
+                  readOnly
+                />
+              </div>
+
+              <div className="form-item form-item-toggle">
+                <label className="form-label">Open Time</label>
+                <div className="toggle-wrap">
+                  <input
+                    id="open-time-toggle"
+                    type="checkbox"
+                    checked={openTime}
+                    onChange={(e) => onChangeOpenTime(e.target.checked)}
+                  />
+                  <label htmlFor="open-time-toggle" className="toggle-label">
+                    {openTime ? "Yes" : "No"}
+                  </label>
+                </div>
+              </div>
+
+              {!openTime ? (
+                <div className="form-item">
+                  <label className="form-label">
+                    Duration (HH:MM or hours)
+                  </label>
+                  <input
+                    className="form-input"
+                    value={durationInput}
+                    placeholder="Examples: 1 / 0:45 / 2:30 / 230 / 100:30"
+                    onChange={(e) => onChangeDuration(e.target.value)}
+                    onBlur={onBlurDuration}
+                  />
+                </div>
+              ) : null}
+
+              <button
+                type="button"
+                className="seat-modal-btn seat-modal-btn--clear"
+                disabled={saving}
+                onClick={onClearNow}
+              >
+                {saving ? "Working..." : "Set as Temporarily Available (CLEAR NOW)"}
+              </button>
+
+              <div style={{ height: 10 }} />
+
+              <button
+                type="button"
+                className="seat-modal-btn seat-modal-btn--temp"
+                disabled={saving}
+                onClick={onTemp}
+              >
+                Set as Occupied Temporarily (Yellow)
+              </button>
+
+              <button
+                type="button"
+                className="seat-modal-btn seat-modal-btn--occupied"
+                disabled={saving}
+                onClick={onOccupied}
+              >
+                Set as Occupied (Red)
+              </button>
+
+              <button
+                type="button"
+                className="seat-modal-btn seat-modal-btn--reserved"
+                disabled={saving}
+                onClick={onReserved}
+              >
+                Set as Reserved (Purple)
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  return createPortal(modal, document.body);
+};
+
 const Staff_Dashboard: React.FC = () => {
   const defaultPins: SeatPin[] = useMemo(
     () => [
@@ -343,8 +530,6 @@ const Staff_Dashboard: React.FC = () => {
     void loadRequiredIds();
   }, []);
 
-  const isConference = (id: string): boolean => id === CONFERENCE_ID;
-
   const getAreaForSelection = (kind: PinKind): "common_area" | "conference_room" =>
     kind === "room" ? "conference_room" : "common_area";
 
@@ -484,9 +669,7 @@ const Staff_Dashboard: React.FC = () => {
       else if (nowMs < s) next[seatId] = "reserved";
     };
 
-    if (promoSeatsErr) {
-      console.error("promo seats status error:", promoSeatsErr.message);
-    } else {
+    if (!promoSeatsErr) {
       const rows = (promoSeatsData ?? []) as PromoBookingRow[];
       for (const r of rows) {
         const seat = r.seat_number ? normalizeSeatId(r.seat_number) : "";
@@ -494,16 +677,12 @@ const Staff_Dashboard: React.FC = () => {
       }
     }
 
-    if (promoConfErr) {
-      console.error("promo conference status error:", promoConfErr.message);
-    } else {
+    if (!promoConfErr) {
       const rows = (promoConfData ?? []) as PromoBookingRow[];
       if (rows.length > 0) applyPromoRow(CONFERENCE_ID, rows[0]);
     }
 
-    if (blockedErr) {
-      console.error("seat_blocked_times status error:", blockedErr.message);
-    } else {
+    if (!blockedErr) {
       const rows = (blockedData ?? []) as SeatBlockedRow[];
       const bySeat: Record<string, SeatStatus> = {};
 
@@ -958,129 +1137,29 @@ const Staff_Dashboard: React.FC = () => {
         </div>
       </div>
 
-      {isModalOpen ? (
-        <div
-          className="seat-modal-overlay"
-          onClick={() => {
-            setIsModalOpen(false);
-            setSelectedSeat("");
-          }}
-        >
-          <div className="seat-manage-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="seat-modal-header">
-              <h2 className="seat-modal-title">Seat Status</h2>
-              <button
-                type="button"
-                className="seat-modal-close"
-                onClick={() => {
-                  setIsModalOpen(false);
-                  setSelectedSeat("");
-                }}
-                aria-label="Close"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="seat-modal-body">
-              <div className="bookadd-card">
-                <div className="form-item">
-                  <label className="form-label">Target</label>
-                  <input
-                    className="form-input"
-                    value={
-                      isConference(selectedSeat)
-                        ? "CONFERENCE ROOM"
-                        : `SEAT ${selectedSeat}`
-                    }
-                    readOnly
-                  />
-                </div>
-
-                <div className="form-item">
-                  <label className="form-label">Current Status</label>
-                  <input
-                    className="form-input"
-                    value={currentStatus.replaceAll("_", " ").toUpperCase()}
-                    readOnly
-                  />
-                </div>
-
-                <div className="form-item form-item-toggle">
-                  <label className="form-label">Open Time</label>
-                  <div className="toggle-wrap">
-                    <input
-                      id="open-time-toggle"
-                      type="checkbox"
-                      checked={openTime}
-                      onChange={(e) => setOpenTime(e.target.checked)}
-                    />
-                    <label htmlFor="open-time-toggle" className="toggle-label">
-                      {openTime ? "Yes" : "No"}
-                    </label>
-                  </div>
-                </div>
-
-                {!openTime ? (
-                  <div className="form-item">
-                    <label className="form-label">
-                      Duration (HH:MM or hours)
-                    </label>
-                    <input
-                      className="form-input"
-                      value={durationInput}
-                      placeholder="Examples: 1 / 0:45 / 2:30 / 230 / 100:30"
-                      onChange={(e) => setDurationInput(e.target.value)}
-                      onBlur={() => {
-                        const n = normalizeDurationHHMM(durationInput);
-                        if (n) setDurationInput(n);
-                      }}
-                    />
-                  </div>
-                ) : null}
-
-                <button
-                  type="button"
-                  className="seat-modal-btn seat-modal-btn--clear"
-                  disabled={saving}
-                  onClick={() => void clearToAvailableNow(selectedSeat, selectedKind)}
-                >
-                  {saving ? "Working..." : "Set as Temporarily Available (CLEAR NOW)"}
-                </button>
-
-                <div style={{ height: 10 }} />
-
-                <button
-                  type="button"
-                  className="seat-modal-btn seat-modal-btn--temp"
-                  disabled={saving}
-                  onClick={() => void saveTempOccupied()}
-                >
-                  Set as Occupied Temporarily (Yellow)
-                </button>
-
-                <button
-                  type="button"
-                  className="seat-modal-btn seat-modal-btn--occupied"
-                  disabled={saving}
-                  onClick={() => void setBlocked("occupied")}
-                >
-                  Set as Occupied (Red)
-                </button>
-
-                <button
-                  type="button"
-                  className="seat-modal-btn seat-modal-btn--reserved"
-                  disabled={saving}
-                  onClick={() => void setBlocked("reserved")}
-                >
-                  Set as Reserved (Purple)
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <SeatManageModal
+        isOpen={isModalOpen}
+        selectedSeat={selectedSeat}
+        selectedKind={selectedKind}
+        currentStatus={currentStatus}
+        openTime={openTime}
+        durationInput={durationInput}
+        saving={saving}
+        onChangeOpenTime={setOpenTime}
+        onChangeDuration={setDurationInput}
+        onBlurDuration={() => {
+          const n = normalizeDurationHHMM(durationInput);
+          if (n) setDurationInput(n);
+        }}
+        onClose={() => {
+          setIsModalOpen(false);
+          setSelectedSeat("");
+        }}
+        onClearNow={() => void clearToAvailableNow(selectedSeat, selectedKind)}
+        onTemp={() => void saveTempOccupied()}
+        onOccupied={() => void setBlocked("occupied")}
+        onReserved={() => void setBlocked("reserved")}
+      />
     </div>
   );
 };
