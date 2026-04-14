@@ -81,6 +81,7 @@ type AddOnPaymentRow = {
 };
 
 type CustomerOrderPaymentRow = {
+  booking_code: string | null;
   paid_at: string | null;
   is_paid: boolean | number | string | null;
   gcash_amount: number | string | null;
@@ -596,37 +597,53 @@ const AdminSalesReport: React.FC = () => {
     setAddonsPaidBase(computeAddonsPaidFromPayments(onlyWithAnyPayment));
   };
 
-  const loadCustomerOrderPaid = async (dateYMD: string): Promise<void> => {
-    if (!isYMD(dateYMD)) {
+const loadCustomerOrderPaid = async (dateYMD: string): Promise<void> => {
+  if (!isYMD(dateYMD)) {
+    setCustomerOrderPaid(0);
+    return;
+  }
+
+  const { startIso, endIso } = manilaDayRange(dateYMD);
+
+  const payRes = await supabase
+    .from("customer_order_payments")
+    .select("booking_code, paid_at, is_paid")
+    .gte("paid_at", startIso)
+    .lt("paid_at", endIso);
+
+  if (payRes.error) {
+    console.error("customer_order_payments query error:", payRes.error.message);
+    setCustomerOrderPaid(0);
+    return;
+  }
+
+    const paidBookingCodes = Array.from(
+      new Set(
+        ((payRes.data ?? []) as CustomerOrderPaymentRow[])
+          .filter((r) => toBool(r.is_paid) && !!r.paid_at)
+          .map((r) => String(r.booking_code ?? "").trim().toUpperCase())
+          .filter(Boolean)
+      )
+    );
+
+    if (paidBookingCodes.length === 0) {
       setCustomerOrderPaid(0);
       return;
     }
 
-    const { startIso, endIso } = manilaDayRange(dateYMD);
+    const addonRes = await supabase
+      .from("addon_orders")
+      .select("booking_code, total_amount")
+      .in("booking_code", paidBookingCodes);
 
-    const res = await supabase
-      .from("customer_order_payments")
-      .select("paid_at, is_paid, gcash_amount, cash_amount")
-      .gte("paid_at", startIso)
-      .lt("paid_at", endIso);
-
-    if (res.error) {
-      console.error("customer_order_payments query error:", res.error.message);
+    if (addonRes.error) {
+      console.error("addon_orders paid query error:", addonRes.error.message);
       setCustomerOrderPaid(0);
       return;
     }
 
-    const rows = (res.data ?? []) as CustomerOrderPaymentRow[];
-
-    const total = rows
-      .filter((r) => toBool(r.is_paid) && !!r.paid_at)
-      .reduce(
-        (sum, r) =>
-          sum +
-          Math.max(0, toNumber(r.gcash_amount)) +
-          Math.max(0, toNumber(r.cash_amount)),
-        0
-      );
+    const total = ((addonRes.data ?? []) as Array<{ booking_code: string; total_amount: number | string }>)
+      .reduce((sum, row) => sum + Math.max(0, toNumber(row.total_amount)), 0);
 
     setCustomerOrderPaid(round2(total));
   };

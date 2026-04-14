@@ -78,6 +78,9 @@ const AppRoutes = () => {
   const sessionsRef = useRef(new Map());
   const promosRef = useRef(new Map());
 
+  const fetchedOrderAlertIdsRef = useRef(new Set());
+  const fetchedCodeAlertIdsRef = useRef(new Set());
+
   const resetAllAlertState = useCallback(() => {
     setShowTimeAlert(false);
     setShowCodeAlert(false);
@@ -87,6 +90,8 @@ const AppRoutes = () => {
     triggeredRef.current.clear();
     sessionsRef.current.clear();
     promosRef.current.clear();
+    fetchedOrderAlertIdsRef.current.clear();
+    fetchedCodeAlertIdsRef.current.clear();
   }, []);
 
   const syncRoleFromSupabase = useCallback(async () => {
@@ -147,18 +152,12 @@ const AppRoutes = () => {
   }, []);
 
   const addOrderAlert = useCallback((a) => {
-    setOrderAlerts((prev) => {
-      if (prev.some((x) => x.key === a.key)) return prev;
-      return [a, ...prev];
-    });
+    setOrderAlerts([a]);
     setShowTimeAlert(true);
   }, []);
 
   const addCodeAlert = useCallback((a) => {
-    setCodeAlerts((prev) => {
-      if (prev.some((x) => x.id === a.id)) return prev;
-      return [a, ...prev];
-    });
+    setCodeAlerts([a]);
     setShowCodeAlert(true);
   }, []);
 
@@ -213,7 +212,11 @@ const AppRoutes = () => {
 
   const fetchAddOnOrderAlert = useCallback(
     async (orderId) => {
-      const key = `add_ons-${orderId}`;
+      const orderKey = `add_ons-${orderId}`;
+      const codeKey = `add_ons-code-${orderId}`;
+
+      if (fetchedOrderAlertIdsRef.current.has(orderKey)) return;
+      fetchedOrderAlertIdsRef.current.add(orderKey);
 
       for (let attempt = 0; attempt < 8; attempt += 1) {
         const { data, error } = await supabase
@@ -221,7 +224,9 @@ const AppRoutes = () => {
           .select(`
             id,
             full_name,
+            phone_number,
             seat_number,
+            booking_code,
             created_at,
             addon_order_items (
               quantity,
@@ -240,7 +245,7 @@ const AppRoutes = () => {
 
           if (lines.length > 0) {
             addOrderAlert({
-              key,
+              key: orderKey,
               kind: "add_ons",
               id: data.id,
               full_name: asString(data.full_name).trim() || "Unknown Customer",
@@ -249,16 +254,21 @@ const AppRoutes = () => {
               lines,
             });
 
-            addCodeAlert({
-              id: `${data.id}-code`,
-              full_name: asString(data.full_name).trim() || "Unknown Customer",
-              seat_number: asString(data.seat_number).trim() || "-",
-              booking_code: data.id,
-              order_text: lines
-                .map((line) => `${line.name} x${line.quantity}`)
-                .join(", "),
-              mode: "add_ons",
-            });
+            if (!fetchedCodeAlertIdsRef.current.has(codeKey)) {
+              fetchedCodeAlertIdsRef.current.add(codeKey);
+
+              addCodeAlert({
+                id: codeKey,
+                full_name: asString(data.full_name).trim() || "Unknown Customer",
+                phone_number: asString(data.phone_number).trim() || "-",
+                seat_number: asString(data.seat_number).trim() || "-",
+                booking_code: asString(data.booking_code).trim() || "-",
+                order_text: lines
+                  .map((line) => `${line.name} x${line.quantity}`)
+                  .join(", "),
+                mode: "add_ons",
+              });
+            }
 
             return;
           }
@@ -266,13 +276,19 @@ const AppRoutes = () => {
 
         await sleep(250);
       }
+
+      fetchedOrderAlertIdsRef.current.delete(orderKey);
     },
     [addCodeAlert, addOrderAlert, buildAddOnLines]
   );
 
   const fetchConsignmentOrderAlert = useCallback(
     async (orderId) => {
-      const key = `consignment-${orderId}`;
+      const orderKey = `consignment-${orderId}`;
+      const codeKey = `consignment-code-${orderId}`;
+
+      if (fetchedOrderAlertIdsRef.current.has(orderKey)) return;
+      fetchedOrderAlertIdsRef.current.add(orderKey);
 
       for (let attempt = 0; attempt < 8; attempt += 1) {
         const { data, error } = await supabase
@@ -280,7 +296,9 @@ const AppRoutes = () => {
           .select(`
             id,
             full_name,
+            phone_number,
             seat_number,
+            booking_code,
             created_at,
             consignment_order_items (
               quantity,
@@ -299,7 +317,7 @@ const AppRoutes = () => {
 
           if (lines.length > 0) {
             addOrderAlert({
-              key,
+              key: orderKey,
               kind: "consignment",
               id: data.id,
               full_name: asString(data.full_name).trim() || "Unknown Customer",
@@ -308,16 +326,21 @@ const AppRoutes = () => {
               lines,
             });
 
-            addCodeAlert({
-              id: `${data.id}-code`,
-              full_name: asString(data.full_name).trim() || "Unknown Customer",
-              seat_number: asString(data.seat_number).trim() || "-",
-              booking_code: data.id,
-              order_text: lines
-                .map((line) => `${line.name} x${line.quantity}`)
-                .join(", "),
-              mode: "consignment",
-            });
+            if (!fetchedCodeAlertIdsRef.current.has(codeKey)) {
+              fetchedCodeAlertIdsRef.current.add(codeKey);
+
+              addCodeAlert({
+                id: codeKey,
+                full_name: asString(data.full_name).trim() || "Unknown Customer",
+                phone_number: asString(data.phone_number).trim() || "-",
+                seat_number: asString(data.seat_number).trim() || "-",
+                booking_code: asString(data.booking_code).trim() || "-",
+                order_text: lines
+                  .map((line) => `${line.name} x${line.quantity}`)
+                  .join(", "),
+                mode: "consignment",
+              });
+            }
 
             return;
           }
@@ -325,6 +348,8 @@ const AppRoutes = () => {
 
         await sleep(250);
       }
+
+      fetchedOrderAlertIdsRef.current.delete(orderKey);
     },
     [addCodeAlert, addOrderAlert, buildConsignmentLines]
   );

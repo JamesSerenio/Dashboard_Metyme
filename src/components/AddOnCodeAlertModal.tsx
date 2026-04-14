@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import "../styles/AddOnCodeAlertModal.css";
 
@@ -7,6 +7,7 @@ export type AddOnAlertMode = "add_ons" | "consignment";
 export type AddOnCodeAlertItem = {
   id: string;
   full_name: string;
+  phone_number: string;
   seat_number: string;
   booking_code: string;
   order_text: string;
@@ -20,16 +21,24 @@ interface Props {
   onCloseAll: () => void;
 }
 
-const getModeLabel = (mode: AddOnAlertMode): string => {
-  return mode === "add_ons" ? "Add-On Order" : "Consignment Order";
+const getTitleLabel = (mode: AddOnAlertMode): string => {
+  return mode === "add_ons"
+    ? "Add-On Order Verified"
+    : "Consignment Order Verified";
 };
 
-const getTitleLabel = (mode: AddOnAlertMode): string => {
-  return mode === "add_ons" ? "Order Verified" : "Consignment Verified";
+const getBadgeLabel = (mode: AddOnAlertMode): string => {
+  return mode === "add_ons" ? "ADD-ON ALERT" : "CONSIGNMENT ALERT";
 };
 
 const getIconLabel = (mode: AddOnAlertMode): string => {
   return mode === "add_ons" ? "🛍" : "📦";
+};
+
+const getSubLabel = (mode: AddOnAlertMode): string => {
+  return mode === "add_ons"
+    ? "A new add-on order has been received."
+    : "A new consignment order has been received.";
 };
 
 const AddOnCodeAlertModal: React.FC<Props> = ({
@@ -40,16 +49,19 @@ const AddOnCodeAlertModal: React.FC<Props> = ({
 }) => {
   const shouldOpen = isOpen && alerts.length > 0;
 
+  const currentAlert = useMemo(() => {
+    return alerts[0] ?? null;
+  }, [alerts]);
+
   useEffect(() => {
-    if (!shouldOpen) return;
+    if (!shouldOpen || !currentAlert) return;
 
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
     const handleKey = (e: KeyboardEvent): void => {
       if (e.key === "Escape") {
-        if (alerts.length > 1) onCloseAll();
-        else if (alerts.length === 1) onCloseOne(alerts[0].id);
+        onCloseOne(currentAlert.id);
       }
     };
 
@@ -59,80 +71,100 @@ const AddOnCodeAlertModal: React.FC<Props> = ({
       document.body.style.overflow = prevOverflow;
       window.removeEventListener("keydown", handleKey);
     };
-  }, [shouldOpen, alerts, onCloseAll, onCloseOne]);
+  }, [shouldOpen, currentAlert, onCloseOne]);
 
-  if (!shouldOpen) return null;
+  if (!shouldOpen || !currentAlert) return null;
+
+  const a = currentAlert;
 
   return createPortal(
     <div className="addon-alert-overlay">
       <div className="addon-alert-wrapper">
-        <div className="addon-alert-stack">
-          {alerts.map((a) => (
-            <div
-              key={a.id}
-              className={`addon-alert-card ${
-                a.mode === "consignment"
-                  ? "addon-alert-card--consignment"
-                  : "addon-alert-card--addons"
-              }`}
-            >
-              <div className="addon-alert-top">
-                <div className="addon-alert-title-wrap">
-                  <div className="addon-alert-icon" aria-hidden="true">
-                    {getIconLabel(a.mode)}
-                  </div>
-                  <div>
-                    <div className="addon-alert-badge">
-                      {a.mode === "add_ons" ? "ORDER ALERT" : "CONSIGNMENT ALERT"}
-                    </div>
-                    <div className="addon-alert-title">{getTitleLabel(a.mode)}</div>
-                  </div>
-                </div>
+        <div
+          className={`addon-alert-card ${
+            a.mode === "consignment"
+              ? "addon-alert-card--consignment"
+              : "addon-alert-card--addons"
+          }`}
+        >
+          <div className="addon-alert-glow addon-alert-glow--1" />
+          <div className="addon-alert-glow addon-alert-glow--2" />
 
-                <button
-                  type="button"
-                  className="addon-alert-close"
-                  onClick={() => onCloseOne(a.id)}
-                  aria-label="Close"
-                >
-                  ✕
-                </button>
+          <div className="addon-alert-top">
+            <div className="addon-alert-title-wrap">
+              <div className="addon-alert-icon" aria-hidden="true">
+                {getIconLabel(a.mode)}
               </div>
 
-              <div className="addon-alert-body">
-                <div className="addon-alert-row">
-                  <strong>Name:</strong> {a.full_name || "-"}
-                </div>
-                <div className="addon-alert-row">
-                  <strong>Seat:</strong> {a.seat_number || "-"}
-                </div>
-                <div className="addon-alert-row">
-                  <strong>Type:</strong> {getModeLabel(a.mode)}
-                </div>
-                <div className="addon-alert-row">
-                  <strong>Order:</strong> {a.order_text || "-"}
-                </div>
+              <div className="addon-alert-headings">
+                <div className="addon-alert-badge">{getBadgeLabel(a.mode)}</div>
+                <div className="addon-alert-title">{getTitleLabel(a.mode)}</div>
+                <div className="addon-alert-subtitle">{getSubLabel(a.mode)}</div>
               </div>
-
-              <button
-                type="button"
-                className="addon-alert-btn"
-                onClick={() => onCloseOne(a.id)}
-              >
-                OK
-              </button>
             </div>
-          ))}
 
-          {alerts.length > 1 ? (
             <button
               type="button"
-              className="addon-alert-close-all"
-              onClick={onCloseAll}
+              className="addon-alert-close"
+              onClick={() => onCloseOne(a.id)}
+              aria-label="Close"
             >
-              Close All
+              ✕
             </button>
-          ) : null}
+          </div>
+
+          <div className="addon-alert-body">
+            <div className="addon-alert-grid">
+              <div className="addon-alert-info-card">
+                <div className="addon-alert-label">Full Name</div>
+                <div className="addon-alert-value">{a.full_name || "-"}</div>
+              </div>
+
+              <div className="addon-alert-info-card">
+                <div className="addon-alert-label">Phone Number</div>
+                <div className="addon-alert-value">{a.phone_number || "-"}</div>
+              </div>
+
+              <div className="addon-alert-info-card">
+                <div className="addon-alert-label">Seat Number</div>
+                <div className="addon-alert-value">{a.seat_number || "-"}</div>
+              </div>
+
+              <div className="addon-alert-info-card">
+                <div className="addon-alert-label">Booking Code</div>
+                <div className="addon-alert-value addon-alert-code">
+                  {a.booking_code || "-"}
+                </div>
+              </div>
+            </div>
+
+            <div className="addon-alert-order-box">
+              <div className="addon-alert-label">Order Details</div>
+              <div className="addon-alert-order-text">{a.order_text || "-"}</div>
+            </div>
+          </div>
+
+          <div className="addon-alert-actions">
+            {alerts.length > 1 ? (
+              <button
+                type="button"
+                className="addon-alert-close-all"
+                onClick={onCloseAll}
+              >
+                Close All ({alerts.length})
+              </button>
+            ) : (
+              <span />
+            )}
+
+            <button
+              type="button"
+              className="addon-alert-btn"
+              onClick={() => onCloseOne(a.id)}
+            >
+              OK
+            </button>
+          </div>
         </div>
       </div>
     </div>,

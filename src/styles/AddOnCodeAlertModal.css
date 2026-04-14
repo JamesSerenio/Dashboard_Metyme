@@ -1,232 +1,309 @@
 .addon-alert-overlay {
   position: fixed;
   inset: 0;
-  z-index: 9999;
-  background: rgba(16, 18, 12, 0.24);
-  backdrop-filter: blur(4px);
-  animation: addonAlertFadeIn 0.2s ease;
+  z-index: 999999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.18), transparent 28%),
+    radial-gradient(circle at bottom right, rgba(255, 215, 160, 0.16), transparent 32%),
+    rgba(8, 12, 20, 0.58);
+  backdrop-filter: blur(10px);
 }
 
 .addon-alert-wrapper {
   width: 100%;
-  min-height: 100vh;
+  max-width: 650px;
   display: flex;
-  align-items: center;
   justify-content: center;
-  padding: 18px;
-  box-sizing: border-box;
-}
-
-.addon-alert-stack {
-  display: grid;
-  gap: 14px;
-  width: min(100%, 420px);
 }
 
 .addon-alert-card {
   position: relative;
   overflow: hidden;
-  background: #ffffff;
-  border-radius: 22px;
-  padding: 18px 16px 16px;
-  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.16);
-  animation: addonAlertPopIn 0.22s ease;
-  border: 2px solid #39a84b;
+  width: 100%;
+  border-radius: 28px;
+  padding: 22px;
+  background: linear-gradient(145deg, rgba(255, 251, 244, 0.98), rgba(247, 238, 219, 0.97));
+  border: 1px solid rgba(84, 56, 26, 0.08);
+  box-shadow:
+    0 22px 60px rgba(0, 0, 0, 0.18),
+    0 8px 24px rgba(0, 0, 0, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.62);
+  animation: addonAlertPopIn 0.35s ease-out both;
 }
 
-.addon-alert-card::before {
+.addon-alert-card--addons::before,
+.addon-alert-card--consignment::before {
   content: "";
   position: absolute;
-  inset: 0;
+  inset: 0 0 auto 0;
+  height: 5px;
+}
+
+.addon-alert-card--addons::before {
+  background: linear-gradient(90deg, #45a049, #7bc67e, #d8f0d8);
+}
+
+.addon-alert-card--consignment::before {
+  background: linear-gradient(90deg, #8c5a2b, #d39c64, #f3dec8);
+}
+
+.addon-alert-glow {
+  position: absolute;
+  border-radius: 999px;
   pointer-events: none;
-  background:
-    radial-gradient(circle at top right, rgba(57, 168, 75, 0.08), transparent 30%),
-    linear-gradient(180deg, rgba(57, 168, 75, 0.04), transparent 35%);
+  filter: blur(26px);
+  opacity: 0.4;
 }
 
-.addon-alert-card--addons {
-  border-color: #39a84b;
+.addon-alert-glow--1 {
+  width: 160px;
+  height: 160px;
+  top: -60px;
+  right: -20px;
+  background: rgba(93, 180, 101, 0.22);
 }
 
-.addon-alert-card--consignment {
-  border-color: #4e8df5;
+.addon-alert-card--consignment .addon-alert-glow--1 {
+  background: rgba(201, 142, 91, 0.22);
+}
+
+.addon-alert-glow--2 {
+  width: 120px;
+  height: 120px;
+  bottom: -35px;
+  left: -35px;
+  background: rgba(255, 201, 130, 0.18);
 }
 
 .addon-alert-top {
   position: relative;
-  z-index: 1;
+  z-index: 2;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
+  gap: 16px;
 }
 
 .addon-alert-title-wrap {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
-  min-width: 0;
+  gap: 14px;
 }
 
 .addon-alert-icon {
-  width: 42px;
-  height: 42px;
-  border-radius: 14px;
-  display: grid;
-  place-items: center;
-  background: rgba(57, 168, 75, 0.12);
-  color: #2f8f3f;
-  font-size: 22px;
-  font-weight: 900;
-  flex-shrink: 0;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.45);
+  width: 58px;
+  height: 58px;
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  background: linear-gradient(135deg, #ffffff, #eef7ea);
+  border: 1px solid rgba(69, 160, 73, 0.16);
+  box-shadow:
+    0 12px 24px rgba(69, 160, 73, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
 .addon-alert-card--consignment .addon-alert-icon {
-  background: rgba(78, 141, 245, 0.12);
-  color: #2f69d9;
+  background: linear-gradient(135deg, #fffaf5, #f6eadc);
+  border: 1px solid rgba(140, 90, 43, 0.16);
+  box-shadow:
+    0 12px 24px rgba(140, 90, 43, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.addon-alert-headings {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .addon-alert-badge {
   display: inline-flex;
   align-items: center;
-  min-height: 22px;
-  padding: 0 10px;
+  width: fit-content;
+  padding: 6px 10px;
   border-radius: 999px;
-  background: rgba(57, 168, 75, 0.12);
-  color: #2f8f3f;
   font-size: 11px;
   font-weight: 900;
-  letter-spacing: 0.08em;
-  margin-bottom: 6px;
+  letter-spacing: 0.12em;
+  color: #2f7d32;
+  background: rgba(69, 160, 73, 0.12);
+  border: 1px solid rgba(69, 160, 73, 0.18);
 }
 
 .addon-alert-card--consignment .addon-alert-badge {
-  background: rgba(78, 141, 245, 0.12);
-  color: #2f69d9;
+  color: #8c5a2b;
+  background: rgba(140, 90, 43, 0.11);
+  border: 1px solid rgba(140, 90, 43, 0.16);
 }
 
 .addon-alert-title {
-  font-size: 20px;
+  font-size: 25px;
+  line-height: 1.15;
   font-weight: 900;
-  color: #111111;
-  line-height: 1.1;
+  color: #1f1f1f;
+}
+
+.addon-alert-subtitle {
+  font-size: 13px;
+  line-height: 1.5;
+  color: #666666;
+  font-weight: 600;
 }
 
 .addon-alert-close {
-  border: none;
-  background: transparent;
-  color: #111111;
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
+  width: 42px;
+  height: 42px;
+  border: 0;
+  border-radius: 14px;
   cursor: pointer;
   font-size: 18px;
-  line-height: 1;
-  flex-shrink: 0;
-  transition: background 0.18s ease;
+  font-weight: 900;
+  color: #6a4b2f;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.08);
+  transition: transform 0.18s ease, background 0.18s ease;
 }
 
 .addon-alert-close:hover {
-  background: rgba(0, 0, 0, 0.06);
+  transform: translateY(-1px) scale(1.03);
+  background: #ffffff;
 }
 
 .addon-alert-body {
   position: relative;
-  z-index: 1;
-  color: #222222;
+  z-index: 2;
+  margin-top: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.addon-alert-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.addon-alert-info-card {
+  border-radius: 20px;
+  padding: 14px 15px;
+  background: rgba(255, 255, 255, 0.84);
+  border: 1px solid rgba(69, 160, 73, 0.08);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    0 8px 18px rgba(0, 0, 0, 0.05);
+}
+
+.addon-alert-card--consignment .addon-alert-info-card {
+  border: 1px solid rgba(140, 90, 43, 0.08);
+}
+
+.addon-alert-label {
+  font-size: 11px;
+  line-height: 1.3;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #7d7d7d;
+  margin-bottom: 6px;
+}
+
+.addon-alert-value {
   font-size: 15px;
-  line-height: 1.7;
-  background: rgba(249, 251, 248, 0.88);
-  border: 1px solid rgba(57, 168, 75, 0.08);
-  border-radius: 16px;
-  padding: 12px 14px;
-}
-
-.addon-alert-card--consignment .addon-alert-body {
-  background: rgba(248, 250, 255, 0.9);
-  border-color: rgba(78, 141, 245, 0.08);
-}
-
-.addon-alert-row {
-  margin-bottom: 4px;
+  line-height: 1.45;
+  font-weight: 800;
+  color: #1f1f1f;
   word-break: break-word;
 }
 
-.addon-alert-row:last-child {
-  margin-bottom: 0;
+.addon-alert-code {
+  letter-spacing: 0.08em;
 }
 
-.addon-alert-row strong {
-  font-weight: 800;
-  color: #111111;
+.addon-alert-order-box {
+  border-radius: 22px;
+  padding: 16px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(248, 252, 246, 0.9));
+  border: 1px solid rgba(69, 160, 73, 0.1);
+  box-shadow: 0 12px 22px rgba(0, 0, 0, 0.05);
 }
 
-.addon-alert-btn {
+.addon-alert-card--consignment .addon-alert-order-box {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(253, 247, 240, 0.94));
+  border: 1px solid rgba(140, 90, 43, 0.1);
+}
+
+.addon-alert-order-text {
+  margin-top: 8px;
+  font-size: 15px;
+  line-height: 1.6;
+  font-weight: 700;
+  color: #2a2a2a;
+  word-break: break-word;
+}
+
+.addon-alert-actions {
   position: relative;
-  z-index: 1;
-  width: 100%;
-  border: none;
-  background: linear-gradient(180deg, #39a84b, #2f8f3f);
-  color: #ffffff;
-  border-radius: 14px;
-  font-weight: 800;
-  height: 46px;
-  margin-top: 14px;
+  z-index: 2;
+  margin-top: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.addon-alert-close-all,
+.addon-alert-btn {
+  border: 0;
   cursor: pointer;
-  font-size: 14px;
-  box-shadow: 0 10px 22px rgba(57, 168, 75, 0.2);
-  transition:
-    transform 0.18s ease,
-    box-shadow 0.18s ease,
-    filter 0.18s ease;
-}
-
-.addon-alert-btn:hover {
-  transform: translateY(-1px);
-  filter: brightness(1.03);
-  box-shadow: 0 14px 26px rgba(57, 168, 75, 0.24);
-}
-
-.addon-alert-card--consignment .addon-alert-btn {
-  background: linear-gradient(180deg, #4e8df5, #2f69d9);
-  box-shadow: 0 10px 22px rgba(78, 141, 245, 0.2);
-}
-
-.addon-alert-card--consignment .addon-alert-btn:hover {
-  box-shadow: 0 14px 26px rgba(78, 141, 245, 0.24);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
 }
 
 .addon-alert-close-all {
-  border: none;
-  background: transparent;
-  color: #444444;
-  font-weight: 700;
-  height: 42px;
-  cursor: pointer;
-  border-radius: 12px;
+  min-height: 48px;
+  padding: 0 18px;
+  border-radius: 16px;
   font-size: 14px;
-  transition: background 0.18s ease;
+  font-weight: 800;
+  color: #6a4b2f;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.06);
 }
 
-.addon-alert-close-all:hover {
-  background: rgba(0, 0, 0, 0.05);
+.addon-alert-btn {
+  min-width: 120px;
+  min-height: 48px;
+  padding: 0 20px;
+  border-radius: 16px;
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  color: #ffffff;
+  background: linear-gradient(135deg, #45a049, #2f7d32);
+  box-shadow: 0 14px 24px rgba(69, 160, 73, 0.24);
 }
 
-@keyframes addonAlertFadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+.addon-alert-card--consignment .addon-alert-btn {
+  background: linear-gradient(135deg, #b7773d, #8c5a2b);
+  box-shadow: 0 14px 24px rgba(140, 90, 43, 0.24);
+}
+
+.addon-alert-close-all:hover,
+.addon-alert-btn:hover {
+  transform: translateY(-1px);
 }
 
 @keyframes addonAlertPopIn {
   from {
     opacity: 0;
-    transform: translateY(10px) scale(0.98);
+    transform: translateY(18px) scale(0.97);
   }
   to {
     opacity: 1;
@@ -234,27 +311,35 @@
   }
 }
 
-@media (max-width: 480px) {
-  .addon-alert-wrapper {
-    padding: 14px;
+@media (max-width: 640px) {
+  .addon-alert-overlay {
+    padding: 12px;
   }
 
   .addon-alert-card {
-    border-radius: 20px;
-    padding: 16px 14px 14px;
+    border-radius: 22px;
+    padding: 16px;
+  }
+
+  .addon-alert-grid {
+    grid-template-columns: 1fr;
   }
 
   .addon-alert-title {
-    font-size: 18px;
-  }
-
-  .addon-alert-body {
-    font-size: 14px;
-  }
-
-  .addon-alert-icon {
-    width: 38px;
-    height: 38px;
     font-size: 20px;
+  }
+
+  .addon-alert-subtitle {
+    font-size: 12px;
+  }
+
+  .addon-alert-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .addon-alert-close-all,
+  .addon-alert-btn {
+    width: 100%;
   }
 }
