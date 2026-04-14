@@ -1521,26 +1521,54 @@ const Customer_Lists: React.FC = () => {
     try {
       setCancellingOrderItemId(item.id);
 
-      if (item.source === "addon") {
-        if (!item.created_at) {
-          alert("Cannot cancel this add-on because created_at is missing.");
-          return;
-        }
-
-        const { error } = await supabase.rpc("cancel_add_on_order", {
-          p_full_name: session.full_name,
-          p_seat_number: session.seat_number,
-          p_add_on_id: item.source_item_id,
-          p_created_at: item.created_at,
-          p_description: note,
+    if (item.source === "addon") {
+      const { error: insertErr } = await supabase
+        .from("customer_session_add_ons_cancelled")
+        .insert({
+          original_id: item.id,
+          created_at: item.created_at,
+          add_on_id: item.source_item_id,
+          quantity: item.qty,
+          price: item.price,
+          full_name: session.full_name,
+          seat_number: session.seat_number,
+          gcash_amount: 0,
+          cash_amount: 0,
+          is_paid: false,
+          paid_at: null,
+          description: note,
         });
 
-        if (error) {
-          alert(`Cancel add-on failed: ${error.message}`);
-          return;
-        }
-      } else {
-        
+      if (insertErr) {
+        alert(`Cancel add-on failed: ${insertErr.message}`);
+        return;
+      }
+
+      const { error: legacyDeleteErr } = await supabase
+        .from("customer_session_add_ons")
+        .delete()
+        .eq("add_on_id", item.source_item_id)
+        .eq("full_name", session.full_name)
+        .eq("seat_number", session.seat_number);
+
+      if (legacyDeleteErr) {
+        alert(`Legacy add-on delete failed: ${legacyDeleteErr.message}`);
+        return;
+      }
+
+      const { error: deleteErr } = await supabase
+        .from("addon_order_items")
+        .delete()
+        .eq("id", item.id);
+
+      if (deleteErr) {
+        alert(`Order item delete failed: ${deleteErr.message}`);
+        return;
+      }
+
+      await recalcAddonParentAfterDelete(item.parent_order_id);
+    } else {
+
         const systemPaid = getSystemPaymentInfo(session);
 
         const consignmentPayload = {
