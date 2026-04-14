@@ -1545,12 +1545,18 @@ const Customer_Lists: React.FC = () => {
           return;
         }
 
-        const { error: legacyDeleteErr } = await supabase
+        let legacyDeleteQuery = supabase
           .from("customer_session_add_ons")
           .delete()
           .eq("add_on_id", item.source_item_id)
           .eq("full_name", session.full_name)
           .eq("seat_number", session.seat_number);
+
+        if (item.created_at) {
+          legacyDeleteQuery = legacyDeleteQuery.eq("created_at", item.created_at);
+        }
+
+        const { error: legacyDeleteErr } = await legacyDeleteQuery;
 
         if (legacyDeleteErr) {
           alert(`Cancelled copy saved, but legacy add-on delete failed: ${legacyDeleteErr.message}`);
