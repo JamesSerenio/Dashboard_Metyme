@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import "./Staff_Dashboard.css";
+import "../styles/staff_dashboard.css";
 import seatsImage from "../assets/seats.png";
 import bearImage from "../assets/bear.png";
 import grassImage from "../assets/grass.png";
