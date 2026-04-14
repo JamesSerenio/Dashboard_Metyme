@@ -33,6 +33,8 @@ interface PromoBookingRow {
   phone_number: string | null;
 
   area: PackageArea;
+  package_id: string;
+  package_option_id: string;
   seat_number: string | null;
   start_at: string;
   end_at: string;
@@ -67,6 +69,8 @@ interface PromoBookingDBRow {
   phone_number: string | null;
 
   area: PackageArea;
+  package_id: string | null;
+  package_option_id: string | null;
   seat_number: string | null;
   start_at: string;
   end_at: string;
@@ -382,40 +386,42 @@ const getConferenceDurationBucket = (
   return "all";
 };
 
-const normalizeRow = (row: PromoBookingDBRow): PromoBookingRow => {
-  const kind = normalizeDiscountKind(row.discount_kind);
-  const value = round2(toNumber(row.discount_value));
-  const promo_code =
-    row.promo_code ?? null ? String(row.promo_code ?? "").trim() : null;
-  const attempts_left = Math.max(0, Math.floor(toNumber(row.attempts_left ?? 0)));
-  const max_attempts = Math.max(0, Math.floor(toNumber(row.max_attempts ?? 0)));
-  const validity_end_at = row.validity_end_at ?? null;
+  const normalizeRow = (row: PromoBookingDBRow): PromoBookingRow => {
+    const kind = normalizeDiscountKind(row.discount_kind);
+    const value = round2(toNumber(row.discount_value));
+    const promo_code =
+      row.promo_code ?? null ? String(row.promo_code ?? "").trim() : null;
+    const attempts_left = Math.max(0, Math.floor(toNumber(row.attempts_left ?? 0)));
+    const max_attempts = Math.max(0, Math.floor(toNumber(row.max_attempts ?? 0)));
+    const validity_end_at = row.validity_end_at ?? null;
 
-  return {
-    id: row.id,
-    created_at: row.created_at,
-    full_name: row.full_name,
-    phone_number: row.phone_number ?? null,
-    area: row.area,
-    seat_number: row.seat_number,
-    start_at: row.start_at,
-    end_at: row.end_at,
-    price: round2(toNumber(row.price)),
-    gcash_amount: round2(toNumber(row.gcash_amount)),
-    cash_amount: round2(toNumber(row.cash_amount)),
-    is_paid: toBool(row.is_paid),
-    paid_at: row.paid_at ?? null,
-    discount_kind: kind,
-    discount_value: value,
-    discount_reason: row.discount_reason ?? null,
-    promo_code,
-    attempts_left,
-    max_attempts,
-    validity_end_at,
-    packages: row.packages ?? null,
-    package_options: row.package_options ?? null,
+    return {
+      id: row.id,
+      created_at: row.created_at,
+      full_name: row.full_name,
+      phone_number: row.phone_number ?? null,
+      area: row.area,
+      package_id: String(row.package_id ?? "").trim(),
+      package_option_id: String(row.package_option_id ?? "").trim(),
+      seat_number: row.seat_number,
+      start_at: row.start_at,
+      end_at: row.end_at,
+      price: round2(toNumber(row.price)),
+      gcash_amount: round2(toNumber(row.gcash_amount)),
+      cash_amount: round2(toNumber(row.cash_amount)),
+      is_paid: toBool(row.is_paid),
+      paid_at: row.paid_at ?? null,
+      discount_kind: kind,
+      discount_value: value,
+      discount_reason: row.discount_reason ?? null,
+      promo_code,
+      attempts_left,
+      max_attempts,
+      validity_end_at,
+      packages: row.packages ?? null,
+      package_options: row.package_options ?? null,
+    };
   };
-};
 
 const readLocalView = (): { enabled: boolean; sessionId: string } => {
   const enabled =
@@ -631,6 +637,8 @@ const Customer_Promo_List: React.FC = () => {
     full_name,
     phone_number,
     area,
+    package_id,
+    package_option_id,
     seat_number,
     start_at,
     end_at,
@@ -1564,16 +1572,17 @@ const Customer_Promo_List: React.FC = () => {
         original_id: cancelTarget.id,
         description: note,
         created_at: cancelTarget.created_at,
+        user_id: null,
         full_name: cancelTarget.full_name,
         phone_number: cancelTarget.phone_number,
         area: cancelTarget.area,
-        package_id: null,
-        package_option_id: null,
+        package_id: cancelTarget.package_id,
+        package_option_id: cancelTarget.package_option_id,
         seat_number: cancelTarget.seat_number,
         start_at: cancelTarget.start_at,
         end_at: cancelTarget.end_at,
         price: cancelTarget.price,
-        status: getStatus(cancelTarget.start_at, cancelTarget.end_at),
+        status: getStatus(cancelTarget.start_at, cancelTarget.end_at).toLowerCase(),
         gcash_amount: cancelTarget.gcash_amount,
         cash_amount: cancelTarget.cash_amount,
         is_paid: cancelTarget.is_paid,
@@ -1581,6 +1590,10 @@ const Customer_Promo_List: React.FC = () => {
         discount_reason: cancelTarget.discount_reason,
         discount_kind: cancelTarget.discount_kind,
         discount_value: cancelTarget.discount_value,
+        promo_code: cancelTarget.promo_code,
+        attempts_left: cancelTarget.attempts_left,
+        max_attempts: cancelTarget.max_attempts,
+        validity_end_at: cancelTarget.validity_end_at,
       };
 
       const { error: insertErr } = await supabase
