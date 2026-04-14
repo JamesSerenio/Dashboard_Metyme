@@ -331,36 +331,47 @@ const Staff_menu: React.FC = () => {
     return "";
   };
 
-  const mapAddOnNotifRow = (row: LooseRecord): FoodNotifRow => {
-    return {
-      id: `addon-${toText(row.id) || crypto.randomUUID()}`,
-      source_id: toText(row.id) || crypto.randomUUID(),
-      mode: "add_ons",
-      created_at: toText(row.created_at) || new Date().toISOString(),
-      full_name: pickText(row, ["full_name", "name", "customer_name", "customer"]),
-      phone_number: pickText(row, [
-        "phone_number",
-        "phone",
-        "contact_number",
-        "mobile_number",
-        "contact_no",
-      ]),
-      seat_number: pickText(row, ["seat_number", "seat", "table_no"]),
-      item_name: pickText(row, [
-        "add_on_name",
-        "addon_name",
-        "item_name",
-        "product_name",
-        "food_name",
-        "name_of_addon",
-      ]),
-      quantity: pickNumber(row, ["quantity", "qty"]),
-      total: pickNumber(row, ["total", "total_amount", "amount", "subtotal"]),
-      is_read: Boolean(row.is_read),
-      read_at: toText(row.read_at) || null,
-      booking_code: pickText(row, ["booking_code", "code", "promo_code"]),
+    const mapAddOnNotifRow = (row: LooseRecord): FoodNotifRow => {
+      const sourceType = toText(row.source_type).toLowerCase();
+
+      const isConsignment = sourceType === "consignment";
+
+      return {
+        id: `${isConsignment ? "consignment" : "addon"}-${toText(row.id) || crypto.randomUUID()}`,
+        source_id: toText(row.id) || crypto.randomUUID(),
+        mode: isConsignment ? "consignment" : "add_ons",
+        created_at: toText(row.created_at) || new Date().toISOString(),
+        full_name: pickText(row, ["full_name", "name", "customer_name", "customer"]),
+        phone_number: pickText(row, [
+          "phone_number",
+          "phone",
+          "contact_number",
+          "mobile_number",
+          "contact_no",
+        ]),
+        seat_number: pickText(row, ["seat_number", "seat", "table_no"]),
+        item_name: isConsignment
+            ? pickText(row, [
+                "item_name",
+                "add_on_name",
+                "product_name",
+                "name",
+              ])
+            : pickText(row, [
+                "add_on_name",
+                "addon_name",
+                "item_name",
+                "product_name",
+                "food_name",
+                "name_of_addon",
+              ]),
+        quantity: pickNumber(row, ["quantity", "qty"]),
+        total: pickNumber(row, ["total", "total_amount", "amount", "subtotal"]),
+        is_read: Boolean(row.is_read),
+        read_at: toText(row.read_at) || null,
+        booking_code: pickText(row, ["booking_code", "code", "promo_code"]),
+      };
     };
-  };
 
   const mapConsignmentNotifRow = (row: LooseRecord): FoodNotifRow => {
     return {
@@ -606,27 +617,16 @@ const Staff_menu: React.FC = () => {
     }, delayMs);
   };
 
-  const fetchFoodUnreadCount = async (): Promise<number> => {
-    const [addonResult, consignmentResult] = await Promise.all([
-      supabase
+    const fetchFoodUnreadCount = async (): Promise<number> => {
+      const result = await supabase
         .from(ADDON_NOTIF_TABLE)
         .select("id", { count: "exact", head: true })
-        .eq("is_read", false),
-      supabase
-        .from(CONSIGNMENT_NOTIF_TABLE)
-        .select("id", { count: "exact", head: true })
-        .eq("is_read", false),
-    ]);
+        .eq("is_read", false);
 
-    const addonTotal = addonResult.error ? 0 : Number(addonResult.count ?? 0);
-    const consignmentTotal = consignmentResult.error
-      ? 0
-      : Number(consignmentResult.count ?? 0);
-
-    const total = addonTotal + consignmentTotal;
-    setFoodUnreadCount(total);
-    return total;
-  };
+      const total = result.error ? 0 : Number(result.count ?? 0);
+      setFoodUnreadCount(total);
+      return total;
+    };
 
   const fetchFoodNotifications = async (
     options?: { silent?: boolean }
@@ -639,43 +639,21 @@ const Staff_menu: React.FC = () => {
     }
 
     try {
-      const [addonRes, consignmentRes] = await Promise.all([
-        supabase
-          .from(ADDON_NOTIF_TABLE)
-          .select("*")
-          .order("created_at", { ascending: false })
-          .limit(50),
-        supabase
-          .from(CONSIGNMENT_NOTIF_TABLE)
-          .select("*")
-          .order("created_at", { ascending: false })
-          .limit(50),
-      ]);
+      const addonRes = await supabase
+        .from(ADDON_NOTIF_TABLE)
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(100);
 
-      if (addonRes.error) {
-        console.warn("fetch add_on_notifications:", addonRes.error.message);
-      }
+        if (addonRes.error) {
+          console.warn("fetch add_on_notifications:", addonRes.error.message);
+        }
 
-      if (consignmentRes.error) {
-        console.warn(
-          "fetch consignment_notifications:",
-          consignmentRes.error.message
+        const merged = ((addonRes.data as LooseRecord[] | null) ?? []).map(
+          mapAddOnNotifRow
         );
-      }
 
-      const addonItems = ((addonRes.data as LooseRecord[] | null) ?? []).map(
-        mapAddOnNotifRow
-      );
-      const consignmentItems = (
-        (consignmentRes.data as LooseRecord[] | null) ?? []
-      ).map(mapConsignmentNotifRow);
-
-      const merged = [...addonItems, ...consignmentItems].sort(
-        (a, b) =>
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      );
-
-      const enriched = await enrichFoodPhoneNumbers(merged.slice(0, 100));
+        const enriched = await enrichFoodPhoneNumbers(merged.slice(0, 100));
 
       /* ignore old response */
       if (reqId !== foodFetchSeqRef.current) return;
@@ -724,33 +702,19 @@ const Staff_menu: React.FC = () => {
       }))
     );
 
-    const [addonUpdate, consignmentUpdate] = await Promise.all([
-      supabase
-        .from(ADDON_NOTIF_TABLE)
-        .update({ is_read: true, read_at: nowIso })
-        .eq("is_read", false),
-      supabase
-        .from(CONSIGNMENT_NOTIF_TABLE)
-        .update({ is_read: true, read_at: nowIso })
-        .eq("is_read", false),
-    ]);
+    const addonUpdate = await supabase
+      .from(ADDON_NOTIF_TABLE)
+      .update({ is_read: true, read_at: nowIso })
+      .eq("is_read", false);
 
-    if (addonUpdate.error || consignmentUpdate.error) {
       if (addonUpdate.error) {
         console.warn("markAll add_on_notifications:", addonUpdate.error.message);
-      }
-      if (consignmentUpdate.error) {
-        console.warn(
-          "markAll consignment_notifications:",
-          consignmentUpdate.error.message
-        );
-      }
 
-      await fetchFoodUnreadCount();
-      if (foodNotifOpenRef.current) {
-        await fetchFoodNotificationsLocked({ silent: true });
+        await fetchFoodUnreadCount();
+        if (foodNotifOpenRef.current) {
+          await fetchFoodNotificationsLocked({ silent: true });
+        }
       }
-    }
 
     /* small delay para ma-ignore ang sariling realtime update burst */
     window.setTimeout(() => {
@@ -764,13 +728,10 @@ const Staff_menu: React.FC = () => {
     const ok = window.confirm("Delete this food notification?");
     if (!ok) return;
 
-    const table =
-      item.mode === "add_ons" ? ADDON_NOTIF_TABLE : CONSIGNMENT_NOTIF_TABLE;
-
-    const { error } = await supabase
-      .from(table)
-      .delete()
-      .eq("id", item.source_id);
+  const { error } = await supabase
+    .from(ADDON_NOTIF_TABLE)
+    .delete()
+    .eq("id", item.source_id);
 
     if (error) {
       alert(`Delete failed: ${error.message}`);
