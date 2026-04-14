@@ -1545,6 +1545,18 @@ const Customer_Lists: React.FC = () => {
           return;
         }
 
+        const { error: legacyDeleteErr } = await supabase
+          .from("customer_session_add_ons")
+          .delete()
+          .eq("add_on_id", item.source_item_id)
+          .eq("full_name", session.full_name)
+          .eq("seat_number", session.seat_number);
+
+        if (legacyDeleteErr) {
+          alert(`Cancelled copy saved, but legacy add-on delete failed: ${legacyDeleteErr.message}`);
+          return;
+        }
+
         const { error: deleteErr } = await supabase
           .from("addon_order_items")
           .delete()
