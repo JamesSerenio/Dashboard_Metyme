@@ -194,7 +194,7 @@ const Staff_Dashboard: React.FC = () => {
       { id: "7A", label: "7A", x: 58, y: 39.7, kind: "seat" },
       { id: "7B", label: "7B", x: 58.2, y: 43, kind: "seat" },
 
-      { id: "13", label: "13", x: 42.5, y: 62.2, kind: "seat" },
+      { id: "13", label: "13", x: 41, y: 61, kind: "seat" },
 
       { id: "14", label: "14", x: 47.8, y: 52.3, kind: "seat" },
       { id: "15", label: "15", x: 54.5, y: 52.3, kind: "seat" },
