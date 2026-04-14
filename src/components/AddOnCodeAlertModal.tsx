@@ -49,27 +49,42 @@ const AddOnCodeAlertModal: React.FC<Props> = ({
 }) => {
   const shouldOpen = isOpen && alerts.length > 0;
 
-  const currentAlert = useMemo(() => {
-    return alerts[0] ?? null;
-  }, [alerts]);
+  const currentAlert = useMemo(() => alerts[0] ?? null, [alerts]);
 
   useEffect(() => {
     if (!shouldOpen || !currentAlert) return;
 
-    const prevOverflow = document.body.style.overflow;
+    const prevHtmlOverflow = document.documentElement.style.overflow;
+    const prevBodyOverflow = document.body.style.overflow;
+    const prevBodyPosition = document.body.style.position;
+    const prevBodyWidth = document.body.style.width;
+    const prevBodyTouchAction = document.body.style.touchAction;
+    const scrollY = window.scrollY;
+
+    document.documentElement.style.overflow = "hidden";
     document.body.style.overflow = "hidden";
+    document.body.style.position = "fixed";
+    document.body.style.width = "100%";
+    document.body.style.touchAction = "none";
+    document.body.style.top = `-${scrollY}px`;
 
     const handleKey = (e: KeyboardEvent): void => {
-      if (e.key === "Escape") {
-        onCloseOne(currentAlert.id);
-      }
+      if (e.key === "Escape") onCloseOne(currentAlert.id);
     };
 
     window.addEventListener("keydown", handleKey);
 
     return () => {
-      document.body.style.overflow = prevOverflow;
       window.removeEventListener("keydown", handleKey);
+      document.documentElement.style.overflow = prevHtmlOverflow;
+      document.body.style.overflow = prevBodyOverflow;
+      document.body.style.position = prevBodyPosition;
+      document.body.style.width = prevBodyWidth;
+      document.body.style.touchAction = prevBodyTouchAction;
+      const top = document.body.style.top;
+      document.body.style.top = "";
+      const restoreY = top ? Math.abs(parseInt(top, 10)) : scrollY;
+      window.scrollTo(0, restoreY);
     };
   }, [shouldOpen, currentAlert, onCloseOne]);
 
@@ -78,8 +93,11 @@ const AddOnCodeAlertModal: React.FC<Props> = ({
   const a = currentAlert;
 
   return createPortal(
-    <div className="addon-alert-overlay">
-      <div className="addon-alert-wrapper">
+    <div className="addon-alert-overlay" onMouseDown={() => onCloseOne(a.id)}>
+      <div
+        className="addon-alert-center-anchor"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
         <div
           className={`addon-alert-card ${
             a.mode === "consignment"

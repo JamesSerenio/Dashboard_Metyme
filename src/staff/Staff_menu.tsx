@@ -93,6 +93,7 @@ type FoodNotifRow = {
   total: number;
   is_read: boolean;
   read_at: string | null;
+  booking_code: string;
 };
 
 type LooseRecord = Record<string, unknown>;
@@ -157,6 +158,8 @@ const Staff_menu: React.FC = () => {
 
   const foodRefreshTimerRef = useRef<number | null>(null);
   const foodSuspendRefreshRef = useRef<boolean>(false);
+
+  const phoneCacheRef = useRef<Map<string, string>>(new Map());
 
   useEffect(() => {
     notifOpenRef.current = notifOpen;
@@ -231,6 +234,94 @@ const Staff_menu: React.FC = () => {
     return 0;
   };
 
+  const buildPhoneCacheKey = (
+    bookingCode: string,
+    fullName: string,
+    seatNumber: string
+  ): string => {
+    return [
+      bookingCode.trim().toLowerCase(),
+      fullName.trim().toLowerCase(),
+      seatNumber.trim().toLowerCase(),
+    ].join("|");
+  };
+
+  const resolvePhoneNumber = async (
+    bookingCode: string,
+    fullName: string,
+    seatNumber: string
+  ): Promise<string> => {
+    const cacheKey = buildPhoneCacheKey(bookingCode, fullName, seatNumber);
+    const cached = phoneCacheRef.current.get(cacheKey);
+    if (cached) return cached;
+
+    const cleanBookingCode = bookingCode.trim();
+    const cleanFullName = fullName.trim();
+    const cleanSeatNumber = seatNumber.trim();
+
+    if (cleanBookingCode) {
+      const { data: sessionByCode } = await supabase
+        .from("customer_sessions")
+        .select("phone_number")
+        .eq("booking_code", cleanBookingCode)
+        .limit(1)
+        .maybeSingle();
+
+      const sessionPhone = toText(sessionByCode?.phone_number);
+      if (sessionPhone) {
+        phoneCacheRef.current.set(cacheKey, sessionPhone);
+        return sessionPhone;
+      }
+
+      const { data: promoByCode } = await supabase
+        .from("promo_bookings")
+        .select("phone_number")
+        .eq("promo_code", cleanBookingCode)
+        .limit(1)
+        .maybeSingle();
+
+      const promoPhone = toText(promoByCode?.phone_number);
+      if (promoPhone) {
+        phoneCacheRef.current.set(cacheKey, promoPhone);
+        return promoPhone;
+      }
+    }
+
+    if (cleanFullName && cleanSeatNumber) {
+      const { data: sessionByNameSeat } = await supabase
+        .from("customer_sessions")
+        .select("phone_number, created_at")
+        .eq("full_name", cleanFullName)
+        .eq("seat_number", cleanSeatNumber)
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      const sessionPhone = toText(sessionByNameSeat?.[0]?.phone_number);
+      if (sessionPhone) {
+        phoneCacheRef.current.set(cacheKey, sessionPhone);
+        return sessionPhone;
+      }
+    }
+
+    if (cleanFullName) {
+      const { data: promoByName } = await supabase
+        .from("promo_bookings")
+        .select("phone_number, created_at")
+        .eq("full_name", cleanFullName)
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      const promoPhone = toText(promoByName?.[0]?.phone_number);
+      if (promoPhone) {
+        phoneCacheRef.current.set(cacheKey, promoPhone);
+        return promoPhone;
+      }
+    }
+
+    phoneCacheRef.current.set(cacheKey, "");
+    return "";
+  };
+
   const mapAddOnNotifRow = (row: LooseRecord): FoodNotifRow => {
     return {
       id: `addon-${toText(row.id) || crypto.randomUUID()}`,
@@ -258,6 +349,7 @@ const Staff_menu: React.FC = () => {
       total: pickNumber(row, ["total", "total_amount", "amount", "subtotal"]),
       is_read: Boolean(row.is_read),
       read_at: toText(row.read_at) || null,
+      booking_code: pickText(row, ["booking_code", "code", "promo_code"]),
     };
   };
 
@@ -286,7 +378,31 @@ const Staff_menu: React.FC = () => {
       total: pickNumber(row, ["total", "total_amount", "amount", "subtotal"]),
       is_read: Boolean(row.is_read),
       read_at: toText(row.read_at) || null,
+      booking_code: pickText(row, ["booking_code", "code", "promo_code"]),
     };
+  };
+
+  const enrichFoodPhoneNumbers = async (
+    items: FoodNotifRow[]
+  ): Promise<FoodNotifRow[]> => {
+    const next = await Promise.all(
+      items.map(async (item) => {
+        if (item.phone_number?.trim()) return item;
+
+        const resolvedPhone = await resolvePhoneNumber(
+          item.booking_code,
+          item.full_name,
+          item.seat_number
+        );
+
+        return {
+          ...item,
+          phone_number: resolvedPhone || "",
+        };
+      })
+    );
+
+    return next;
   };
 
   const normalizeType = (value: string | null | undefined): string => {
@@ -518,8 +634,6 @@ const Staff_menu: React.FC = () => {
         .limit(50),
     ]);
 
-    setFoodNotifLoading(false);
-
     if (addonRes.error) {
       console.warn("fetch add_on_notifications:", addonRes.error.message);
     }
@@ -543,7 +657,9 @@ const Staff_menu: React.FC = () => {
         new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
 
-    setFoodNotifItems(merged.slice(0, 100));
+    const enriched = await enrichFoodPhoneNumbers(merged.slice(0, 100));
+    setFoodNotifItems(enriched);
+    setFoodNotifLoading(false);
   };
 
   const markAllFoodAsReadSilent = async (): Promise<void> => {
@@ -765,9 +881,18 @@ const Staff_menu: React.FC = () => {
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: ADDON_NOTIF_TABLE },
-        (payload: unknown) => {
+        async (payload: unknown) => {
           const raw = (payload as RealtimeInsertPayload<LooseRecord>).new;
-          const row = mapAddOnNotifRow(raw);
+          let row = mapAddOnNotifRow(raw);
+
+          if (!row.phone_number) {
+            const resolvedPhone = await resolvePhoneNumber(
+              row.booking_code,
+              row.full_name,
+              row.seat_number
+            );
+            row = { ...row, phone_number: resolvedPhone || "" };
+          }
 
           setFoodNotifItems((prev) => {
             if (prev.some((x) => x.id === row.id)) return prev;
@@ -790,9 +915,18 @@ const Staff_menu: React.FC = () => {
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: ADDON_NOTIF_TABLE },
-        (payload: unknown) => {
+        async (payload: unknown) => {
           const p = payload as RealtimeUpdatePayload<LooseRecord>;
-          const newRow = mapAddOnNotifRow(p.new as LooseRecord);
+          let newRow = mapAddOnNotifRow(p.new as LooseRecord);
+
+          if (!newRow.phone_number) {
+            const resolvedPhone = await resolvePhoneNumber(
+              newRow.booking_code,
+              newRow.full_name,
+              newRow.seat_number
+            );
+            newRow = { ...newRow, phone_number: resolvedPhone || "" };
+          }
 
           setFoodNotifItems((prev) => {
             const idx = prev.findIndex((x) => x.id === newRow.id);
@@ -834,9 +968,18 @@ const Staff_menu: React.FC = () => {
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: CONSIGNMENT_NOTIF_TABLE },
-        (payload: unknown) => {
+        async (payload: unknown) => {
           const raw = (payload as RealtimeInsertPayload<LooseRecord>).new;
-          const row = mapConsignmentNotifRow(raw);
+          let row = mapConsignmentNotifRow(raw);
+
+          if (!row.phone_number) {
+            const resolvedPhone = await resolvePhoneNumber(
+              row.booking_code,
+              row.full_name,
+              row.seat_number
+            );
+            row = { ...row, phone_number: resolvedPhone || "" };
+          }
 
           setFoodNotifItems((prev) => {
             if (prev.some((x) => x.id === row.id)) return prev;
@@ -859,9 +1002,18 @@ const Staff_menu: React.FC = () => {
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: CONSIGNMENT_NOTIF_TABLE },
-        (payload: unknown) => {
+        async (payload: unknown) => {
           const p = payload as RealtimeUpdatePayload<LooseRecord>;
-          const newRow = mapConsignmentNotifRow(p.new as LooseRecord);
+          let newRow = mapConsignmentNotifRow(p.new as LooseRecord);
+
+          if (!newRow.phone_number) {
+            const resolvedPhone = await resolvePhoneNumber(
+              newRow.booking_code,
+              newRow.full_name,
+              newRow.seat_number
+            );
+            newRow = { ...newRow, phone_number: resolvedPhone || "" };
+          }
 
           setFoodNotifItems((prev) => {
             const idx = prev.findIndex((x) => x.id === newRow.id);

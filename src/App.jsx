@@ -30,7 +30,11 @@ const seatText = (seat) => {
   return seat ?? "";
 };
 
-const asString = (value) => (typeof value === "string" ? value : "");
+const asString = (value) => {
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number") return String(value);
+  return "";
+};
 
 const toNum = (value) => {
   const n = typeof value === "number" ? value : Number(value);
@@ -40,14 +44,12 @@ const toNum = (value) => {
 const getRoleLocal = () =>
   (localStorage.getItem("role") || "").toLowerCase();
 
-const firstObj = (value) => {
-  if (!value) return null;
-  if (Array.isArray(value)) return value[0] ?? null;
-  return value;
-};
+const getModeLabel = (mode) =>
+  mode === "consignment" ? "consignment" : "add_ons";
 
-const sleep = (ms) =>
-  new Promise((resolve) => window.setTimeout(resolve, ms));
+
+const makeLookupKey = (fullName, seatNumber) =>
+  `${asString(fullName).toLowerCase()}|${asString(seatNumber).toLowerCase()}`;
 
 const AppRoutes = () => {
   const location = useLocation();
@@ -78,8 +80,8 @@ const AppRoutes = () => {
   const sessionsRef = useRef(new Map());
   const promosRef = useRef(new Map());
 
-  const fetchedOrderAlertIdsRef = useRef(new Set());
-  const fetchedCodeAlertIdsRef = useRef(new Set());
+  const fetchedNotificationIdsRef = useRef(new Set());
+  const resolvedMetaCacheRef = useRef(new Map());
 
   const resetAllAlertState = useCallback(() => {
     setShowTimeAlert(false);
@@ -90,8 +92,8 @@ const AppRoutes = () => {
     triggeredRef.current.clear();
     sessionsRef.current.clear();
     promosRef.current.clear();
-    fetchedOrderAlertIdsRef.current.clear();
-    fetchedCodeAlertIdsRef.current.clear();
+    fetchedNotificationIdsRef.current.clear();
+    resolvedMetaCacheRef.current.clear();
   }, []);
 
   const syncRoleFromSupabase = useCallback(async () => {
@@ -182,176 +184,157 @@ const AppRoutes = () => {
     [addAlert]
   );
 
-  const buildAddOnLines = useCallback((rows) => {
-    return (rows ?? [])
-      .map((row) => {
-        const catalog = firstObj(row.add_ons);
-        return {
-          name: asString(catalog?.name).trim() || "Order Item",
-          quantity: Math.max(1, Math.floor(toNum(row.quantity))),
-          size: asString(catalog?.size).trim() || "-",
-          image_url: catalog?.image_url ?? null,
+  const resolveCustomerMeta = useCallback(async (fullName, seatNumber) => {
+    const key = makeLookupKey(fullName, seatNumber);
+    if (resolvedMetaCacheRef.current.has(key)) {
+      return resolvedMetaCacheRef.current.get(key);
+    }
+
+    const now = Date.now();
+    const cleanSeat = asString(seatNumber);
+    const cleanName = asString(fullName);
+
+    let resolved = {
+      phone_number: "",
+      booking_code: "",
+    };
+
+    try {
+      const sessionQuery = supabase
+        .from("customer_sessions")
+        .select(
+          "id, full_name, seat_number, phone_number, booking_code, time_started, time_ended, created_at"
+        )
+        .eq("full_name", cleanName)
+        .order("created_at", { ascending: false })
+        .limit(10);
+
+      const sessionRes =
+        cleanSeat && cleanSeat !== "CONFERENCE ROOM"
+          ? await sessionQuery.eq("seat_number", cleanSeat)
+          : await sessionQuery;
+
+      if (!sessionRes.error && Array.isArray(sessionRes.data) && sessionRes.data.length > 0) {
+        const activeSession =
+          sessionRes.data.find((row) => {
+            const start = new Date(row.time_started).getTime();
+            const end = row.time_ended ? new Date(row.time_ended).getTime() : Infinity;
+            return Number.isFinite(start) && now >= start && now < end;
+          }) ?? sessionRes.data[0];
+
+        resolved = {
+          phone_number: asString(activeSession.phone_number),
+          booking_code: asString(activeSession.booking_code),
         };
-      })
-      .filter((line) => line.name.trim().length > 0);
-  }, []);
-
-  const buildConsignmentLines = useCallback((rows) => {
-    return (rows ?? [])
-      .map((row) => {
-        const catalog = firstObj(row.consignment);
-        return {
-          name: asString(catalog?.item_name).trim() || "Other Item",
-          quantity: Math.max(1, Math.floor(toNum(row.quantity))),
-          size: asString(catalog?.size).trim() || "-",
-          image_url: catalog?.image_url ?? null,
-        };
-      })
-      .filter((line) => line.name.trim().length > 0);
-  }, []);
-
-  const fetchAddOnOrderAlert = useCallback(
-    async (orderId) => {
-      const orderKey = `add_ons-${orderId}`;
-      const codeKey = `add_ons-code-${orderId}`;
-
-      if (fetchedOrderAlertIdsRef.current.has(orderKey)) return;
-      fetchedOrderAlertIdsRef.current.add(orderKey);
-
-      for (let attempt = 0; attempt < 8; attempt += 1) {
-        const { data, error } = await supabase
-          .from("addon_orders")
-          .select(`
-            id,
-            full_name,
-            phone_number,
-            seat_number,
-            booking_code,
-            created_at,
-            addon_order_items (
-              quantity,
-              add_ons (
-                name,
-                size,
-                image_url
-              )
-            )
-          `)
-          .eq("id", orderId)
-          .maybeSingle();
-
-        if (!error && data?.id) {
-          const lines = buildAddOnLines(data.addon_order_items);
-
-          if (lines.length > 0) {
-            addOrderAlert({
-              key: orderKey,
-              kind: "add_ons",
-              id: data.id,
-              full_name: asString(data.full_name).trim() || "Unknown Customer",
-              seat_number: asString(data.seat_number).trim() || "-",
-              created_at: asString(data.created_at),
-              lines,
-            });
-
-            if (!fetchedCodeAlertIdsRef.current.has(codeKey)) {
-              fetchedCodeAlertIdsRef.current.add(codeKey);
-
-              addCodeAlert({
-                id: codeKey,
-                full_name: asString(data.full_name).trim() || "Unknown Customer",
-                phone_number: asString(data.phone_number).trim() || "-",
-                seat_number: asString(data.seat_number).trim() || "-",
-                booking_code: asString(data.booking_code).trim() || "-",
-                order_text: lines
-                  .map((line) => `${line.name} x${line.quantity}`)
-                  .join(", "),
-                mode: "add_ons",
-              });
-            }
-
-            return;
-          }
-        }
-
-        await sleep(250);
       }
 
-      fetchedOrderAlertIdsRef.current.delete(orderKey);
-    },
-    [addCodeAlert, addOrderAlert, buildAddOnLines]
-  );
+      if (!resolved.phone_number || !resolved.booking_code) {
+        let promoRes;
 
-  const fetchConsignmentOrderAlert = useCallback(
-    async (orderId) => {
-      const orderKey = `consignment-${orderId}`;
-      const codeKey = `consignment-code-${orderId}`;
-
-      if (fetchedOrderAlertIdsRef.current.has(orderKey)) return;
-      fetchedOrderAlertIdsRef.current.add(orderKey);
-
-      for (let attempt = 0; attempt < 8; attempt += 1) {
-        const { data, error } = await supabase
-          .from("consignment_orders")
-          .select(`
-            id,
-            full_name,
-            phone_number,
-            seat_number,
-            booking_code,
-            created_at,
-            consignment_order_items (
-              quantity,
-              consignment (
-                item_name,
-                size,
-                image_url
-              )
+        if (cleanSeat === "CONFERENCE ROOM") {
+          promoRes = await supabase
+            .from("promo_bookings")
+            .select(
+              "id, full_name, phone_number, promo_code, area, seat_number, start_at, end_at, created_at"
             )
-          `)
-          .eq("id", orderId)
-          .maybeSingle();
-
-        if (!error && data?.id) {
-          const lines = buildConsignmentLines(data.consignment_order_items);
-
-          if (lines.length > 0) {
-            addOrderAlert({
-              key: orderKey,
-              kind: "consignment",
-              id: data.id,
-              full_name: asString(data.full_name).trim() || "Unknown Customer",
-              seat_number: asString(data.seat_number).trim() || "-",
-              created_at: asString(data.created_at),
-              lines,
-            });
-
-            if (!fetchedCodeAlertIdsRef.current.has(codeKey)) {
-              fetchedCodeAlertIdsRef.current.add(codeKey);
-
-              addCodeAlert({
-                id: codeKey,
-                full_name: asString(data.full_name).trim() || "Unknown Customer",
-                phone_number: asString(data.phone_number).trim() || "-",
-                seat_number: asString(data.seat_number).trim() || "-",
-                booking_code: asString(data.booking_code).trim() || "-",
-                order_text: lines
-                  .map((line) => `${line.name} x${line.quantity}`)
-                  .join(", "),
-                mode: "consignment",
-              });
-            }
-
-            return;
-          }
+            .eq("full_name", cleanName)
+            .eq("area", "conference_room")
+            .order("created_at", { ascending: false })
+            .limit(10);
+        } else {
+          promoRes = await supabase
+            .from("promo_bookings")
+            .select(
+              "id, full_name, phone_number, promo_code, area, seat_number, start_at, end_at, created_at"
+            )
+            .eq("full_name", cleanName)
+            .eq("area", "common_area")
+            .eq("seat_number", cleanSeat)
+            .order("created_at", { ascending: false })
+            .limit(10);
         }
 
-        await sleep(250);
-      }
+        if (!promoRes.error && Array.isArray(promoRes.data) && promoRes.data.length > 0) {
+          const activePromo =
+            promoRes.data.find((row) => {
+              const start = new Date(row.start_at).getTime();
+              const end = new Date(row.end_at).getTime();
+              return Number.isFinite(start) && Number.isFinite(end) && now >= start && now < end;
+            }) ?? promoRes.data[0];
 
-      fetchedOrderAlertIdsRef.current.delete(orderKey);
+          resolved = {
+            phone_number: resolved.phone_number || asString(activePromo.phone_number),
+            booking_code: resolved.booking_code || asString(activePromo.promo_code),
+          };
+        }
+      }
+    } catch (error) {
+      console.warn("resolveCustomerMeta failed:", error);
+    }
+
+    resolvedMetaCacheRef.current.set(key, resolved);
+    return resolved;
+  }, []);
+
+  const buildOrderTextFromNotif = useCallback((row, mode) => {
+    const name =
+      mode === "consignment"
+        ? asString(row.consignment_name || row.item_name || row.product_name || row.name)
+        : asString(
+            row.add_on_name ||
+              row.addon_name ||
+              row.item_name ||
+              row.product_name ||
+              row.food_name ||
+              row.name_of_addon
+          );
+
+    const qty = Math.max(1, Math.floor(toNum(row.quantity || row.qty || 1)));
+    return `${name || (mode === "consignment" ? "Other Item" : "Add-On")} x${qty}`;
+  }, []);
+
+  const handleIncomingFoodNotification = useCallback(
+    async (raw, mode) => {
+      const notifId = `${getModeLabel(mode)}-${asString(raw.id)}`;
+      if (!asString(raw.id)) return;
+      if (fetchedNotificationIdsRef.current.has(notifId)) return;
+      fetchedNotificationIdsRef.current.add(notifId);
+
+      const full_name = asString(
+        raw.full_name || raw.name || raw.customer_name || raw.customer
+      );
+      const seat_number = asString(raw.seat_number || raw.seat || raw.table_no);
+      const order_text = buildOrderTextFromNotif(raw, mode);
+      const created_at = asString(raw.created_at) || new Date().toISOString();
+
+      const meta = await resolveCustomerMeta(full_name, seat_number);
+
+      addOrderAlert({
+        key: notifId,
+        kind: mode,
+        id: asString(raw.id),
+        full_name: full_name || "Unknown Customer",
+        seat_number: seat_number || "-",
+        created_at,
+        lines: [
+          {
+            name: order_text.replace(/\sx\d+$/, ""),
+            quantity: Math.max(1, Math.floor(toNum(raw.quantity || raw.qty || 1))),
+          },
+        ],
+      });
+
+      addCodeAlert({
+        id: notifId,
+        full_name: full_name || "Unknown Customer",
+        phone_number: meta.phone_number || "-",
+        seat_number: seat_number || "-",
+        booking_code: meta.booking_code || "-",
+        order_text,
+        mode,
+      });
     },
-    [addCodeAlert, addOrderAlert, buildConsignmentLines]
+    [addCodeAlert, addOrderAlert, buildOrderTextFromNotif, resolveCustomerMeta]
   );
 
   const tickCheckAll = useCallback(() => {
@@ -510,28 +493,28 @@ const AppRoutes = () => {
       )
       .subscribe();
 
-    const chAddOnOrders = supabase
-      .channel("rt_addon_orders_alerts")
+    const chAddonNotif = supabase
+      .channel("rt_add_on_notifications_code_alerts")
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "addon_orders" },
+        { event: "INSERT", schema: "public", table: "add_on_notifications" },
         (payload) => {
           const row = payload.new;
           if (!row?.id) return;
-          fetchAddOnOrderAlert(row.id);
+          void handleIncomingFoodNotification(row, "add_ons");
         }
       )
       .subscribe();
 
-    const chConsignmentOrders = supabase
-      .channel("rt_consignment_orders_alerts")
+    const chConsignmentNotif = supabase
+      .channel("rt_consignment_notifications_code_alerts")
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "consignment_orders" },
+        { event: "INSERT", schema: "public", table: "consignment_notifications" },
         (payload) => {
           const row = payload.new;
           if (!row?.id) return;
-          fetchConsignmentOrderAlert(row.id);
+          void handleIncomingFoodNotification(row, "consignment");
         }
       )
       .subscribe();
@@ -559,13 +542,12 @@ const AppRoutes = () => {
 
       supabase.removeChannel(chSessions);
       supabase.removeChannel(chPromos);
-      supabase.removeChannel(chAddOnOrders);
-      supabase.removeChannel(chConsignmentOrders);
+      supabase.removeChannel(chAddonNotif);
+      supabase.removeChannel(chConsignmentNotif);
     };
   }, [
+    handleIncomingFoodNotification,
     isStaffOrAdmin,
-    fetchAddOnOrderAlert,
-    fetchConsignmentOrderAlert,
     loadActiveCustomerSessions,
     loadActivePromos,
     resetAllAlertState,
