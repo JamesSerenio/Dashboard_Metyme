@@ -1121,7 +1121,7 @@ const Staff_menu: React.FC = () => {
 
   const menuItems = useMemo<MenuItem[]>(
     () => [
-      { name: "Dashboard", key: "dashboard", icon: dashboardIcon },
+      { name: "Seat Layout", key: "dashboard", icon: dashboardIcon },
       { name: "Customer Lists", key: "customer_lists", icon: listIcon },
       {
         name: "Customer Reservations",
