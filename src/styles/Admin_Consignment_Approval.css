@@ -33,7 +33,7 @@
 
 .aca-shell {
   width: 100%;
-  max-width: 1320px;
+  max-width: 1380px;
   margin: 0 auto;
 }
 
@@ -63,6 +63,90 @@
   font-weight: 700;
 }
 
+.aca-toolbar-panel {
+  background: rgba(247, 242, 234, 0.96);
+  border: 1px solid var(--aca-stroke);
+  border-radius: var(--aca-radius-xl);
+  box-shadow: var(--aca-shadow);
+  padding: 18px;
+  margin-bottom: 18px;
+  display: grid;
+  gap: 16px;
+  animation: acaFadeUp 0.5s ease;
+}
+
+.aca-search-wrap {
+  display: flex;
+}
+
+.aca-search-input {
+  width: 100%;
+  min-height: 52px;
+  border: 1px solid rgba(132, 104, 71, 0.18);
+  background: #fffdf9;
+  color: var(--aca-text);
+  border-radius: 18px;
+  padding: 0 16px;
+  outline: none;
+  font-size: 15px;
+  font-weight: 700;
+  font-family: inherit;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.aca-search-input:focus {
+  border-color: rgba(157, 119, 59, 0.55);
+  box-shadow: 0 0 0 4px rgba(184, 134, 49, 0.12);
+}
+
+.aca-filter-groups {
+  display: grid;
+  gap: 14px;
+}
+
+.aca-filter-block {
+  display: grid;
+  gap: 10px;
+}
+
+.aca-filter-label {
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #8a663d;
+}
+
+.aca-pill-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.aca-pill {
+  border: none;
+  cursor: pointer;
+  min-height: 42px;
+  padding: 0 16px;
+  border-radius: 999px;
+  background: rgba(255, 253, 249, 0.9);
+  color: #8a6a4d;
+  font-size: 13px;
+  font-weight: 900;
+  box-shadow: var(--aca-shadow-soft);
+  transition: transform 0.18s ease, filter 0.18s ease, background 0.18s ease, color 0.18s ease;
+}
+
+.aca-pill:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.02);
+}
+
+.aca-pill.is-active {
+  background: linear-gradient(180deg, #5a2b15 0%, #35180d 100%);
+  color: #fff7ef;
+}
+
 .aca-section {
   background: rgba(247, 242, 234, 0.96);
   border: 1px solid var(--aca-stroke);
@@ -74,7 +158,7 @@
 }
 
 .aca-history-section {
-  margin-bottom: 0;
+  margin-bottom: 18px;
 }
 
 .aca-section-head {
@@ -169,6 +253,10 @@
   box-shadow: 0 18px 36px rgba(68, 42, 18, 0.12);
 }
 
+.aca-card-action {
+  background: linear-gradient(180deg, rgba(255, 253, 249, 0.95) 0%, rgba(250, 244, 235, 0.92) 100%);
+}
+
 .aca-card-grid {
   display: grid;
   grid-template-columns: 170px 1fr;
@@ -209,15 +297,52 @@
 }
 
 .aca-item-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
   font-size: 26px;
   font-weight: 900;
   color: #35180d;
   line-height: 1.05;
 }
 
+.aca-action-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.aca-action-cashout {
+  background: linear-gradient(180deg, #f6e5c9 0%, #e6c998 100%);
+  color: #7b4e10;
+}
+
+.aca-action-return_expired {
+  background: linear-gradient(180deg, #f3ddd3 0%, #e7b4a0 100%);
+  color: #8b3f24;
+}
+
+.aca-action-restock {
+  background: linear-gradient(180deg, #dff0da 0%, #b7ddb0 100%);
+  color: #2c6b2d;
+}
+
+.aca-action-delete {
+  background: linear-gradient(180deg, #f2c8d1 0%, #e999ad 100%);
+  color: #8f1f45;
+}
+
 .aca-info-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -302,6 +427,11 @@
   margin-bottom: 14px;
 }
 
+.aca-history-toolbar-bottom {
+  margin-top: 14px;
+  justify-content: flex-end;
+}
+
 .aca-segment {
   display: inline-flex;
   align-items: center;
@@ -345,7 +475,7 @@
 
 .aca-table {
   width: 100%;
-  min-width: 1100px;
+  min-width: 1240px;
   border-collapse: separate;
   border-spacing: 0;
 }
@@ -450,6 +580,12 @@
   }
 }
 
+@media (max-width: 1180px) {
+  .aca-info-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 980px) {
   .aca-card-grid {
     grid-template-columns: 1fr;
@@ -457,10 +593,6 @@
 
   .aca-image-wrap {
     max-width: 220px;
-  }
-
-  .aca-info-grid {
-    grid-template-columns: 1fr 1fr;
   }
 
   .aca-history-toolbar {
@@ -485,6 +617,7 @@
   }
 
   .aca-head,
+  .aca-toolbar-panel,
   .aca-section {
     border-radius: 22px;
     padding: 16px;
