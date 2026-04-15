@@ -1769,26 +1769,20 @@ const Customer_Promo_List: React.FC = () => {
         </section>
 
         <section className="cpl-stats">
-          <div className="cpl-stat-box">
-            <span>Total Rows</span>
-            <strong>{totalRows}</strong>
-          </div>
-          <div className="cpl-stat-box">
-            <span>Paid</span>
-            <strong>{paidRows}</strong>
-          </div>
-          <div className="cpl-stat-box">
-            <span>Unpaid</span>
-            <strong>{unpaidRows}</strong>
-          </div>
-          <div className="cpl-stat-box">
-            <span>System Total</span>
-            <strong>₱{systemTotal.toFixed(2)}</strong>
-          </div>
-          <div className="cpl-stat-box">
-            <span>Orders Total</span>
-            <strong>₱{ordersTotal.toFixed(2)}</strong>
-          </div>
+        <div className="cpl-stat-box">
+          <span>Total Customers</span>
+          <strong>{totalRows}</strong>
+        </div>
+
+        <div className="cpl-stat-box">
+          <span>Paid</span>
+          <strong>{paidRows}</strong>
+        </div>
+
+        <div className="cpl-stat-box">
+          <span>Unpaid</span>
+          <strong>{unpaidRows}</strong>
+        </div>
         </section>
 
         <section className="cpl-table-wrap">
