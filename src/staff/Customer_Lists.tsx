@@ -1324,19 +1324,31 @@ const Customer_Lists: React.FC = () => {
         ? existingOrderRow?.paid_at ?? new Date().toISOString()
         : null;
 
-    const { error: payErr } = await supabase.rpc("pay_addon_order_by_booking_code", {
-      p_booking_code: bookingCode,
-      p_full_name: orderPaymentTarget.full_name,
-      p_seat_number: orderPaymentTarget.seat_number || "N/A",
-      p_order_total: due,
-      p_gcash_amount: gcash,
-      p_cash_amount: cash,
-    });
+      // 👉 ADD THIS (both addon + consignment)
+      const addonRes = await supabase.rpc("pay_addon_order_by_booking_code", {
+        p_booking_code: bookingCode,
+        p_full_name: orderPaymentTarget.full_name,
+        p_seat_number: orderPaymentTarget.seat_number || "N/A",
+        p_order_total: due,
+        p_gcash_amount: gcash,
+        p_cash_amount: cash,
+      });
 
-    if (payErr) {
-      alert(`Save order payment error: ${payErr.message}`);
-      return;
-    }
+      const consignmentRes = await supabase.rpc("pay_consignment_order_by_booking_code", {
+        p_booking_code: bookingCode,
+        p_full_name: orderPaymentTarget.full_name,
+        p_seat_number: orderPaymentTarget.seat_number || "N/A",
+        p_order_total: due,
+        p_gcash_amount: gcash,
+        p_cash_amount: cash,
+      });
+
+      // 👉 FIX ERROR HANDLING
+      if (addonRes.error && consignmentRes.error) {
+        alert(`Payment error: ${addonRes.error.message || consignmentRes.error.message}`);
+        return;
+      }
+
 
     const { data: paymentRow, error: refetchErr } = await supabase
       .from("customer_order_payments")
@@ -1602,24 +1614,45 @@ const Customer_Lists: React.FC = () => {
           stock_returned: true,
         };
 
-        const { error: insertErr } = await supabase
-          .from("consignment_cancelled")
-          .insert(consignmentPayload);
+      const { error: insertErr } = await supabase
+        .from("consignment_cancelled")
+        .insert(consignmentPayload);
 
-        if (insertErr) {
-          alert(`Cancel consignment failed: ${insertErr.message}`);
-          return;
-        }
+      if (insertErr) {
+        alert(`Cancel consignment failed: ${insertErr.message}`);
+        return;
+      }
 
-        const { error: deleteErr } = await supabase
-          .from("consignment_order_items")
-          .delete()
-          .eq("id", item.id);
+      let legacyConsignmentDelete = supabase
+        .from("customer_session_consignment")
+        .delete()
+        .eq("consignment_id", item.source_item_id)
+        .eq("full_name", session.full_name);
 
-        if (deleteErr) {
-          alert(`Cancelled copy saved, but item delete failed: ${deleteErr.message}`);
-          return;
-        }
+      if (item.created_at) {
+        legacyConsignmentDelete = legacyConsignmentDelete.eq("created_at", item.created_at);
+      }
+
+      const { error: legacyConsignmentDeleteErr } = await legacyConsignmentDelete;
+
+      if (legacyConsignmentDeleteErr) {
+        alert(`Legacy consignment delete failed: ${legacyConsignmentDeleteErr.message}`);
+        return;
+      }
+
+      const { error: deleteErr } = await supabase
+        .from("consignment_order_items")
+        .delete()
+        .eq("id", item.id);
+
+      if (deleteErr) {
+        alert(`Cancelled copy saved, but item delete failed: ${deleteErr.message}`);
+        return;
+      }
+
+      await recalcConsignmentParentAfterDelete(item.parent_order_id);
+      await refreshOrderPaymentTotalForSession(session);
+      await fetchOrdersForSessions(await fetchCustomerSessions());
 
         const { data: conRow, error: conFetchErr } = await supabase
           .from("consignment")

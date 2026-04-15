@@ -250,6 +250,11 @@ const Staff_Consignment_Record: React.FC = () => {
   const [restockNote, setRestockNote] = useState<string>("");
   const [savingRestock, setSavingRestock] = useState<boolean>(false);
 
+  const [returnTarget, setReturnTarget] = useState<ConsignmentRow | null>(null);
+  const [returnQty, setReturnQty] = useState<string>("");
+  const [returnNote, setReturnNote] = useState<string>("");
+  const [savingReturn, setSavingReturn] = useState<boolean>(false);
+
   const [deleteTarget, setDeleteTarget] = useState<ConsignmentRow | null>(null);
   const [deleting, setDeleting] = useState<boolean>(false);
 
@@ -539,18 +544,28 @@ const Staff_Consignment_Record: React.FC = () => {
           }
         }
       } else {
-        const { error } = await supabase.rpc("cashout_consignment_oversale", {
-          p_full_name: cashoutTargetLabel,
-          p_cash_amount: cash,
-          p_gcash_amount: gcash,
-          p_note: note,
-        });
+      const targetRow = salesRows.find(
+        (row) => norm(show(row.full_name, "-")) === cashoutTargetKey
+      );
 
-        if (error) {
-          alert(`Cash out error: ${error.message}`);
-          return;
-        }
+      if (!targetRow) {
+        alert("No matching consignment record found for this cash out.");
+        return;
       }
+
+      const { error } = await supabase.rpc("request_consignment_action", {
+        p_consignment_id: targetRow.id,
+        p_action_type: "cashout",
+        p_cash_amount: cash,
+        p_gcash_amount: gcash,
+        p_note: note,
+      });
+
+      if (error) {
+        alert(`Cash out error: ${error.message}`);
+        return;
+      }
+    }
 
       setCashoutTargetKey(null);
       setCashoutTargetLabel("");
@@ -648,11 +663,17 @@ const Staff_Consignment_Record: React.FC = () => {
     }
   };
 
-  const openRestock = (r: ConsignmentRow): void => {
-    setRestockTarget(r);
-    setRestockQty("");
-    setRestockNote("");
-  };
+    const openRestock = (r: ConsignmentRow): void => {
+      setRestockTarget(r);
+      setRestockQty("");
+      setRestockNote("");
+    };
+
+    const openReturnExpired = (r: ConsignmentRow): void => {
+      setReturnTarget(r);
+      setReturnQty("");
+      setReturnNote("");
+    };
 
   const saveRestock = async (): Promise<void> => {
     if (!restockTarget) return;
@@ -666,11 +687,12 @@ const Staff_Consignment_Record: React.FC = () => {
     try {
       setSavingRestock(true);
 
-      const { error } = await supabase.rpc("consignment_restock", {
-        p_consignment_id: restockTarget.id,
-        p_qty: addQty,
-        p_note: restockNote.trim() ? restockNote.trim() : null,
-      });
+    const { error } = await supabase.rpc("request_consignment_action", {
+      p_consignment_id: restockTarget.id,
+      p_action_type: "restock",
+      p_qty: addQty,
+      p_note: restockNote.trim() ? restockNote.trim() : null,
+    });
 
       if (error) {
         alert(`Restock failed: ${error.message}`);
@@ -686,7 +708,47 @@ const Staff_Consignment_Record: React.FC = () => {
     }
   };
 
-  const confirmDelete = (r: ConsignmentRow): void => setDeleteTarget(r);
+    const submitReturnExpired = async (): Promise<void> => {
+      if (!returnTarget) return;
+
+      const qty = Math.max(0, Math.floor(Number(returnQty) || 0));
+      if (qty <= 0) {
+        alert("Quantity must be greater than 0.");
+        return;
+      }
+
+      const currentStocks = Math.max(0, Math.floor(Number(returnTarget.stocks ?? 0) || 0));
+      if (qty > currentStocks) {
+        alert(`Return/Expired quantity cannot exceed current stock (${currentStocks}).`);
+        return;
+      }
+
+      try {
+        setSavingReturn(true);
+
+        const { error } = await supabase.rpc("request_consignment_action", {
+          p_consignment_id: returnTarget.id,
+          p_action_type: "return_expired",
+          p_qty: qty,
+          p_note: returnNote.trim() || null,
+        });
+
+        if (error) {
+          alert(`Request failed: ${error.message}`);
+          return;
+        }
+
+        alert("Return/Expired request submitted for admin approval.");
+        setReturnTarget(null);
+        setReturnQty("");
+        setReturnNote("");
+        await fetchAll();
+      } finally {
+        setSavingReturn(false);
+      }
+    };
+
+    const confirmDelete = (r: ConsignmentRow): void => setDeleteTarget(r);
 
   const doDelete = async (): Promise<void> => {
     if (!deleteTarget) return;
@@ -694,9 +756,11 @@ const Staff_Consignment_Record: React.FC = () => {
     try {
       setDeleting(true);
 
-      await deleteStorageByUrl(deleteTarget.image_url ?? null, CONSIGNMENT_BUCKET);
-
-      const { error } = await supabase.from("consignment").delete().eq("id", deleteTarget.id);
+      const { error } = await supabase.rpc("request_consignment_action", {
+        p_consignment_id: deleteTarget.id,
+        p_action_type: "delete",
+        p_note: "Delete request from staff",
+      });
 
       if (error) {
         alert(`Delete failed: ${error.message}`);
@@ -897,6 +961,9 @@ const Staff_Consignment_Record: React.FC = () => {
                             <div className="scr-action-stack">
                               <button className="scr-btn" onClick={() => openEdit(r)} type="button">
                                 Edit
+                              </button>
+                              <button className="scr-btn" onClick={() => openReturnExpired(r)} type="button">
+                                Returns/Expired
                               </button>
                               <button className="scr-btn" onClick={() => openRestock(r)} type="button">
                                 Restock
@@ -1285,6 +1352,57 @@ const Staff_Consignment_Record: React.FC = () => {
           </button>
           <button className="scr-btn scr-btn-danger" onClick={() => void doDelete()} disabled={deleting} type="button">
             {deleting ? "Deleting..." : "Delete"}
+          </button>
+        </div>
+      </CenterModal>
+            <CenterModal
+        open={!!returnTarget}
+        title="RETURNS / EXPIRED"
+        subtitle={
+          returnTarget
+            ? `${returnTarget.item_name} • Current Stock: ${Math.max(
+                0,
+                Math.floor(Number(returnTarget.stocks ?? 0) || 0)
+              )}`
+            : ""
+        }
+        onClose={() => (savingReturn ? null : setReturnTarget(null))}
+      >
+        <div className="scr-field">
+          <label>Qty</label>
+          <input
+            className="scr-input"
+            type="number"
+            min="1"
+            step="1"
+            value={returnQty}
+            onChange={(e) => setReturnQty(e.currentTarget.value)}
+            placeholder="0"
+            disabled={savingReturn}
+          />
+        </div>
+
+        <div className="scr-field">
+          <label>Note (optional)</label>
+          <textarea
+            className="scr-textarea"
+            value={returnNote}
+            onChange={(e) => setReturnNote(e.currentTarget.value)}
+            placeholder="Example: expired / returned to owner / damaged..."
+            disabled={savingReturn}
+          />
+        </div>
+
+        <div className="scr-footnote">
+          This will submit a request for admin approval. Stock will be reduced only after approval.
+        </div>
+
+        <div className="scr-modal-actions">
+          <button className="scr-btn" onClick={() => setReturnTarget(null)} disabled={savingReturn} type="button">
+            Close
+          </button>
+          <button className="scr-btn" onClick={() => void submitReturnExpired()} disabled={savingReturn} type="button">
+            {savingReturn ? "Saving..." : "Submit Request"}
           </button>
         </div>
       </CenterModal>
