@@ -1,9 +1,9 @@
 // src/pages/Admin_Customer_Add_ons.tsx
-// ✅ React version (no Ionic)
-// ✅ Plain premium UI
-// ✅ Strict TS
-// ✅ Existing logic preserved
-// ✅ FIXED: Payment + Receipt modals always centered using portal
+// Admin version
+// - Keeps: mode (day/week/month), delete by filter, export to excel
+// - Updated: table/payment/cancel/toggle logic copied from staff flow
+// - Strict TS
+// - React only (no Ionic)
 
 import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
@@ -30,6 +30,15 @@ interface CustomerSessionAddOnRow {
   cash_amount: NumericLike;
   is_paid: boolean | number | string | null;
   paid_at: string | null;
+  add_ons?: AddOnInfo | null;
+}
+
+interface AddOnInfo {
+  id: string;
+  name: string;
+  category: string;
+  size: string | null;
+  image_url?: string | null;
 }
 
 interface AddOnLookup {
@@ -75,6 +84,7 @@ type OrderGroup = {
   created_at: string;
   full_name: string;
   seat_number: string;
+  booking_code: string | null;
   items: OrderItem[];
   grand_total: number;
   gcash_amount: number;
@@ -94,7 +104,8 @@ const toNumber = (v: NumericLike | null | undefined): number => {
   return 0;
 };
 
-const round2 = (n: number): number => Number((Number.isFinite(n) ? n : 0).toFixed(2));
+const round2 = (n: number): number =>
+  Number((Number.isFinite(n) ? n : 0).toFixed(2));
 
 const toBool = (v: unknown): boolean => {
   if (typeof v === "boolean") return v;
@@ -113,14 +124,16 @@ const yyyyMmDdLocal = (d: Date): string => {
   return `${y}-${m}-${day}`;
 };
 
-const yyyyMmLocal = (d: Date): string => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
+const yyyyMmLocal = (d: Date): string =>
+  `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
 
 const ms = (iso: string): number => {
   const t = new Date(iso).getTime();
   return Number.isFinite(t) ? t : 0;
 };
 
-const norm = (s: string | null | undefined): string => (s ?? "").trim().toLowerCase();
+const norm = (s: string | null | undefined): string =>
+  (s ?? "").trim().toLowerCase();
 
 const moneyText = (n: number): string => `₱${round2(n).toFixed(2)}`;
 
@@ -138,10 +151,15 @@ const formatDateTime = (iso: string): string => {
 const formatTimeText = (iso: string): string => {
   const d = new Date(iso);
   if (!Number.isFinite(d.getTime())) return "";
-  return d.toLocaleTimeString("en-PH", { hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleTimeString("en-PH", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 };
 
-const manilaDayRange = (yyyyMmDd: string): { startIso: string; endIso: string } => {
+const manilaDayRange = (
+  yyyyMmDd: string
+): { startIso: string; endIso: string } => {
   const start = new Date(`${yyyyMmDd}T00:00:00+08:00`);
   const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
   return { startIso: start.toISOString(), endIso: end.toISOString() };
@@ -156,7 +174,9 @@ const startOfLocalDay = (d: Date): Date => {
 const addDays = (d: Date, days: number): Date =>
   new Date(d.getTime() + days * 24 * 60 * 60 * 1000);
 
-const getWeekRangeMonSun = (anchorYmd: string): { start: Date; endExclusive: Date } => {
+const getWeekRangeMonSun = (
+  anchorYmd: string
+): { start: Date; endExclusive: Date } => {
   const base = new Date(`${anchorYmd}T00:00:00`);
   const day = base.getDay();
   const diffToMon = day === 0 ? -6 : 1 - day;
@@ -165,7 +185,9 @@ const getWeekRangeMonSun = (anchorYmd: string): { start: Date; endExclusive: Dat
   return { start, endExclusive };
 };
 
-const getMonthRange = (anchorYmd: string): { start: Date; endExclusive: Date } => {
+const getMonthRange = (
+  anchorYmd: string
+): { start: Date; endExclusive: Date } => {
   const base = new Date(`${anchorYmd}T00:00:00`);
   const y = base.getFullYear();
   const m = base.getMonth();
@@ -221,7 +243,8 @@ const manilaRangeFromMode = (
 const GROUP_WINDOW_MS = 10_000;
 
 const samePersonSeat = (a: CustomerAddOnMerged, b: CustomerAddOnMerged): boolean =>
-  norm(a.full_name) === norm(b.full_name) && norm(a.seat_number) === norm(b.seat_number);
+  norm(a.full_name) === norm(b.full_name) &&
+  norm(a.seat_number) === norm(b.seat_number);
 
 const clamp = (n: number, minV: number, maxV: number): number =>
   Math.min(maxV, Math.max(minV, n));
@@ -256,9 +279,17 @@ const autoFitColumns = (
   }
 };
 
-const applyHeaderStyle = (row: ExcelJS.Row, startCol: number, endCol: number): void => {
+const applyHeaderStyle = (
+  row: ExcelJS.Row,
+  startCol: number,
+  endCol: number
+): void => {
   row.font = { bold: true };
-  row.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
+  row.alignment = {
+    vertical: "middle",
+    horizontal: "center",
+    wrapText: true,
+  };
   row.height = 20;
 
   for (let c = startCol; c <= endCol; c++) {
@@ -269,11 +300,19 @@ const applyHeaderStyle = (row: ExcelJS.Row, startCol: number, endCol: number): v
       bottom: { style: "thin" },
       right: { style: "thin" },
     };
-    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEFEFEF" } };
+    cell.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFEFEFEF" },
+    };
   }
 };
 
-const applyBorders = (row: ExcelJS.Row, startCol: number, endCol: number): void => {
+const applyBorders = (
+  row: ExcelJS.Row,
+  startCol: number,
+  endCol: number
+): void => {
   for (let c = startCol; c <= endCol; c++) {
     row.getCell(c).border = {
       top: { style: "thin" },
@@ -294,7 +333,10 @@ const arrayBufferToBase64 = (buffer: ArrayBuffer): string => {
   return btoa(binary);
 };
 
-const guessImageExtension = (url: string, contentType: string | null): "png" | "jpeg" => {
+const guessImageExtension = (
+  url: string,
+  contentType: string | null
+): "png" | "jpeg" => {
   const ct = (contentType ?? "").toLowerCase();
   if (ct.includes("png")) return "png";
   if (ct.includes("jpg") || ct.includes("jpeg")) return "jpeg";
@@ -330,6 +372,8 @@ const Admin_Customer_Add_ons: React.FC = () => {
 
   const [filterMode, setFilterMode] = useState<FilterMode>("day");
   const [anchorDate, setAnchorDate] = useState<string>(yyyyMmDdLocal(new Date()));
+  const [searchText, setSearchText] = useState<string>("");
+
   const [selectedOrder, setSelectedOrder] = useState<OrderGroup | null>(null);
 
   const [paymentTarget, setPaymentTarget] = useState<OrderGroup | null>(null);
@@ -354,21 +398,20 @@ const Admin_Customer_Add_ons: React.FC = () => {
 
   useEffect(() => {
     void fetchAddOnsByRange(activeRange.startIso, activeRange.endIso);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    void fetchAddOnsByRange(activeRange.startIso, activeRange.endIso);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeRange.startIso, activeRange.endIso]);
 
   useEffect(() => {
-    const hasOpenModal = Boolean(paymentTarget || selectedOrder || cancelTarget || deleteOpen);
+    const hasOpenModal = Boolean(
+      paymentTarget || selectedOrder || cancelTarget || deleteOpen
+    );
     document.body.classList.toggle("aca-modal-open", hasOpenModal);
     return () => document.body.classList.remove("aca-modal-open");
   }, [paymentTarget, selectedOrder, cancelTarget, deleteOpen]);
 
-  const fetchAddOnsByRange = async (startIso: string, endIso: string): Promise<void> => {
+  const fetchAddOnsByRange = async (
+    startIso: string,
+    endIso: string
+  ): Promise<void> => {
     setLoading(true);
 
     const { data: rows, error } = await supabase
@@ -447,7 +490,7 @@ const Admin_Customer_Add_ons: React.FC = () => {
     setLoading(false);
   };
 
-  const groupedOrders = useMemo<OrderGroup[]>(() => {
+  const groupedOrdersAll = useMemo<OrderGroup[]>(() => {
     if (records.length === 0) return [];
 
     const groups: OrderGroup[] = [];
@@ -462,12 +505,16 @@ const Admin_Customer_Add_ons: React.FC = () => {
         Math.abs(ms(row.created_at) - ms(lastRow.created_at)) > GROUP_WINDOW_MS;
 
       if (startNew) {
-        const key = `${norm(row.full_name)}|${norm(row.seat_number)}|${ms(row.created_at)}`;
+        const key = `${norm(row.full_name)}|${norm(row.seat_number)}|${ms(
+          row.created_at
+        )}`;
+
         current = {
           key,
           created_at: row.created_at,
           full_name: row.full_name,
           seat_number: row.seat_number,
+          booking_code: null,
           items: [],
           grand_total: 0,
           gcash_amount: 0,
@@ -475,6 +522,7 @@ const Admin_Customer_Add_ons: React.FC = () => {
           is_paid: false,
           paid_at: null,
         };
+
         groups.push(current);
       }
 
@@ -503,6 +551,65 @@ const Admin_Customer_Add_ons: React.FC = () => {
     return groups.sort((a, b) => ms(b.created_at) - ms(a.created_at));
   }, [records]);
 
+  const groupedOrders = useMemo<OrderGroup[]>(() => {
+    const q = searchText.trim().toLowerCase();
+    if (!q) return groupedOrdersAll;
+
+    return groupedOrdersAll.filter((o) => {
+      const name = String(o.full_name ?? "").toLowerCase();
+      const seat = String(o.seat_number ?? "").toLowerCase();
+      const items = o.items.some((it) =>
+        String(it.item_name ?? "").toLowerCase().includes(q)
+      );
+      return name.includes(q) || seat.includes(q) || items;
+    });
+  }, [groupedOrdersAll, searchText]);
+
+  const findBookingCodeForGroup = async (
+    group: OrderGroup
+  ): Promise<string | null> => {
+    const { data, error } = await supabase
+      .from("addon_orders")
+      .select("booking_code, created_at, full_name, seat_number")
+      .eq("full_name", group.full_name)
+      .eq("seat_number", group.seat_number)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("findBookingCodeForGroup error:", error);
+      return null;
+    }
+
+    const rows = (data ?? []) as Array<{
+      booking_code?: string | null;
+      created_at?: string | null;
+      full_name?: string | null;
+      seat_number?: string | null;
+    }>;
+
+    if (rows.length === 0) return null;
+
+    const groupTime = new Date(group.created_at).getTime();
+
+    let best: { booking_code?: string | null; created_at?: string | null } | null =
+      null;
+    let bestDiff = Number.POSITIVE_INFINITY;
+
+    for (const row of rows) {
+      const rowTime = new Date(String(row.created_at ?? "")).getTime();
+      if (!Number.isFinite(rowTime)) continue;
+
+      const diff = Math.abs(rowTime - groupTime);
+      if (diff < bestDiff) {
+        bestDiff = diff;
+        best = row;
+      }
+    }
+
+    const code = String(best?.booking_code ?? "").trim().toUpperCase();
+    return code || null;
+  };
+
   const exportToExcelByFilter = async (): Promise<void> => {
     if (!anchorDate) return alert("Please select a date.");
     if (records.length === 0) return alert("No records for this filter range.");
@@ -513,7 +620,9 @@ const Admin_Customer_Add_ons: React.FC = () => {
       wb.creator = "Admin";
       wb.created = now;
 
-      const ws = wb.addWorksheet("AddOns", { views: [{ state: "frozen", ySplit: 7 }] });
+      const ws = wb.addWorksheet("AddOns", {
+        views: [{ state: "frozen", ySplit: 7 }],
+      });
 
       ws.columns = [
         { header: "Image", key: "img", width: 12 },
@@ -594,7 +703,11 @@ const Admin_Customer_Add_ons: React.FC = () => {
           row.getCell(c).alignment =
             c === 8 || c === 4
               ? { vertical: "middle", horizontal: "left", wrapText: true }
-              : { vertical: "middle", horizontal: c === 9 ? "center" : "left", wrapText: true };
+              : {
+                  vertical: "middle",
+                  horizontal: c === 9 ? "center" : "left",
+                  wrapText: true,
+                };
         }
 
         applyBorders(row, 1, 11);
@@ -631,7 +744,10 @@ const Admin_Customer_Add_ons: React.FC = () => {
       const totalRow = ws.getRow(totalRowIndex);
       totalRow.getCell(10).value = "TOTAL:";
       totalRow.getCell(10).font = { bold: true };
-      totalRow.getCell(10).alignment = { vertical: "middle", horizontal: "right" };
+      totalRow.getCell(10).alignment = {
+        vertical: "middle",
+        horizontal: "right",
+      };
       totalRow.getCell(11).value = { formula: `SUM(K7:K${rIdx - 1})` };
       totalRow.getCell(11).numFmt = '"₱"#,##0.00';
       totalRow.getCell(11).font = { bold: true };
@@ -645,8 +761,30 @@ const Admin_Customer_Add_ons: React.FC = () => {
         6,
         totalRowIndex,
         [2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
-        { 2: 10, 3: 8, 4: 16, 5: 8, 6: 10, 7: 8, 8: 14, 9: 6, 10: 10, 11: 10 },
-        { 2: 14, 3: 12, 4: 28, 5: 12, 6: 18, 7: 12, 8: 30, 9: 8, 10: 14, 11: 14 }
+        {
+          2: 10,
+          3: 8,
+          4: 16,
+          5: 8,
+          6: 10,
+          7: 8,
+          8: 14,
+          9: 6,
+          10: 10,
+          11: 10,
+        },
+        {
+          2: 14,
+          3: 12,
+          4: 28,
+          5: 12,
+          6: 18,
+          7: 12,
+          8: 30,
+          9: 8,
+          10: 14,
+          11: 14,
+        }
       );
 
       ws.getColumn(1).width = 12;
@@ -771,16 +909,24 @@ const Admin_Customer_Add_ons: React.FC = () => {
     const g = round2(Math.max(0, toNumber(gcashInput)));
     const c = round2(Math.max(0, toNumber(cashInput)));
 
-    const itemIds = paymentTarget.items.map((x) => x.id);
-    if (itemIds.length === 0) return;
-
     try {
       setSavingPayment(true);
 
-      const { error } = await supabase.rpc("set_addon_payment", {
-        p_item_ids: itemIds,
-        p_gcash: g,
-        p_cash: c,
+      const bookingCode =
+        paymentTarget.booking_code ?? (await findBookingCodeForGroup(paymentTarget));
+
+      if (!bookingCode) {
+        alert("No booking code found for this add-on order.");
+        return;
+      }
+
+      const { error } = await supabase.rpc("pay_addon_order_by_booking_code", {
+        p_booking_code: bookingCode,
+        p_full_name: paymentTarget.full_name,
+        p_seat_number: paymentTarget.seat_number,
+        p_order_total: paymentTarget.grand_total,
+        p_gcash_amount: g,
+        p_cash_amount: c,
       });
 
       if (error) {
@@ -826,13 +972,6 @@ const Admin_Customer_Add_ons: React.FC = () => {
     }
   };
 
-  const rangeLabelShort =
-    filterMode === "day"
-      ? anchorDate
-      : filterMode === "week"
-      ? `Week of ${anchorDate}`
-      : `Month of ${anchorDate}`;
-
   return (
     <div className="aca-page">
       <div className="aca-shell">
@@ -841,12 +980,14 @@ const Admin_Customer_Add_ons: React.FC = () => {
             <h2 className="aca-title">Add-Ons Records (Admin)</h2>
             <div className="aca-subtext">
               Mode: <strong>{filterMode.toUpperCase()}</strong> • Range:{" "}
-              <strong>{activeRange.label}</strong> • Orders: <strong>{groupedOrders.length}</strong> •
-              Rows: <strong>{records.length}</strong>
+              <strong>{activeRange.label}</strong> • Orders:{" "}
+              <strong>{groupedOrders.length}</strong> • Rows:{" "}
+              <strong>{records.length}</strong>
             </div>
           </div>
 
           <div className="aca-topbar-right">
+
             <label className="aca-pill">
               <span className="aca-pill-label">Mode</span>
               <select
@@ -864,7 +1005,9 @@ const Admin_Customer_Add_ons: React.FC = () => {
             </label>
 
             <label className="aca-pill">
-              <span className="aca-pill-label">{filterMode === "day" ? "Date" : "Anchor"}</span>
+              <span className="aca-pill-label">
+                {filterMode === "day" ? "Date" : "Anchor"}
+              </span>
               <input
                 className="aca-pill-input"
                 type="date"
@@ -876,9 +1019,12 @@ const Admin_Customer_Add_ons: React.FC = () => {
             <div className="aca-tools-row">
               <button
                 className="aca-btn aca-btn-ghost"
-                onClick={() => void fetchAddOnsByRange(activeRange.startIso, activeRange.endIso)}
+                onClick={() =>
+                  void fetchAddOnsByRange(activeRange.startIso, activeRange.endIso)
+                }
                 disabled={loading}
                 title="Reload this filter range"
+                type="button"
               >
                 Refresh
               </button>
@@ -888,6 +1034,7 @@ const Admin_Customer_Add_ons: React.FC = () => {
                 onClick={() => void exportToExcelByFilter()}
                 disabled={records.length === 0}
                 title="Export this range"
+                type="button"
               >
                 Export to Excel
               </button>
@@ -897,6 +1044,7 @@ const Admin_Customer_Add_ons: React.FC = () => {
                 onClick={openDeleteByFilter}
                 disabled={records.length === 0 || Boolean(deletingKey) || loading}
                 title={`Cancel/Delete ALL rows in this ${filterMode.toUpperCase()} range`}
+                type="button"
               >
                 {deletingKey ? "Deleting..." : `Delete (${filterMode})`}
               </button>
@@ -909,7 +1057,11 @@ const Admin_Customer_Add_ons: React.FC = () => {
         ) : groupedOrders.length === 0 ? (
           <p className="aca-note">No add-ons found for this range</p>
         ) : (
-          <div className="aca-table-wrap" key={`${filterMode}-${activeRange.fileLabel}`}>
+          <div
+            className="aca-table-wrap"
+            key={`${filterMode}-${activeRange.fileLabel}`}
+            style={{ maxHeight: "560px", overflowY: "auto", overflowX: "auto" }}
+          >
             <table className="aca-table">
               <thead>
                 <tr>
@@ -947,7 +1099,9 @@ const Admin_Customer_Add_ons: React.FC = () => {
                                   {it.item_name}{" "}
                                   <span className="aca-item-cat">
                                     ({it.category}
-                                    {String(it.size ?? "").trim() ? ` • ${sizeText(it.size)}` : ""}
+                                    {String(it.size ?? "").trim()
+                                      ? ` • ${sizeText(it.size)}`
+                                      : ""}
                                     )
                                   </span>
                                 </div>
@@ -955,7 +1109,9 @@ const Admin_Customer_Add_ons: React.FC = () => {
                                   Qty: {it.quantity} • {moneyText(it.price)}
                                 </div>
                               </div>
-                              <div className="aca-item-total">{moneyText(it.total)}</div>
+                              <div className="aca-item-total">
+                                {moneyText(it.total)}
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -975,14 +1131,20 @@ const Admin_Customer_Add_ons: React.FC = () => {
                       <td>
                         <div className="aca-cell-stack aca-cell-center">
                           <span className="aca-cell-strong">
-                            GCash {moneyText(o.gcash_amount)} / Cash {moneyText(o.cash_amount)}
+                            GCash {moneyText(o.gcash_amount)} / Cash{" "}
+                            {moneyText(o.cash_amount)}
                           </span>
 
                           <button
                             className="aca-btn aca-btn-ghost"
                             onClick={() => openPaymentModal(o)}
                             disabled={due <= 0}
-                            title={due <= 0 ? "No amount due" : "Set Cash & GCash freely (no limit)"}
+                            title={
+                              due <= 0
+                                ? "No amount due"
+                                : "Set Cash & GCash freely (no limit)"
+                            }
+                            type="button"
                           >
                             Payment
                           </button>
@@ -991,18 +1153,29 @@ const Admin_Customer_Add_ons: React.FC = () => {
 
                       <td>
                         <button
-                          className={`aca-btn aca-badge ${paid ? "aca-badge-paid" : "aca-badge-unpaid"}`}
+                          className={`aca-btn aca-badge ${
+                            paid ? "aca-badge-paid" : "aca-badge-unpaid"
+                          }`}
                           onClick={() => void togglePaid(o)}
                           disabled={togglingPaidKey === o.key}
                           title={paid ? "Tap to set UNPAID" : "Tap to set PAID"}
+                          type="button"
                         >
-                          {togglingPaidKey === o.key ? "Updating..." : paid ? "PAID" : "UNPAID"}
+                          {togglingPaidKey === o.key
+                            ? "Updating..."
+                            : paid
+                            ? "PAID"
+                            : "UNPAID"}
                         </button>
                       </td>
 
                       <td>
                         <div className="aca-action-stack">
-                          <button className="aca-btn aca-btn-ghost" onClick={() => setSelectedOrder(o)}>
+                          <button
+                            className="aca-btn aca-btn-ghost"
+                            onClick={() => setSelectedOrder(o)}
+                            type="button"
+                          >
                             View Receipt
                           </button>
 
@@ -1010,6 +1183,7 @@ const Admin_Customer_Add_ons: React.FC = () => {
                             className="aca-btn aca-btn-danger"
                             disabled={busyCancel}
                             onClick={() => openCancelModal(o)}
+                            type="button"
                           >
                             {busyCancel ? "Cancelling..." : "Cancel"}
                           </button>
@@ -1097,7 +1271,11 @@ const Admin_Customer_Add_ons: React.FC = () => {
 
                         <div className="aca-payment-summary-row">
                           <span>Auto Status</span>
-                          <strong className={`aca-status-text ${isPaidAuto ? "is-paid" : "is-unpaid"}`}>
+                          <strong
+                            className={`aca-status-text ${
+                              isPaidAuto ? "is-paid" : "is-unpaid"
+                            }`}
+                          >
                             {isPaidAuto ? "PAID" : "UNPAID"}
                           </strong>
                         </div>
@@ -1108,6 +1286,7 @@ const Admin_Customer_Add_ons: React.FC = () => {
                           className="aca-btn aca-btn-ghost"
                           onClick={() => setPaymentTarget(null)}
                           disabled={savingPayment}
+                          type="button"
                         >
                           Cancel
                         </button>
@@ -1115,6 +1294,7 @@ const Admin_Customer_Add_ons: React.FC = () => {
                           className="aca-btn aca-btn-primary"
                           onClick={() => void savePayment()}
                           disabled={savingPayment}
+                          type="button"
                         >
                           {savingPayment ? "Saving..." : "Save"}
                         </button>
@@ -1129,7 +1309,10 @@ const Admin_Customer_Add_ons: React.FC = () => {
 
         {cancelTarget && (
           <ModalPortal>
-            <div className="aca-overlay" onClick={() => (cancellingKey ? null : setCancelTarget(null))}>
+            <div
+              className="aca-overlay"
+              onClick={() => (cancellingKey ? null : setCancelTarget(null))}
+            >
               <div className="aca-modal" onClick={(e) => e.stopPropagation()}>
                 <h3 className="aca-modal-title">CANCEL ORDER</h3>
                 <p className="aca-modal-subtitle">
@@ -1138,7 +1321,9 @@ const Admin_Customer_Add_ons: React.FC = () => {
 
                 <hr className="aca-line" />
 
-                <div className="aca-text-strong">Required: Description / Reason</div>
+                <div className="aca-text-strong">
+                  Required: Description / Reason
+                </div>
 
                 <textarea
                   className="aca-textarea"
@@ -1149,7 +1334,8 @@ const Admin_Customer_Add_ons: React.FC = () => {
                 />
 
                 <div className="aca-warning-text">
-                  ⚠️ Cancel will archive this order to the cancel table and reverse SOLD.
+                  ⚠️ Cancel will archive this order to the cancel table and reverse
+                  SOLD.
                 </div>
 
                 <div className="aca-modal-actions">
@@ -1157,71 +1343,27 @@ const Admin_Customer_Add_ons: React.FC = () => {
                     className="aca-btn aca-btn-ghost"
                     onClick={() => setCancelTarget(null)}
                     disabled={cancellingKey === cancelTarget.key}
+                    type="button"
                   >
                     Close
                   </button>
                   <button
                     className="aca-btn aca-btn-danger"
                     onClick={() => void submitCancel()}
-                    disabled={cancellingKey === cancelTarget.key || cancelDesc.trim().length === 0}
-                    title={cancelDesc.trim().length === 0 ? "Description required" : "Submit cancel"}
-                  >
-                    {cancellingKey === cancelTarget.key ? "Cancelling..." : "Submit Cancel"}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </ModalPortal>
-        )}
-
-        {deleteOpen && (
-          <ModalPortal>
-            <div className="aca-overlay" onClick={() => (deletingKey ? null : setDeleteOpen(false))}>
-              <div className="aca-modal" onClick={(e) => e.stopPropagation()}>
-                <h3 className="aca-modal-title">DELETE ({filterMode.toUpperCase()})</h3>
-                <p className="aca-modal-subtitle">
-                  {rangeLabelShort}: <strong>{anchorDate}</strong>
-                  <br />
-                  Range: <strong>{activeRange.label}</strong>
-                  <br />
-                  Rows: <strong>{records.length}</strong>
-                </p>
-
-                <hr className="aca-line" />
-
-                <div className="aca-text-strong">Required: Description / Reason</div>
-
-                <textarea
-                  className="aca-textarea"
-                  value={deleteDesc}
-                  onChange={(e) => setDeleteDesc(e.currentTarget.value)}
-                  placeholder="Example: End of day cleanup / wrong range / duplicate orders..."
-                  disabled={Boolean(deletingKey)}
-                />
-
-                <div className="aca-warning-text">
-                  ⚠️ This will CANCEL ALL rows in the selected range (moves to cancel table + reverses SOLD).
-                </div>
-
-                <div className="aca-modal-actions">
-                  <button
-                    className="aca-btn aca-btn-ghost"
-                    onClick={() => setDeleteOpen(false)}
-                    disabled={Boolean(deletingKey)}
-                  >
-                    Close
-                  </button>
-                  <button
-                    className="aca-btn aca-btn-danger"
-                    onClick={() => void submitDeleteByFilter()}
-                    disabled={Boolean(deletingKey) || deleteDesc.trim().length === 0}
-                    title={
-                      deleteDesc.trim().length === 0
-                        ? "Description required"
-                        : "Delete all rows for this range"
+                    disabled={
+                      cancellingKey === cancelTarget.key ||
+                      cancelDesc.trim().length === 0
                     }
+                    title={
+                      cancelDesc.trim().length === 0
+                        ? "Description required"
+                        : "Submit cancel"
+                    }
+                    type="button"
                   >
-                    {deletingKey ? "Deleting..." : "Submit Delete"}
+                    {cancellingKey === cancelTarget.key
+                      ? "Cancelling..."
+                      : "Submit Cancel"}
                   </button>
                 </div>
               </div>
@@ -1233,7 +1375,7 @@ const Admin_Customer_Add_ons: React.FC = () => {
           <ModalPortal>
             <div className="aca-overlay" onClick={() => setSelectedOrder(null)}>
               <div
-                className="aca-modal aca-receipt-modal aca-modal-receipt"
+                className="aca-modal aca-modal-receipt"
                 onClick={(e) => e.stopPropagation()}
                 role="dialog"
                 aria-modal="true"
@@ -1268,96 +1410,120 @@ const Admin_Customer_Add_ons: React.FC = () => {
 
                 <div className="aca-items-receipt">
                   {selectedOrder.items.map((it) => (
-                    <div className="aca-receipt-item-row" key={it.id}>
+                    <div key={it.id} className="aca-receipt-item-row">
                       <div className="aca-receipt-item-left">
                         <div className="aca-receipt-item-title">
                           {it.item_name}{" "}
-                          <span className="aca-item-cat">
+                          <span className="aca-receipt-item-cat">
                             ({it.category}
-                            {String(it.size ?? "").trim() ? ` • ${sizeText(it.size)}` : ""}
+                            {String(it.size ?? "").trim()
+                              ? ` • ${sizeText(it.size)}`
+                              : ""}
                             )
                           </span>
                         </div>
                         <div className="aca-receipt-item-sub">
-                          {it.quantity} × {moneyText(it.price)}
+                          Qty: {it.quantity} × {moneyText(it.price)}
                         </div>
                       </div>
-                      <div className="aca-receipt-item-total">{moneyText(it.total)}</div>
+                      <div className="aca-receipt-item-right">
+                        {moneyText(it.total)}
+                      </div>
                     </div>
                   ))}
                 </div>
 
                 <hr className="aca-line" />
 
-                {(() => {
-                  const due = round2(selectedOrder.grand_total);
-                  const totalPaid = round2(selectedOrder.gcash_amount + selectedOrder.cash_amount);
-                  const diff = round2(totalPaid - due);
-                  const paid = toBool(selectedOrder.is_paid);
+                <div className="aca-receipt-summary">
+                  <div className="aca-receipt-summary-row">
+                    <span>Grand Total</span>
+                    <strong>{moneyText(selectedOrder.grand_total)}</strong>
+                  </div>
+                  <div className="aca-receipt-summary-row">
+                    <span>GCash</span>
+                    <strong>{moneyText(selectedOrder.gcash_amount)}</strong>
+                  </div>
+                  <div className="aca-receipt-summary-row">
+                    <span>Cash</span>
+                    <strong>{moneyText(selectedOrder.cash_amount)}</strong>
+                  </div>
+                  <div className="aca-receipt-summary-row">
+                    <span>Status</span>
+                    <strong>
+                      {toBool(selectedOrder.is_paid) ? "PAID" : "UNPAID"}
+                    </strong>
+                  </div>
+                </div>
 
-                  return (
-                    <>
-                      <div className="aca-receipt-meta">
-                        <div className="aca-receipt-meta-row">
-                          <span>GCash</span>
-                          <strong>{moneyText(selectedOrder.gcash_amount)}</strong>
-                        </div>
-
-                        <div className="aca-receipt-meta-row">
-                          <span>Cash</span>
-                          <strong>{moneyText(selectedOrder.cash_amount)}</strong>
-                        </div>
-
-                        <div className="aca-receipt-meta-row">
-                          <span>Total Paid</span>
-                          <strong>{moneyText(totalPaid)}</strong>
-                        </div>
-
-                        <div className="aca-receipt-meta-row">
-                          <span>{diff >= 0 ? "Change" : "Remaining"}</span>
-                          <strong>{moneyText(Math.abs(diff))}</strong>
-                        </div>
-
-                        <div className="aca-receipt-meta-row">
-                          <span>Status</span>
-                          <strong className={`aca-status-text ${paid ? "is-paid" : "is-unpaid"}`}>
-                            {paid ? "PAID" : "UNPAID"}
-                          </strong>
-                        </div>
-
-                        {paid && (
-                          <div className="aca-receipt-meta-row">
-                            <span>Paid at</span>
-                            <strong>{selectedOrder.paid_at ? formatDateTime(selectedOrder.paid_at) : "-"}</strong>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="aca-receipt-total">
-                        <span>TOTAL</span>
-                        <span>{moneyText(due)}</span>
-                      </div>
-                    </>
-                  );
-                })()}
-
-                <p className="aca-receipt-footer">
-                  Thank you for choosing <br />
-                  <strong>Me Tyme Lounge</strong>
-                </p>
-
-                <button
-                  className="aca-btn aca-btn-primary aca-close-btn"
-                  onClick={() => setSelectedOrder(null)}
-                >
-                  Close
-                </button>
+                <div className="aca-modal-actions aca-modal-actions-receipt">
+                  <button
+                    className="aca-btn aca-btn-ghost"
+                    onClick={() => setSelectedOrder(null)}
+                    type="button"
+                  >
+                    Close
+                  </button>
+                </div>
               </div>
             </div>
           </ModalPortal>
         )}
 
-        {!loading && groupedOrders.length === 0 && <div />}
+        {deleteOpen && (
+          <ModalPortal>
+            <div className="aca-overlay" onClick={() => setDeleteOpen(false)}>
+              <div
+                className="aca-modal"
+                onClick={(e) => e.stopPropagation()}
+                role="dialog"
+                aria-modal="true"
+              >
+                <h3 className="aca-modal-title">DELETE BY FILTER</h3>
+                <p className="aca-modal-subtitle">{activeRange.label}</p>
+
+                <hr className="aca-line" />
+
+                <div className="aca-text-strong">
+                  Required: Description / Reason
+                </div>
+
+                <textarea
+                  className="aca-textarea"
+                  value={deleteDesc}
+                  onChange={(e) => setDeleteDesc(e.currentTarget.value)}
+                  placeholder="Example: cleanup duplicate rows / wrong records / admin correction..."
+                  disabled={Boolean(deletingKey)}
+                />
+
+                <div className="aca-warning-text">
+                  ⚠️ This will cancel/delete all add-on rows in the selected filter
+                  range.
+                </div>
+
+                <div className="aca-modal-actions">
+                  <button
+                    className="aca-btn aca-btn-ghost"
+                    onClick={() => setDeleteOpen(false)}
+                    disabled={Boolean(deletingKey)}
+                    type="button"
+                  >
+                    Close
+                  </button>
+
+                  <button
+                    className="aca-btn aca-btn-danger"
+                    onClick={() => void submitDeleteByFilter()}
+                    disabled={Boolean(deletingKey) || deleteDesc.trim().length === 0}
+                    type="button"
+                  >
+                    {deletingKey ? "Deleting..." : "Submit Delete"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </ModalPortal>
+        )}
       </div>
     </div>
   );

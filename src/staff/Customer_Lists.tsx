@@ -1324,30 +1324,30 @@ const Customer_Lists: React.FC = () => {
         ? existingOrderRow?.paid_at ?? new Date().toISOString()
         : null;
 
-      const { error: payErr } = await supabase.rpc("pay_addon_order_by_booking_code", {
-        p_booking_code: bookingCode,
-        p_full_name: orderPaymentTarget.full_name,
-        p_seat_number: orderPaymentTarget.seat_number || "N/A",
-        p_order_total: due,
-        p_gcash_amount: gcash,
-        p_cash_amount: cash,
-      });
+    const { error: payErr } = await supabase.rpc("pay_addon_order_by_booking_code", {
+      p_booking_code: bookingCode,
+      p_full_name: orderPaymentTarget.full_name,
+      p_seat_number: orderPaymentTarget.seat_number || "N/A",
+      p_order_total: due,
+      p_gcash_amount: gcash,
+      p_cash_amount: cash,
+    });
 
-      if (payErr) {
-        alert(`Save order payment error: ${payErr.message}`);
-        return;
-      }
+    if (payErr) {
+      alert(`Save order payment error: ${payErr.message}`);
+      return;
+    }
 
-      const { data: paymentRow, error: refetchErr } = await supabase
-        .from("customer_order_payments")
-        .select("*")
-        .eq("booking_code", bookingCode)
-        .single();
+    const { data: paymentRow, error: refetchErr } = await supabase
+      .from("customer_order_payments")
+      .select("*")
+      .eq("booking_code", bookingCode)
+      .single();
 
-      if (refetchErr || !paymentRow) {
-        alert(`Payment saved, but refresh failed: ${refetchErr?.message ?? "Unknown error"}`);
-        return;
-      }
+    if (refetchErr || !paymentRow) {
+      alert(`Payment saved, but refresh failed: ${refetchErr?.message ?? "Unknown error"}`);
+      return;
+    }
 
       setOrderPayments((prev) => ({
         ...prev,

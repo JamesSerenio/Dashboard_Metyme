@@ -47,7 +47,6 @@ const getRoleLocal = () =>
 const getModeLabel = (mode) =>
   mode === "consignment" ? "consignment" : "add_ons";
 
-
 const makeLookupKey = (fullName, seatNumber) =>
   `${asString(fullName).toLowerCase()}|${asString(seatNumber).toLowerCase()}`;
 

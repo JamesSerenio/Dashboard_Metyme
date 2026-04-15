@@ -1648,15 +1648,27 @@ const Admin_customer_list: React.FC = () => {
           return;
         }
 
-        const { error: deleteErr } = await supabase
-          .from("addon_order_items")
-          .delete()
-          .eq("id", item.id);
+      const { error: legacyDeleteErr } = await supabase
+        .from("customer_session_add_ons")
+        .delete()
+        .eq("add_on_id", item.source_item_id)
+        .eq("full_name", session.full_name)
+        .eq("seat_number", session.seat_number);
 
-        if (deleteErr) {
-          alert(`Cancelled copy saved, but item delete failed: ${deleteErr.message}`);
-          return;
-        }
+      if (legacyDeleteErr) {
+        alert(`Cancelled copy saved, but legacy add-on delete failed: ${legacyDeleteErr.message}`);
+        return;
+      }
+
+      const { error: deleteErr } = await supabase
+        .from("addon_order_items")
+        .delete()
+        .eq("id", item.id);
+
+      if (deleteErr) {
+        alert(`Cancelled copy saved, but item delete failed: ${deleteErr.message}`);
+        return;
+      }
 
         const { data: addonRow, error: addonFetchErr } = await supabase
           .from("add_ons")
