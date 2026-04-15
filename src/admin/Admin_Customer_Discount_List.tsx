@@ -1129,23 +1129,28 @@ const Admin_Customer_Discount_List: React.FC = () => {
     };
   };
 
-  const totals = useMemo(() => {
-    const nowMs = tick;
-    const total = filteredRows.reduce((sum, r) => sum + getGrandDue(r), 0);
+    const totals = useMemo(() => {
+      const totalCustomer = filteredRows.length;
 
-    let upcoming = 0;
-    let ongoing = 0;
-    let finished = 0;
+      const paid = filteredRows.filter((r) => toBool(r.is_paid)).length;
+      const unpaid = totalCustomer - paid;
 
-    for (const r of filteredRows) {
-      const st = getStatus(r.start_at, r.end_at, nowMs);
-      if (st === "UPCOMING") upcoming += 1;
-      else if (st === "ONGOING") ongoing += 1;
-      else finished += 1;
-    }
+      const systemTotal = round2(
+        filteredRows.reduce((sum, r) => sum + getSystemDue(r), 0)
+      );
 
-    return { total: round2(total), upcoming, ongoing, finished };
-  }, [filteredRows, tick, ordersMap, orderParentsMap]);
+      const ordersTotal = round2(
+        filteredRows.reduce((sum, r) => sum + getOrderDue(r.promo_code), 0)
+      );
+
+      return {
+        totalCustomer,
+        paid,
+        unpaid,
+        systemTotal,
+        ordersTotal,
+      };
+    }, [filteredRows, ordersMap, orderParentsMap]);
 
   const isFinalPaidRow = (r: PromoBookingRow): boolean => {
     const systemDue = getSystemDue(r);
@@ -2159,7 +2164,12 @@ const Admin_Customer_Discount_List: React.FC = () => {
       ws.getCell("A4").font = { size: 11 };
 
       ws.mergeCells("A5", "V5");
-      ws.getCell("A5").value = `Total: ₱${totals.total.toFixed(2)} • Upcoming: ${totals.upcoming} • Ongoing: ${totals.ongoing} • Finished: ${totals.finished}`;
+      ws.getCell("A5").value =
+      `Total Customer: ${totals.totalCustomer} • ` +
+      `Paid: ${totals.paid} • ` +
+      `Unpaid: ${totals.unpaid} • ` +
+      `System Total: ₱${totals.systemTotal.toFixed(2)} • ` +
+      `Orders Total: ₱${totals.ordersTotal.toFixed(2)}`;
       ws.getCell("A5").font = { bold: true, size: 11 };
 
       const headerRow = ws.getRow(6);
@@ -2339,28 +2349,32 @@ const Admin_Customer_Discount_List: React.FC = () => {
           </div>
         </div>
 
-        <div className="acdl-stats">
-          <div className="acdl-stat-box">
-            <span>Range</span>
-            <strong>{activeRange.label}</strong>
-          </div>
-          <div className="acdl-stat-box">
-            <span>Total</span>
-            <strong>₱{totals.total.toFixed(2)}</strong>
-          </div>
-          <div className="acdl-stat-box">
-            <span>Upcoming</span>
-            <strong>{totals.upcoming}</strong>
-          </div>
-          <div className="acdl-stat-box">
-            <span>Ongoing</span>
-            <strong>{totals.ongoing}</strong>
-          </div>
-          <div className="acdl-stat-box">
-            <span>Finished</span>
-            <strong>{totals.finished}</strong>
-          </div>
+      <div className="acdl-stats">
+        <div className="acdl-stat-box">
+          <span>Total Customer</span>
+          <strong>{totals.totalCustomer}</strong>
         </div>
+
+        <div className="acdl-stat-box">
+          <span>Paid</span>
+          <strong>{totals.paid}</strong>
+        </div>
+
+        <div className="acdl-stat-box">
+          <span>Unpaid</span>
+          <strong>{totals.unpaid}</strong>
+        </div>
+
+        <div className="acdl-stat-box">
+          <span>System Total</span>
+          <strong>₱{totals.systemTotal.toFixed(2)}</strong>
+        </div>
+
+        <div className="acdl-stat-box">
+          <span>Orders Total</span>
+          <strong>₱{totals.ordersTotal.toFixed(2)}</strong>
+        </div>
+      </div>
 
         <div className="acdl-table-wrap">
           {loading ? (
