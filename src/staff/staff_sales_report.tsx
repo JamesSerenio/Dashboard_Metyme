@@ -60,12 +60,10 @@ interface SalesTotalsRow {
 }
 
 type ConsignmentState = {
-  gross: number;
+  net: number;
 };
 
 type ConsignmentRpcRow = {
-  gross: number | string | null;
-  fee15: number | string | null;
   net: number | string | null;
 };
 
@@ -413,7 +411,7 @@ const StaffSalesReport: React.FC = () => {
   const [totals, setTotals] = useState<SalesTotalsRow | null>(null);
 
   const [consignment, setConsignment] = useState<ConsignmentState>({
-    gross: 0,
+    net: 0,
   });
 
   const [addonsPaidBase, setAddonsPaidBase] = useState<number>(0);
@@ -465,7 +463,7 @@ const StaffSalesReport: React.FC = () => {
     setReport(null);
     setLines([]);
     setTotals(null);
-    setConsignment({ gross: 0 });
+    setConsignment({ net: 0 });
     setAddonsPaidBase(0);
     setCustomerOrderPaid(0);
     setWalkinSystemPaid(0);
@@ -579,7 +577,7 @@ const StaffSalesReport: React.FC = () => {
 
   const loadConsignment = async (dateYMD: string): Promise<void> => {
     if (!isYMD(dateYMD)) {
-      setConsignment({ gross: 0 });
+      setConsignment({ net: 0 });
       return;
     }
 
@@ -587,18 +585,18 @@ const StaffSalesReport: React.FC = () => {
 
     if (res.error) {
       console.error("get_consignment_totals_for_day error:", res.error.message);
-      setConsignment({ gross: 0 });
+      setConsignment({ net: 0 });
       return;
     }
 
     const row = (res.data?.[0] ?? null) as ConsignmentRpcRow | null;
     if (!row) {
-      setConsignment({ gross: 0 });
+      setConsignment({ net: 0 });
       return;
     }
 
     setConsignment({
-      gross: toNumber(row.gross),
+      net: toNumber(row.net),
     });
   };
 
@@ -1198,7 +1196,7 @@ const StaffSalesReport: React.FC = () => {
   );
 
   const salesSystemComputed = round2(
-    addonsTotalWithCustomerOrders + totalTimeAmount + consignment.gross - discount
+    addonsTotalWithCustomerOrders + totalTimeAmount - discount
   );
 
   const salesCollectedDisplay = round2(actualSystem - bilin);
@@ -1397,7 +1395,7 @@ const StaffSalesReport: React.FC = () => {
                 </div>
                 <div className="ssrp-summary-box">
                   <div className="ssrp-summary-title">Consignment Sales</div>
-                  <div className="ssrp-summary-value">{peso(consignment.gross)}</div>
+                  <div className="ssrp-summary-value">{peso(consignment.net)}</div>
                 </div>
                 <div className="ssrp-summary-box">
                   <div className="ssrp-summary-title">Inventory Loss</div>

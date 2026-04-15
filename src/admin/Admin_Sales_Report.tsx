@@ -1208,7 +1208,7 @@ const loadCustomerOrderPaid = async (dateYMD: string): Promise<void> => {
   );
 
   const salesSystemComputed = round2(
-    addonsTotalWithCustomerOrders + totalTimeAmount + consignment.net - discount
+    addonsTotalWithCustomerOrders + totalTimeAmount - discount
   );
 
   const salesCollectedDisplay = round2(actualSystem - bilin);
