@@ -11,6 +11,7 @@ type DurationUnit = "hour" | "day" | "month" | "year";
 type DiscountKind = "none" | "percent" | "amount";
 
 type AreaFilter = "all" | PackageArea;
+type AttendanceFilter = "all" | "in_out_customers";
 type CommonDurationFilter = "all" | "1_day" | "week" | "half_month" | "month";
 type ConferenceDurationFilter = "all" | "1_hour" | "3_hours" | "6_hours" | "8_hours";
 
@@ -665,11 +666,12 @@ const Admin_Customer_Discount_List: React.FC = () => {
     return `${y}-${m}`;
   });
 
-  const [areaFilter, setAreaFilter] = useState<AreaFilter>("all");
-  const [commonDurationFilter, setCommonDurationFilter] =
-    useState<CommonDurationFilter>("all");
-  const [conferenceDurationFilter, setConferenceDurationFilter] =
-    useState<ConferenceDurationFilter>("all");
+const [areaFilter, setAreaFilter] = useState<AreaFilter>("all");
+const [attendanceFilter, setAttendanceFilter] = useState<AttendanceFilter>("all");
+const [commonDurationFilter, setCommonDurationFilter] =
+  useState<CommonDurationFilter>("all");
+const [conferenceDurationFilter, setConferenceDurationFilter] =
+  useState<ConferenceDurationFilter>("all");
 
   const [deletingRangeLabel, setDeletingRangeLabel] = useState<string | null>(null);
 
@@ -1005,31 +1007,64 @@ const Admin_Customer_Discount_List: React.FC = () => {
     [rangeMode, selectedDay, selectedMonth]
   );
 
-  const filteredRows = useMemo(() => {
-    return rows.filter((r) => {
-      if (!bookingOverlapsRange(r.start_at, r.end_at, activeRange)) return false;
+    const filteredRows = useMemo(() => {
+      return rows.filter((r) => {
+        const hasDayAttendance = hasAttendanceOnSelectedDay(r.id, selectedDay);
 
-      if (areaFilter !== "all" && r.area !== areaFilter) return false;
+        if (attendanceFilter === "in_out_customers") {
+          if (!hasDayAttendance) return false;
+        } else {
+          if (!bookingOverlapsRange(r.start_at, r.end_at, activeRange) && !hasDayAttendance) {
+            return false;
+          }
+        }
 
-      if (areaFilter === "common_area" && commonDurationFilter !== "all") {
-        const bucket = getCommonAreaDurationBucket(r);
-        if (bucket !== commonDurationFilter) return false;
-      }
+        if (areaFilter !== "all" && r.area !== areaFilter) return false;
 
-      if (areaFilter === "conference_room" && conferenceDurationFilter !== "all") {
-        const bucket = getConferenceDurationBucket(r);
-        if (bucket !== conferenceDurationFilter) return false;
-      }
+        if (areaFilter === "common_area" && commonDurationFilter !== "all") {
+          const bucket = getCommonAreaDurationBucket(r);
+          if (bucket !== commonDurationFilter) return false;
+        }
 
-      return true;
-    });
-  }, [rows, activeRange, areaFilter, commonDurationFilter, conferenceDurationFilter]);
+        if (areaFilter === "conference_room" && conferenceDurationFilter !== "all") {
+          const bucket = getConferenceDurationBucket(r);
+          if (bucket !== conferenceDurationFilter) return false;
+        }
 
-  const logsFor = (bookingId: string): PromoBookingAttendanceRow[] => attMap[bookingId] ?? [];
-  const lastLogFor = (bookingId: string): PromoBookingAttendanceRow | null => {
-    const logs = logsFor(bookingId);
-    return logs.length ? logs[0] : null;
-  };
+        return true;
+      });
+    }, [
+      rows,
+      activeRange,
+      areaFilter,
+      attendanceFilter,
+      commonDurationFilter,
+      conferenceDurationFilter,
+      selectedDay,
+      attMap,
+    ]);
+
+    const logsFor = (bookingId: string): PromoBookingAttendanceRow[] => attMap[bookingId] ?? [];
+    const lastLogFor = (bookingId: string): PromoBookingAttendanceRow | null => {
+      const logs = logsFor(bookingId);
+      return logs.length ? logs[0] : null;
+    };
+
+    const logsForSelectedDay = (bookingId: string, day: string): PromoBookingAttendanceRow[] => {
+      return logsFor(bookingId).filter((log) => String(log.local_day ?? "").trim() === day);
+    };
+
+    const hasAttendanceOnSelectedDay = (bookingId: string, day: string): boolean => {
+      return logsForSelectedDay(bookingId, day).length > 0;
+    };
+
+    const lastLogForSelectedDay = (
+      bookingId: string,
+      day: string
+    ): PromoBookingAttendanceRow | null => {
+      const logs = logsForSelectedDay(bookingId, day);
+      return logs.length ? logs[0] : null;
+    };
 
   const getOrderItems = (code: string | null): PromoOrderItemRow[] => {
     if (!code) return [];
@@ -2188,7 +2223,7 @@ const Admin_Customer_Discount_List: React.FC = () => {
         const systemDue = getSystemDue(r);
         const systemPaidInfo = getSystemPaidInfo(r);
         const grand = getGrandDue(r);
-        const last = lastLogFor(r.id);
+        const last = lastLogForSelectedDay(r.id, selectedDay);
 
         ws.addRow({
           created_at: fmtPH(r.created_at),
@@ -2284,14 +2319,25 @@ const Admin_Customer_Discount_List: React.FC = () => {
               </div>
             )}
 
-            <div className="acdl-control">
-              <label>Area</label>
-              <select value={areaFilter} onChange={(e) => setAreaFilter(e.currentTarget.value as AreaFilter)}>
-                <option value="all">All</option>
-                <option value="common_area">Common Area</option>
-                <option value="conference_room">Conference Room</option>
-              </select>
-            </div>
+          <div className="acdl-control">
+            <label>Area</label>
+            <select value={areaFilter} onChange={(e) => setAreaFilter(e.target.value as AreaFilter)}>
+              <option value="all">All</option>
+              <option value="common_area">Common Area</option>
+              <option value="conference_room">Conference Room</option>
+            </select>
+          </div>
+
+          <div className="acdl-control">
+            <label>Memberships</label>
+            <select
+              value={attendanceFilter}
+              onChange={(e) => setAttendanceFilter(e.target.value as AttendanceFilter)}
+            >
+              <option value="all">All Customers</option>
+              <option value="in_out_customers">IN & OUT Customers</option>
+            </select>
+          </div>
 
             {areaFilter === "common_area" ? (
               <div className="acdl-control">
@@ -2351,7 +2397,7 @@ const Admin_Customer_Discount_List: React.FC = () => {
 
       <div className="acdl-stats">
         <div className="acdl-stat-box">
-          <span>Total Customer</span>
+          <span>{attendanceFilter === "in_out_customers" ? "IN & OUT Customers" : "Total Customer"}</span>
           <strong>{totals.totalCustomer}</strong>
         </div>
 
@@ -2431,7 +2477,7 @@ const Admin_Customer_Discount_List: React.FC = () => {
                     const orderDue = getOrderDue(r.promo_code);
                     const orderPaid = getOrderPaidInfo(r.promo_code);
                     const orderBalance = getOrderRemainingInfo(r.promo_code);
-                    const last = lastLogFor(r.id);
+                    const last = lastLogForSelectedDay(r.id, selectedDay);
 
                     return (
                       <tr key={r.id}>
