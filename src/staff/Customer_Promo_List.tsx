@@ -9,6 +9,7 @@ type DurationUnit = "hour" | "day" | "month" | "year";
 type DiscountKind = "none" | "percent" | "amount";
 
 type AreaFilter = "all" | PackageArea;
+type AttendanceFilter = "all" | "in_out_customers";
 type CommonDurationFilter = "all" | "1_day" | "week" | "half_month" | "month";
 type ConferenceDurationFilter = "all" | "1_hour" | "3_hours" | "6_hours" | "8_hours";
 
@@ -580,6 +581,7 @@ const Customer_Promo_List: React.FC = () => {
   const [searchName, setSearchName] = useState<string>("");
 
   const [areaFilter, setAreaFilter] = useState<AreaFilter>("all");
+  const [attendanceFilter, setAttendanceFilter] = useState<AttendanceFilter>("all");
   const [commonDurationFilter, setCommonDurationFilter] =
     useState<CommonDurationFilter>("all");
   const [conferenceDurationFilter, setConferenceDurationFilter] =
@@ -790,6 +792,22 @@ const Customer_Promo_List: React.FC = () => {
 
   const lastLogFor = (bookingId: string): PromoBookingAttendanceRow | null => {
     const logs = logsFor(bookingId);
+    return logs.length ? logs[0] : null;
+  };
+
+  const logsForSelectedDay = (bookingId: string, day: string): PromoBookingAttendanceRow[] => {
+    return logsFor(bookingId).filter((log) => String(log.local_day ?? "").trim() === day);
+  };
+
+  const hasAttendanceOnSelectedDay = (bookingId: string, day: string): boolean => {
+    return logsForSelectedDay(bookingId, day).length > 0;
+  };
+
+  const lastLogForSelectedDay = (
+    bookingId: string,
+    day: string
+  ): PromoBookingAttendanceRow | null => {
+    const logs = logsForSelectedDay(bookingId, day);
     return logs.length ? logs[0] : null;
   };
 
@@ -1626,36 +1644,56 @@ const Customer_Promo_List: React.FC = () => {
     }
   };
 
-  const filteredRows = useMemo(() => {
-    const nowMs = tick;
+    const filteredRows = useMemo(() => {
+      const nowMs = tick;
 
-    return rows.filter((r) => {
-      if (!bookingCoversLocalDate(r.start_at, r.end_at, selectedDate)) return false;
+      return rows
+        .filter((r) => {
+          const hasDayAttendance = hasAttendanceOnSelectedDay(r.id, selectedDate);
 
-      if (searchName.trim()) {
-        const q = searchName.trim().toLowerCase();
-        if (!String(r.full_name ?? "").toLowerCase().includes(q)) return false;
-      }
+          if (attendanceFilter === "in_out_customers") {
+            if (!hasDayAttendance) return false;
+          } else {
+            if (!bookingCoversLocalDate(r.start_at, r.end_at, selectedDate) && !hasDayAttendance) {
+              return false;
+            }
+          }
 
-      if (areaFilter !== "all" && r.area !== areaFilter) return false;
+          if (searchName.trim()) {
+            const q = searchName.trim().toLowerCase();
+            if (!String(r.full_name ?? "").toLowerCase().includes(q)) return false;
+          }
 
-      if (areaFilter === "common_area" && commonDurationFilter !== "all") {
-        if (getCommonAreaDurationBucket(r) !== commonDurationFilter) return false;
-      }
+          if (areaFilter !== "all" && r.area !== areaFilter) return false;
 
-      if (areaFilter === "conference_room" && conferenceDurationFilter !== "all") {
-        if (getConferenceDurationBucket(r) !== conferenceDurationFilter) return false;
-      }
+          if (areaFilter === "common_area" && commonDurationFilter !== "all") {
+            if (getCommonAreaDurationBucket(r) !== commonDurationFilter) return false;
+          }
 
-      return true;
-    }).sort((a, b) => {
-      const sa = getStatus(a.start_at, a.end_at, nowMs);
-      const sb = getStatus(b.start_at, b.end_at, nowMs);
-      const order = { ONGOING: 0, UPCOMING: 1, FINISHED: 2 } as const;
-      if (order[sa] !== order[sb]) return order[sa] - order[sb];
-      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-    });
-  }, [rows, selectedDate, searchName, areaFilter, commonDurationFilter, conferenceDurationFilter, tick]);
+          if (areaFilter === "conference_room" && conferenceDurationFilter !== "all") {
+            if (getConferenceDurationBucket(r) !== conferenceDurationFilter) return false;
+          }
+
+          return true;
+        })
+        .sort((a, b) => {
+          const sa = getStatus(a.start_at, a.end_at, nowMs);
+          const sb = getStatus(b.start_at, b.end_at, nowMs);
+          const order = { ONGOING: 0, UPCOMING: 1, FINISHED: 2 } as const;
+          if (order[sa] !== order[sb]) return order[sa] - order[sb];
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        });
+    }, [
+      rows,
+      selectedDate,
+      searchName,
+      areaFilter,
+      attendanceFilter,
+      commonDurationFilter,
+      conferenceDurationFilter,
+      tick,
+      attMap,
+    ]);
 
   const totalRows = filteredRows.length;
   const paidRows = filteredRows.filter(isFinalPaidRow).length;
@@ -1699,14 +1737,25 @@ const Customer_Promo_List: React.FC = () => {
               />
             </div>
 
-            <div className="cpl-control">
-              <label>Area</label>
-              <select value={areaFilter} onChange={(e) => setAreaFilter(e.target.value as AreaFilter)}>
-                <option value="all">All</option>
-                <option value="common_area">Common Area</option>
-                <option value="conference_room">Conference Room</option>
-              </select>
-            </div>
+          <div className="cpl-control">
+            <label>Area</label>
+            <select value={areaFilter} onChange={(e) => setAreaFilter(e.target.value as AreaFilter)}>
+              <option value="all">All</option>
+              <option value="common_area">Common Area</option>
+              <option value="conference_room">Conference Room</option>
+            </select>
+          </div>
+
+          <div className="cpl-control">
+            <label>Memberships</label>
+            <select
+              value={attendanceFilter}
+              onChange={(e) => setAttendanceFilter(e.target.value as AttendanceFilter)}
+            >
+              <option value="all">All Customers</option>
+              <option value="in_out_customers">IN & OUT Customers</option>
+            </select>
+          </div>
 
             <div className="cpl-control">
               <label>
@@ -1745,11 +1794,12 @@ const Customer_Promo_List: React.FC = () => {
               <button
                 className="cpl-btn cpl-btn-light"
                 onClick={() => {
-                  setSelectedDate(yyyyMmDdLocal(new Date()));
-                  setSearchName("");
-                  setAreaFilter("all");
-                  setCommonDurationFilter("all");
-                  setConferenceDurationFilter("all");
+                setSelectedDate(yyyyMmDdLocal(new Date()));
+                setSearchName("");
+                setAreaFilter("all");
+                setAttendanceFilter("all");
+                setCommonDurationFilter("all");
+                setConferenceDurationFilter("all");
                 }}
                 type="button"
               >
@@ -1770,7 +1820,7 @@ const Customer_Promo_List: React.FC = () => {
 
         <section className="cpl-stats">
         <div className="cpl-stat-box">
-          <span>Total Customers</span>
+          <span>{attendanceFilter === "in_out_customers" ? "IN & OUT Today" : "Total Customers"}</span>
           <strong>{totalRows}</strong>
         </div>
 
@@ -1828,7 +1878,7 @@ const Customer_Promo_List: React.FC = () => {
                     const systemPay = getSystemPaidInfo(row);
                     const orderPay = getOrderPaidInfo(row.promo_code);
                     const status = getStatus(row.start_at, row.end_at, tick);
-                    const lastLog = lastLogFor(row.id);
+                    const lastLog = lastLogForSelectedDay(row.id, selectedDate);
                     const expired = isExpired(row.validity_end_at);
 
                     return (
