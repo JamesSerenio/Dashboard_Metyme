@@ -1007,64 +1007,65 @@ const [conferenceDurationFilter, setConferenceDurationFilter] =
     [rangeMode, selectedDay, selectedMonth]
   );
 
-    const filteredRows = useMemo(() => {
-      return rows.filter((r) => {
-        const hasDayAttendance = hasAttendanceOnSelectedDay(r.id, selectedDay);
+  const logsFor = (bookingId: string): PromoBookingAttendanceRow[] => attMap[bookingId] ?? [];
 
-        if (attendanceFilter === "in_out_customers") {
-          if (!hasDayAttendance) return false;
-        } else {
-          if (!bookingOverlapsRange(r.start_at, r.end_at, activeRange) && !hasDayAttendance) {
-            return false;
-          }
+  const lastLogFor = (bookingId: string): PromoBookingAttendanceRow | null => {
+    const logs = logsFor(bookingId);
+    return logs.length ? logs[0] : null;
+  };
+
+  const logsForSelectedDay = (bookingId: string, day: string): PromoBookingAttendanceRow[] => {
+    return logsFor(bookingId).filter((log) => String(log.local_day ?? "").trim() === day);
+  };
+
+  const hasAttendanceOnSelectedDay = (bookingId: string, day: string): boolean => {
+    return logsForSelectedDay(bookingId, day).length > 0;
+  };
+
+  const lastLogForSelectedDay = (
+    bookingId: string,
+    day: string
+  ): PromoBookingAttendanceRow | null => {
+    const logs = logsForSelectedDay(bookingId, day);
+    return logs.length ? logs[0] : null;
+  };
+
+  const filteredRows = useMemo(() => {
+    return rows.filter((r) => {
+      const hasDayAttendance = hasAttendanceOnSelectedDay(r.id, selectedDay);
+
+      if (attendanceFilter === "in_out_customers") {
+        if (!hasDayAttendance) return false;
+      } else {
+        if (!bookingOverlapsRange(r.start_at, r.end_at, activeRange) && !hasDayAttendance) {
+          return false;
         }
+      }
 
-        if (areaFilter !== "all" && r.area !== areaFilter) return false;
+      if (areaFilter !== "all" && r.area !== areaFilter) return false;
 
-        if (areaFilter === "common_area" && commonDurationFilter !== "all") {
-          const bucket = getCommonAreaDurationBucket(r);
-          if (bucket !== commonDurationFilter) return false;
-        }
+      if (areaFilter === "common_area" && commonDurationFilter !== "all") {
+        const bucket = getCommonAreaDurationBucket(r);
+        if (bucket !== commonDurationFilter) return false;
+      }
 
-        if (areaFilter === "conference_room" && conferenceDurationFilter !== "all") {
-          const bucket = getConferenceDurationBucket(r);
-          if (bucket !== conferenceDurationFilter) return false;
-        }
+      if (areaFilter === "conference_room" && conferenceDurationFilter !== "all") {
+        const bucket = getConferenceDurationBucket(r);
+        if (bucket !== conferenceDurationFilter) return false;
+      }
 
-        return true;
-      });
-    }, [
-      rows,
-      activeRange,
-      areaFilter,
-      attendanceFilter,
-      commonDurationFilter,
-      conferenceDurationFilter,
-      selectedDay,
-      attMap,
-    ]);
-
-    const logsFor = (bookingId: string): PromoBookingAttendanceRow[] => attMap[bookingId] ?? [];
-    const lastLogFor = (bookingId: string): PromoBookingAttendanceRow | null => {
-      const logs = logsFor(bookingId);
-      return logs.length ? logs[0] : null;
-    };
-
-    const logsForSelectedDay = (bookingId: string, day: string): PromoBookingAttendanceRow[] => {
-      return logsFor(bookingId).filter((log) => String(log.local_day ?? "").trim() === day);
-    };
-
-    const hasAttendanceOnSelectedDay = (bookingId: string, day: string): boolean => {
-      return logsForSelectedDay(bookingId, day).length > 0;
-    };
-
-    const lastLogForSelectedDay = (
-      bookingId: string,
-      day: string
-    ): PromoBookingAttendanceRow | null => {
-      const logs = logsForSelectedDay(bookingId, day);
-      return logs.length ? logs[0] : null;
-    };
+      return true;
+    });
+  }, [
+    rows,
+    activeRange,
+    areaFilter,
+    attendanceFilter,
+    commonDurationFilter,
+    conferenceDurationFilter,
+    selectedDay,
+    attMap,
+  ]);
 
   const getOrderItems = (code: string | null): PromoOrderItemRow[] => {
     if (!code) return [];
