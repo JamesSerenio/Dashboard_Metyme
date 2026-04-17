@@ -277,6 +277,26 @@ const Customer_Consignment_Record: React.FC = () => {
     };
   }, [filtered]);
 
+  const stats = useMemo(() => {
+  let totalOrders = 0;
+  let paid = 0;
+  let unpaid = 0;
+
+  for (const r of filtered) {
+    if (toBool(r.voided)) continue;
+
+    totalOrders++;
+
+    if (toBool(r.is_paid)) {
+      paid++;
+    } else {
+      unpaid++;
+    }
+  }
+
+  return { totalOrders, paid, unpaid };
+}, [filtered]);
+
   const makeReceiptGroup = (r: CustomerConsignmentRow): ReceiptGroup => {
     const qty = Number(r.quantity ?? 0) || 0;
     const price = round2(toNumber(r.price));
@@ -528,6 +548,23 @@ const Customer_Consignment_Record: React.FC = () => {
             </div>
           </div>
         </section>
+
+              <div className="ccr-stats">
+            <div className="ccr-stat-box">
+              <span>Total Orders</span>
+              <strong>{stats.totalOrders}</strong>
+            </div>
+
+            <div className="ccr-stat-box">
+              <span>Paid</span>
+              <strong>{stats.paid}</strong>
+            </div>
+
+            <div className="ccr-stat-box">
+              <span>Unpaid</span>
+              <strong>{stats.unpaid}</strong>
+            </div>
+          </div>
 
         {loading ? (
           <div className="ccr-state-card">Loading...</div>
