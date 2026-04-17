@@ -547,6 +547,18 @@ const Customer_Lists: React.FC = () => {
       });
   }, [sessions, selectedDate, searchName]);
 
+  const totals = useMemo(() => {
+    const totalCustomer = filteredSessions.length;
+    const paid = filteredSessions.filter((session) => getFinalPaidStatus(session)).length;
+    const unpaid = totalCustomer - paid;
+
+    return {
+      totalCustomer,
+      paid,
+      unpaid,
+    };
+  }, [filteredSessions]);
+
   const fetchCustomerSessions = async (): Promise<CustomerSession[]> => {
     const { data, error } = await supabase
       .from("customer_sessions")
@@ -1854,6 +1866,23 @@ const Customer_Lists: React.FC = () => {
           </div>
         </section>
 
+        <section className="cll-stats">
+          <div className="cll-stat-box">
+            <span>Total Customer</span>
+            <strong>{totals.totalCustomer}</strong>
+          </div>
+
+          <div className="cll-stat-box">
+            <span>Paid</span>
+            <strong>{totals.paid}</strong>
+          </div>
+
+          <div className="cll-stat-box">
+            <span>Unpaid</span>
+            <strong>{totals.unpaid}</strong>
+          </div>
+        </section>
+        
         <section className="cll-table-wrap">
           {loading ? (
             <div className="cll-empty">Loading customer records...</div>
