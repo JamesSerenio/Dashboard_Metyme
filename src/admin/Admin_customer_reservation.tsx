@@ -1176,11 +1176,35 @@ const Admin_customer_reservation: React.FC = () => {
     return paid >= due;
   };
 
-  const getFinalPaidStatus = (s: CustomerSession): boolean => {
-    const systemPaid = getSystemIsPaid(s);
-    const orderPaid = hasOrders(s) ? getOrderIsPaid(s) : true;
-    return systemPaid && orderPaid;
+const getFinalPaidStatus = (s: CustomerSession): boolean => {
+  const systemPaid = getSystemIsPaid(s);
+  const orderPaid = hasOrders(s) ? getOrderIsPaid(s) : true;
+  return systemPaid && orderPaid;
+};
+
+const totals = useMemo(() => {
+  const totalCustomer = filteredSessions.length;
+  const paid = filteredSessions.filter((s) => getFinalPaidStatus(s)).length;
+  const unpaid = totalCustomer - paid;
+
+  const systemTotal = filteredSessions.reduce(
+    (sum, s) => sum + getSessionSystemCost(s),
+    0
+  );
+
+  const ordersTotal = filteredSessions.reduce(
+    (sum, s) => sum + getOrdersTotal(s),
+    0
+  );
+
+  return {
+    totalCustomer,
+    paid,
+    unpaid,
+    systemTotal,
+    ordersTotal,
   };
+}, [filteredSessions]);
 
   const syncSingleSessionPaidState = async (s: CustomerSession): Promise<void> => {
     const finalPaid = getFinalPaidStatus(s);
@@ -2046,9 +2070,36 @@ const Admin_customer_reservation: React.FC = () => {
               </button>
             </div>
           </div>
-        </div>
+          </div>
 
-        <div className="acr-table-wrap">
+          <div className="acr-bottom-stats">
+            <div className="acr-stat-box">
+              <span>Total Customer</span>
+              <strong>{totals.totalCustomer}</strong>
+            </div>
+
+            <div className="acr-stat-box">
+              <span>Paid</span>
+              <strong>{totals.paid}</strong>
+            </div>
+
+            <div className="acr-stat-box">
+              <span>Unpaid</span>
+              <strong>{totals.unpaid}</strong>
+            </div>
+
+            <div className="acr-stat-box">
+              <span>System Total</span>
+              <strong>₱{totals.systemTotal.toLocaleString()}</strong>
+            </div>
+
+            <div className="acr-stat-box">
+              <span>Orders Total</span>
+              <strong>₱{totals.ordersTotal.toLocaleString()}</strong>
+            </div>
+          </div>
+
+          <div className="acr-table-wrap">
           {loading ? (
             <div className="acr-empty">Loading reservations...</div>
           ) : filteredSessions.length === 0 ? (
