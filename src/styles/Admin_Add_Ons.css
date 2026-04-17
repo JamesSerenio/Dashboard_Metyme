@@ -765,3 +765,33 @@
     width: 100%;
   }
 }
+.aca-bottom-stats {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.aca-stat-box {
+  flex: 1;
+  min-width: 180px;
+  padding: 16px;
+  border-radius: 20px;
+  background: linear-gradient(180deg, #fffaf2, #f3eadb);
+  border: 1px solid rgba(102, 79, 47, 0.1);
+  box-shadow: var(--aca-shadow-soft);
+  text-align: center;
+}
+
+.aca-stat-box span {
+  display: block;
+  font-size: 12px;
+  color: var(--aca-text-soft);
+  font-weight: 700;
+}
+
+.aca-stat-box strong {
+  font-size: 20px;
+  font-weight: 1000;
+  color: var(--aca-title);
+}

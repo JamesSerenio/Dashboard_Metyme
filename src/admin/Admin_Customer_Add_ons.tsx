@@ -551,19 +551,38 @@ const Admin_Customer_Add_ons: React.FC = () => {
     return groups.sort((a, b) => ms(b.created_at) - ms(a.created_at));
   }, [records]);
 
-  const groupedOrders = useMemo<OrderGroup[]>(() => {
-    const q = searchText.trim().toLowerCase();
-    if (!q) return groupedOrdersAll;
+const groupedOrders = useMemo<OrderGroup[]>(() => {
+  const q = searchText.trim().toLowerCase();
+  if (!q) return groupedOrdersAll;
 
-    return groupedOrdersAll.filter((o) => {
-      const name = String(o.full_name ?? "").toLowerCase();
-      const seat = String(o.seat_number ?? "").toLowerCase();
-      const items = o.items.some((it) =>
-        String(it.item_name ?? "").toLowerCase().includes(q)
-      );
-      return name.includes(q) || seat.includes(q) || items;
-    });
-  }, [groupedOrdersAll, searchText]);
+  return groupedOrdersAll.filter((o) => {
+    const name = String(o.full_name ?? "").toLowerCase();
+    const seat = String(o.seat_number ?? "").toLowerCase();
+    const items = o.items.some((it) =>
+      String(it.item_name ?? "").toLowerCase().includes(q)
+    );
+    return name.includes(q) || seat.includes(q) || items;
+  });
+}, [groupedOrdersAll, searchText]);
+
+const totals = useMemo(() => {
+  const totalOrders = groupedOrders.length;
+
+  const paid = groupedOrders.filter((o) => o.is_paid).length;
+  const unpaid = totalOrders - paid;
+
+  const systemTotal = groupedOrders.reduce(
+    (sum, o) => sum + (o.gcash_amount + o.cash_amount),
+    0
+  );
+
+  return {
+    totalOrders,
+    paid,
+    unpaid,
+    systemTotal,
+  };
+}, [groupedOrders]);
 
   const findBookingCodeForGroup = async (
     group: OrderGroup
@@ -1052,11 +1071,35 @@ const Admin_Customer_Add_ons: React.FC = () => {
           </div>
         </div>
 
+              <div className="aca-bottom-stats">
+        <div className="aca-stat-box">
+          <span>Total Orders</span>
+          <strong>{totals.totalOrders}</strong>
+        </div>
+
+        <div className="aca-stat-box">
+          <span>Paid</span>
+          <strong>{totals.paid}</strong>
+        </div>
+
+        <div className="aca-stat-box">
+          <span>Unpaid</span>
+          <strong>{totals.unpaid}</strong>
+        </div>
+
+        <div className="aca-stat-box">
+          <span>System Total</span>
+          <strong>₱{totals.systemTotal.toLocaleString()}</strong>
+        </div>
+      </div>
+
         {loading ? (
           <p className="aca-note">Loading...</p>
         ) : groupedOrders.length === 0 ? (
           <p className="aca-note">No add-ons found for this range</p>
         ) : (
+
+          
           <div
             className="aca-table-wrap"
             key={`${filterMode}-${activeRange.fileLabel}`}
