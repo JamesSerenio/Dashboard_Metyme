@@ -348,17 +348,23 @@ const Customer_Add_ons: React.FC = () => {
     return groups.sort((a, b) => ms(b.created_at) - ms(a.created_at));
   }, [records]);
 
-    const groupedOrders = useMemo<OrderGroup[]>(() => {
-      const q = searchText.trim().toLowerCase();
-      if (!q) return groupedOrdersAll;
+const groupedOrders = useMemo<OrderGroup[]>(() => {
+  const q = searchText.trim().toLowerCase();
+  if (!q) return groupedOrdersAll;
 
-      return groupedOrdersAll.filter((o) => {
-        const name = String(o.full_name ?? "").toLowerCase();
-        const seat = String(o.seat_number ?? "").toLowerCase();
-        const items = o.items.some((it) => String(it.item_name ?? "").toLowerCase().includes(q));
-        return name.includes(q) || seat.includes(q) || items;
-      });
-    }, [groupedOrdersAll, searchText]);
+  return groupedOrdersAll.filter((o) => {
+    const name = String(o.full_name ?? "").toLowerCase();
+    const seat = String(o.seat_number ?? "").toLowerCase();
+    const items = o.items.some((it) =>
+      String(it.item_name ?? "").toLowerCase().includes(q)
+    );
+    return name.includes(q) || seat.includes(q) || items;
+  });
+}, [groupedOrdersAll, searchText]);
+
+const totalOrders = groupedOrders.length;
+const totalPaidOrders = groupedOrders.filter((o) => toBool(o.is_paid)).length;
+const totalUnpaidOrders = totalOrders - totalPaidOrders;
 
     const openPaymentModal = (o: OrderGroup): void => {
       setPaymentTarget(o);
@@ -579,7 +585,25 @@ const Customer_Add_ons: React.FC = () => {
               </button>
             </div>
           </div>
+          
         </section>
+
+        <div className="cao-stats">
+      <div className="cao-stat-box">
+        <span>Total Orders</span>
+        <strong>{totalOrders}</strong>
+      </div>
+
+      <div className="cao-stat-box">
+        <span>Paid</span>
+        <strong>{totalPaidOrders}</strong>
+      </div>
+
+      <div className="cao-stat-box">
+        <span>Unpaid</span>
+        <strong>{totalUnpaidOrders}</strong>
+      </div>
+    </div>
 
         {loading ? (
           <p className="cao-note">Loading...</p>
