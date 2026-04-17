@@ -326,22 +326,31 @@ const Admin_Customer_Consignment_Record: React.FC = () => {
   }, [rows, searchText]);
 
   const totals = useMemo(() => {
-    let totalAmount = 0;
-    let totalCash = 0;
-    let totalGcash = 0;
+    const validRows = filtered.filter((r) => !toBool(r.voided));
 
-    for (const r of filtered) {
-      const isVoided = toBool(r.voided);
-      if (isVoided) continue;
-      totalAmount += round2(toNumber(r.total));
-      totalCash += round2(toNumber(r.cash_amount));
-      totalGcash += round2(toNumber(r.gcash_amount));
-    }
+    const totalOrder = validRows.length;
+    const paid = validRows.filter((r) => toBool(r.is_paid)).length;
+    const unpaid = totalOrder - paid;
+
+    const systemTotal = round2(
+      validRows.reduce((sum, r) => sum + round2(toNumber(r.total)), 0)
+    );
+
+    const totalCash = round2(
+      validRows.reduce((sum, r) => sum + round2(toNumber(r.cash_amount)), 0)
+    );
+
+    const totalGcash = round2(
+      validRows.reduce((sum, r) => sum + round2(toNumber(r.gcash_amount)), 0)
+    );
 
     return {
-      totalAmount: round2(totalAmount),
-      totalCash: round2(totalCash),
-      totalGcash: round2(totalGcash),
+      totalOrder,
+      paid,
+      unpaid,
+      systemTotal,
+      totalCash,
+      totalGcash,
     };
   }, [filtered]);
 
@@ -806,7 +815,7 @@ const Admin_Customer_Consignment_Record: React.FC = () => {
             </div>
 
             <div className="customer-subtext">
-              Rows: <strong>{filtered.length}</strong> • Total: <strong>{moneyText(totals.totalAmount)}</strong> • Cash:{" "}
+              Rows: <strong>{filtered.length}</strong> • Total: <strong>{moneyText(totals.systemTotal)}</strong> • Cash:{" "}
               <strong>{moneyText(totals.totalCash)}</strong> • GCash:{" "}
               <strong>{moneyText(totals.totalGcash)}</strong>
             </div>
@@ -880,6 +889,27 @@ const Admin_Customer_Consignment_Record: React.FC = () => {
                 {exporting ? "Exporting..." : "Export to Excel"}
               </button>
             </div>
+          </div>
+          </div>
+        <div className="acr-stats">
+          <div className="acr-stat-box">
+            <span>Total Customer</span>
+            <strong>{totals.totalOrder}</strong>
+          </div>
+
+          <div className="acr-stat-box">
+            <span>Paid</span>
+            <strong>{totals.paid}</strong>
+          </div>
+
+          <div className="acr-stat-box">
+            <span>Unpaid</span>
+            <strong>{totals.unpaid}</strong>
+          </div>
+
+          <div className="acr-stat-box">
+            <span>System Total</span>
+            <strong>{moneyText(totals.systemTotal)}</strong>
           </div>
         </div>
 
