@@ -1912,7 +1912,21 @@ const Customer_Promo_List: React.FC = () => {
                         <td>{new Date(row.start_at).toLocaleString("en-PH")}</td>
                         <td>{new Date(row.end_at).toLocaleString("en-PH")}</td>
                         <td className="cpl-strong">₱{systemDue.toFixed(2)}</td>
-                        <td className="cpl-strong">₱{orderDue.toFixed(2)}</td>
+                        <td className="cpl-strong">
+                          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                            <span>₱{orderDue.toFixed(2)}</span>
+
+                            {hasOrder(row.promo_code) && (
+                              <button
+                                className="cpl-btn-mini"
+                                onClick={() => setSelectedOrderBooking(row)}
+                                type="button"
+                              >
+                                View Order
+                              </button>
+                            )}
+                          </div>
+                        </td>
                         <td>
                           <div className="cpl-stack">
                             <strong>{getDiscountTextFrom(row.discount_kind, row.discount_value)}</strong>
@@ -2025,15 +2039,6 @@ const Customer_Promo_List: React.FC = () => {
                             <button className="cpl-btn-mini" onClick={() => setSelected(row)} type="button">
                               View Receipt
                             </button>
-                            {hasOrder(row.promo_code) ? (
-                              <button
-                                className="cpl-btn-mini"
-                                onClick={() => setSelectedOrderBooking(row)}
-                                type="button"
-                              >
-                                View Order
-                              </button>
-                            ) : null}
                             <button className="cpl-btn-mini" onClick={() => openDiscountModal(row)} type="button">
                               Discount
                             </button>
