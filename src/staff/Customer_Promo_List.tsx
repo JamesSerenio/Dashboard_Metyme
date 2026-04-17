@@ -1246,15 +1246,33 @@ const Customer_Promo_List: React.FC = () => {
           return;
         }
 
-        const { error: deleteErr } = await supabase
-          .from("addon_order_items")
-          .delete()
-          .eq("id", item.id);
+      let legacyAddonDelete = supabase
+        .from("customer_session_add_ons")
+        .delete()
+        .eq("add_on_id", item.source_item_id)
+        .eq("full_name", booking.full_name)
+        .eq("seat_number", seatLabel(booking));
 
-        if (deleteErr) {
-          alert(`Cancelled copy saved, but item delete failed: ${deleteErr.message}`);
-          return;
-        }
+      if (item.created_at) {
+        legacyAddonDelete = legacyAddonDelete.eq("created_at", item.created_at);
+      }
+
+      const { error: legacyAddonDeleteErr } = await legacyAddonDelete;
+
+      if (legacyAddonDeleteErr) {
+        alert(`Legacy add-on delete failed: ${legacyAddonDeleteErr.message}`);
+        return;
+      }
+
+      const { error: deleteErr } = await supabase
+        .from("addon_order_items")
+        .delete()
+        .eq("id", item.id);
+
+      if (deleteErr) {
+        alert(`Cancelled copy saved, but item delete failed: ${deleteErr.message}`);
+        return;
+      }
 
         if (item.source_item_id) {
           const { data: addonRow, error: addonFetchErr } = await supabase
