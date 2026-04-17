@@ -1100,11 +1100,35 @@ const Admin_customer_list: React.FC = () => {
     return paid >= due;
   };
 
-  const getFinalPaidStatus = (s: CustomerSession): boolean => {
-    const systemPaid = getSystemIsPaid(s);
-    const orderPaid = hasOrders(s) ? getOrderIsPaid(s) : true;
-    return systemPaid && orderPaid;
-  };
+    const getFinalPaidStatus = (s: CustomerSession): boolean => {
+      const systemPaid = getSystemIsPaid(s);
+      const orderPaid = hasOrders(s) ? getOrderIsPaid(s) : true;
+      return systemPaid && orderPaid;
+    };
+
+    const totals = useMemo(() => {
+      const totalCustomer = filteredSessions.length;
+      const paid = filteredSessions.filter((s) => getFinalPaidStatus(s)).length;
+      const unpaid = totalCustomer - paid;
+
+      const systemTotal = filteredSessions.reduce(
+        (sum, s) => sum + getSessionSystemCost(s),
+        0
+      );
+
+      const ordersTotal = filteredSessions.reduce(
+        (sum, s) => sum + getOrdersTotal(s),
+        0
+      );
+
+      return {
+        totalCustomer,
+        paid,
+        unpaid,
+        systemTotal,
+        ordersTotal,
+      };
+    }, [filteredSessions]);
 
   const syncSingleSessionPaidState = async (s: CustomerSession): Promise<void> => {
     const finalPaid = getFinalPaidStatus(s);
@@ -2217,6 +2241,33 @@ const Admin_customer_list: React.FC = () => {
                 Delete (day)
               </button>
             </div>
+          </div>
+        </section>
+
+        <section className="acl-stats">
+          <div className="acl-stat-box">
+            <span>Total Customer</span>
+            <strong>{totals.totalCustomer}</strong>
+          </div>
+
+          <div className="acl-stat-box">
+            <span>Paid</span>
+            <strong>{totals.paid}</strong>
+          </div>
+
+          <div className="acl-stat-box">
+            <span>Unpaid</span>
+            <strong>{totals.unpaid}</strong>
+          </div>
+
+          <div className="acl-stat-box">
+            <span>System Total</span>
+            <strong>₱{totals.systemTotal.toLocaleString()}</strong>
+          </div>
+
+          <div className="acl-stat-box">
+            <span>Orders Total</span>
+            <strong>₱{totals.ordersTotal.toLocaleString()}</strong>
           </div>
         </section>
 
