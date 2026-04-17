@@ -303,10 +303,8 @@ const Product_Item_lists: React.FC = () => {
     setExpenseAmount(String(total));
   }, [selectedAddOn, expenseType, qty]);
 
-  const totalProducts = addOns.length;
-  const lowStockCount = addOns.filter((a) => toNumber(a.stocks) <= 10).length;
-  const totalExpected = addOns.reduce((sum, a) => sum + toNumber(a.expected_sales), 0);
-  const totalOverall = addOns.reduce((sum, a) => sum + toNumber(a.overall_sales), 0);
+const totalProducts = addOns.length;
+const lowStockCount = addOns.filter((a) => toNumber(a.stocks) <= 10).length;
 
   const openExpenseModal = (): void => {
     setFullName("");
@@ -515,14 +513,6 @@ const Product_Item_lists: React.FC = () => {
                 <span className="prod-items-summary-label">Low Stocks</span>
                 <strong>{lowStockCount}</strong>
               </div>
-              <div className="prod-items-summary-card">
-                <span className="prod-items-summary-label">Expected Sales</span>
-                <strong>{money2(totalExpected)}</strong>
-              </div>
-              <div className="prod-items-summary-card">
-                <span className="prod-items-summary-label">Overall Sales</span>
-                <strong>{money2(totalOverall)}</strong>
-              </div>
             </div>
 
             <div className="prod-items-toolbar-search">
@@ -613,8 +603,6 @@ const Product_Item_lists: React.FC = () => {
                     <th>Bale</th>
                     <th>Stocks</th>
                     <th>Expenses (qty)</th>
-                    <th>Overall</th>
-                    <th>Expected</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -642,8 +630,6 @@ const Product_Item_lists: React.FC = () => {
                       <td>{toNumber(a.bilin)}</td>
                       <td>{toNumber(a.stocks)}</td>
                       <td>{toNumber(a.expenses)}</td>
-                      <td>{money2(toNumber(a.overall_sales))}</td>
-                      <td>{money2(toNumber(a.expected_sales))}</td>
                     </tr>
                   ))}
                 </tbody>
