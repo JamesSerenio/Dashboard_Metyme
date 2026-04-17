@@ -2092,7 +2092,23 @@ const Customer_Reservations: React.FC = () => {
             </div>
           </div>
         </section>
+          <div className="crv-stats">
+          <div className="crv-stat-box">
+            <span>Total Customer</span>
+            <strong>{filteredSessions.length}</strong>
+          </div>
 
+          <div className="crv-stat-box">
+            <span>Paid</span>
+            <strong>{filteredSessions.filter((s) => toBool(s.is_paid)).length}</strong>
+          </div>
+
+          <div className="crv-stat-box">
+            <span>Unpaid</span>
+            <strong>{filteredSessions.filter((s) => !toBool(s.is_paid)).length}</strong>
+          </div>
+        </div>
+        
         <section className="crv-table-wrap">
           {loading ? (
             <div className="crv-empty">Loading reservation records...</div>
