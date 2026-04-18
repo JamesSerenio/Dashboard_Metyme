@@ -1355,10 +1355,10 @@ const Customer_Promo_List: React.FC = () => {
       const addGcash = moneyFromStr(gcashInput);
       const addCash = moneyFromStr(cashInput);
 
-    const nextGcash = round2(paymentTarget.gcash_amount + addGcash);
-    const nextCash = round2(paymentTarget.cash_amount + addCash);
+    const nextGcash = round2(addGcash);
+    const nextCash = round2(addCash);
 
-    const systemDue = round2(Number(paymentTarget.price) || 0);
+    const systemDue = getSystemDue(paymentTarget);
     const nextTotalPaid = round2(nextGcash + nextCash);
     const nextPaid = nextTotalPaid >= systemDue;
     const nextPaidAt = nextPaid ? new Date().toISOString() : null;
@@ -1886,7 +1886,23 @@ const updatedRow: PromoBookingRow = {
                         <td>{new Date(row.start_at).toLocaleString("en-PH")}</td>
                         <td>{new Date(row.end_at).toLocaleString("en-PH")}</td>
                         <td className="cpl-strong">₱{systemDue.toFixed(2)}</td>
-                        <td className="cpl-strong">₱{orderDue.toFixed(2)}</td>
+                        <td>
+                        {hasOrder(row.promo_code) ? (
+                          <div className="cpl-order-col">
+                            <strong>₱{orderDue.toFixed(2)}</strong>
+
+                            <button
+                              className="cpl-btn-mini"
+                              onClick={() => setSelectedOrderBooking(row)}
+                              type="button"
+                            >
+                              View Order
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="cpl-empty cpl-empty-tight">No order</div>
+                        )}
+                      </td>
                         <td>
                           <div className="cpl-stack">
                             <strong>{getDiscountTextFrom(row.discount_kind, row.discount_value)}</strong>
@@ -1994,15 +2010,6 @@ const updatedRow: PromoBookingRow = {
                             <button className="cpl-btn-mini" onClick={() => setSelected(row)} type="button">
                               View Receipt
                             </button>
-                            {hasOrder(row.promo_code) ? (
-                              <button
-                                className="cpl-btn-mini"
-                                onClick={() => setSelectedOrderBooking(row)}
-                                type="button"
-                              >
-                                View Order
-                              </button>
-                            ) : null}
                             <button className="cpl-btn-mini" onClick={() => openDiscountModal(row)} type="button">
                               Discount
                             </button>
