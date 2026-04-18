@@ -225,13 +225,13 @@ const Customer_Add_ons: React.FC = () => {
   const [cancellingKey, setCancellingKey] = useState<string | null>(null);
   const [orderPayments, setOrderPayments] = useState<Record<string, CustomerOrderPayment>>({});
   const [addonOrderLookup, setAddonOrderLookup] = useState<
-  Array<{
-    booking_code: string;
-    created_at: string | null;
-    full_name: string | null;
-    seat_number: string | null;
-  }>
->([]);
+    Array<{
+      booking_code: string;
+      created_at: string | null;
+      full_name: string | null;
+      seat_number: string | null;
+    }>
+  >([]);
 
   useEffect(() => {
     void fetchAddOns(selectedDate);
@@ -328,13 +328,13 @@ const Customer_Add_ons: React.FC = () => {
   }>;
 
   setAddonOrderLookup(
-  addonOrderRows.map((r) => ({
-    booking_code: String(r.booking_code ?? "").trim().toUpperCase(),
-    created_at: r.created_at ?? null,
-    full_name: r.full_name ?? null,
-    seat_number: r.seat_number ?? null,
-  }))
-);
+    addonOrderRows.map((r) => ({
+      booking_code: String(r.booking_code ?? "").trim().toUpperCase(),
+      created_at: r.created_at ?? null,
+      full_name: r.full_name ?? null,
+      seat_number: r.seat_number ?? null,
+    }))
+  );
 
   const bookingCodes = Array.from(
     new Set(
@@ -353,7 +353,7 @@ const Customer_Add_ons: React.FC = () => {
 const paymentRes = await supabase
   .from("customer_order_payments")
   .select("booking_code, full_name, seat_number, gcash_amount, cash_amount, is_paid, paid_at")
-  .in("booking_code", bookingCodes);;
+  .in("booking_code", bookingCodes);
 
   if (paymentRes.error) {
     console.error("FETCH ORDER PAYMENTS ERROR:", paymentRes.error);
@@ -374,112 +374,131 @@ const paymentRes = await supabase
   };
 
   const groupedOrdersAll = useMemo<OrderGroup[]>(() => {
-  if (records.length === 0) return [];
+    if (records.length === 0) return [];
 
-  const groups: OrderGroup[] = [];
-  let current: OrderGroup | null = null;
-  let lastRow: CustomerAddOnMerged | null = null;
+    const groups: OrderGroup[] = [];
+    let current: OrderGroup | null = null;
+    let lastRow: CustomerAddOnMerged | null = null;
 
-  for (const row of records) {
-    const startNew =
-      current === null ||
-      lastRow === null ||
-      !samePersonSeat(row, lastRow) ||
-      Math.abs(ms(row.created_at) - ms(lastRow.created_at)) > GROUP_WINDOW_MS;
+    for (const row of records) {
+      const startNew =
+        current === null ||
+        lastRow === null ||
+        !samePersonSeat(row, lastRow) ||
+        Math.abs(ms(row.created_at) - ms(lastRow.created_at)) > GROUP_WINDOW_MS;
 
-    if (startNew) {
-      const key = `${norm(row.full_name)}|${norm(row.seat_number)}|${ms(row.created_at)}`;
+      if (startNew) {
+        const key = `${norm(row.full_name)}|${norm(row.seat_number)}|${ms(row.created_at)}`;
 
-      current = {
-        key,
-        created_at: row.created_at,
-        full_name: row.full_name,
-        seat_number: row.seat_number,
-        booking_code: null,
-        items: [],
-        grand_total: 0,
-        gcash_amount: 0,
-        cash_amount: 0,
-        is_paid: false,
-        paid_at: null,
-      };
+        current = {
+          key,
+          created_at: row.created_at,
+          full_name: row.full_name,
+          seat_number: row.seat_number,
+          booking_code: null,
+          items: [],
+          grand_total: 0,
+          gcash_amount: 0,
+          cash_amount: 0,
+          is_paid: false,
+          paid_at: null,
+        };
 
-      groups.push(current);
-    }
-
-    if (!current) continue;
-
-    current.items.push({
-      id: row.id,
-      add_on_id: row.add_on_id,
-      category: row.category,
-      size: row.size,
-      item_name: row.item_name,
-      quantity: Number(row.quantity) || 0,
-      price: row.price,
-      total: row.total,
-    });
-
-    current.grand_total = round2(current.grand_total + row.total);
-    current.gcash_amount = round2(current.gcash_amount + row.gcash_amount);
-    current.cash_amount = round2(current.cash_amount + row.cash_amount);
-    current.is_paid = current.is_paid || row.is_paid;
-    current.paid_at = current.paid_at ?? row.paid_at;
-
-    lastRow = row;
-  }
-
-  const findBookingCodeForGroupLocal = (g: OrderGroup): string | null => {
-    const groupTime = ms(g.created_at);
-
-    const candidates = addonOrderLookup.filter((r) => {
-      return (
-        norm(r.full_name) === norm(g.full_name) &&
-        norm(r.seat_number) === norm(g.seat_number)
-      );
-    });
-
-    if (candidates.length === 0) return null;
-
-    let bestCode: string | null = null;
-    let bestDiff = Number.POSITIVE_INFINITY;
-
-    for (const row of candidates) {
-      const rowTime = ms(String(row.created_at ?? ""));
-      if (!Number.isFinite(rowTime)) continue;
-
-      const diff = Math.abs(rowTime - groupTime);
-      if (diff < bestDiff) {
-        bestDiff = diff;
-        bestCode = String(row.booking_code ?? "").trim().toUpperCase() || null;
+        groups.push(current);
       }
+
+      if (!current) continue;
+
+      current.items.push({
+        id: row.id,
+        add_on_id: row.add_on_id,
+        category: row.category,
+        size: row.size,
+        item_name: row.item_name,
+        quantity: Number(row.quantity) || 0,
+        price: row.price,
+        total: row.total,
+      });
+
+      current.grand_total = round2(current.grand_total + row.total);
+      current.gcash_amount = round2(current.gcash_amount + row.gcash_amount);
+      current.cash_amount = round2(current.cash_amount + row.cash_amount);
+      current.is_paid = current.is_paid || row.is_paid;
+      current.paid_at = current.paid_at ?? row.paid_at;
+
+      lastRow = row;
     }
 
-    return bestCode;
-  };
+    const findBookingCodeForGroupLocal = (g: OrderGroup): string | null => {
+      const groupTime = ms(g.created_at);
 
-  return groups
-    .map((g) => {
-      const bookingCode = findBookingCodeForGroupLocal(g);
-      const payment = bookingCode ? orderPayments[bookingCode] ?? null : null;
+      const candidates = addonOrderLookup.filter((r) => {
+        return (
+          norm(r.full_name) === norm(g.full_name) &&
+          norm(r.seat_number) === norm(g.seat_number)
+        );
+      });
 
-      return {
-        ...g,
-        booking_code: bookingCode,
-        gcash_amount:
-          payment && round2(Math.max(0, toNumber(g.gcash_amount))) <= 0
+      if (candidates.length === 0) return null;
+
+      let bestCode: string | null = null;
+      let bestDiff = Number.POSITIVE_INFINITY;
+
+      for (const row of candidates) {
+        const rowTime = ms(String(row.created_at ?? ""));
+        if (!Number.isFinite(rowTime)) continue;
+
+        const diff = Math.abs(rowTime - groupTime);
+        if (diff < bestDiff) {
+          bestDiff = diff;
+          bestCode = String(row.booking_code ?? "").trim().toUpperCase() || null;
+        }
+      }
+
+      return bestCode;
+    };
+
+    return groups
+      .map((g) => {
+        const bookingCode = findBookingCodeForGroupLocal(g);
+        const payment = bookingCode ? orderPayments[bookingCode] ?? null : null;
+
+        const hasOwnManualAmounts =
+          round2(Math.max(0, toNumber(g.gcash_amount)) + Math.max(0, toNumber(g.cash_amount))) > 0;
+
+        const nextGcash =
+          payment && !hasOwnManualAmounts
             ? round2(Math.max(0, toNumber(payment.gcash_amount)))
-            : g.gcash_amount,
-        cash_amount:
-          payment && round2(Math.max(0, toNumber(g.cash_amount))) <= 0
+            : g.gcash_amount;
+
+        const nextCash =
+          payment && !hasOwnManualAmounts
             ? round2(Math.max(0, toNumber(payment.cash_amount)))
-            : g.cash_amount,
-        is_paid: payment ? toBool(payment.is_paid) || g.is_paid : g.is_paid,
-        paid_at: payment?.paid_at ?? g.paid_at ?? null,
-      };
-    })
-    .sort((a, b) => ms(b.created_at) - ms(a.created_at));
-}, [records, orderPayments, addonOrderLookup]);
+            : g.cash_amount;
+
+        const nextIsPaid =
+          hasOwnManualAmounts
+            ? g.is_paid
+            : payment
+            ? toBool(payment.is_paid)
+            : g.is_paid;
+
+        const nextPaidAt =
+          hasOwnManualAmounts
+            ? g.paid_at
+            : payment?.paid_at ?? g.paid_at ?? null;
+
+        return {
+          ...g,
+          booking_code: bookingCode,
+          gcash_amount: nextGcash,
+          cash_amount: nextCash,
+          is_paid: nextIsPaid,
+          paid_at: nextPaidAt,
+        };
+      })
+      .sort((a, b) => ms(b.created_at) - ms(a.created_at));
+  }, [records, orderPayments, addonOrderLookup]);
 
 const groupedOrders = useMemo<OrderGroup[]>(() => {
   const q = searchText.trim().toLowerCase();
@@ -552,6 +571,9 @@ const totalUnpaidOrders = totalOrders - totalPaidOrders;
 
     const g = round2(Math.max(0, toNumber(gcashInput)));
     const c = round2(Math.max(0, toNumber(cashInput)));
+    const totalPaid = round2(g + c);
+    const isPaid = paymentTarget.grand_total <= 0 ? true : totalPaid >= paymentTarget.grand_total;
+    const paidAt = isPaid ? new Date().toISOString() : null;
 
     try {
       setSavingPayment(true);
@@ -559,23 +581,42 @@ const totalUnpaidOrders = totalOrders - totalPaidOrders;
       const bookingCode =
         paymentTarget.booking_code ?? (await findBookingCodeForGroup(paymentTarget));
 
-      if (!bookingCode) {
-        alert("No booking code found for this add-on order.");
-        return;
-      }
+      if (bookingCode) {
+        const { error } = await supabase.rpc("pay_addon_order_by_booking_code", {
+          p_booking_code: bookingCode,
+          p_full_name: paymentTarget.full_name,
+          p_seat_number: paymentTarget.seat_number,
+          p_order_total: paymentTarget.grand_total,
+          p_gcash_amount: g,
+          p_cash_amount: c,
+        });
 
-      const { error } = await supabase.rpc("pay_addon_order_by_booking_code", {
-        p_booking_code: bookingCode,
-        p_full_name: paymentTarget.full_name,
-        p_seat_number: paymentTarget.seat_number,
-        p_order_total: paymentTarget.grand_total,
-        p_gcash_amount: g,
-        p_cash_amount: c,
-      });
+        if (error) {
+          alert(`Save payment error: ${error.message}`);
+          return;
+        }
+      } else {
+        const itemIds = paymentTarget.items.map((it) => it.id);
 
-      if (error) {
-        alert(`Save payment error: ${error.message}`);
-        return;
+        if (itemIds.length === 0) {
+          alert("No add-on items found for this payment.");
+          return;
+        }
+
+        const { error } = await supabase
+          .from("customer_session_add_ons")
+          .update({
+            gcash_amount: g,
+            cash_amount: c,
+            is_paid: isPaid,
+            paid_at: paidAt,
+          })
+          .in("id", itemIds);
+
+        if (error) {
+          alert(`Save manual payment error: ${error.message}`);
+          return;
+        }
       }
 
       setPaymentTarget(null);
