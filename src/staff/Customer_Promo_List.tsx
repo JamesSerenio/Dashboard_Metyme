@@ -611,10 +611,23 @@ const Customer_Promo_List: React.FC = () => {
   const [cashInput, setCashInput] = useState<string>("0");
   const [savingPayment, setSavingPayment] = useState<boolean>(false);
 
-  const [orderPaymentTarget, setOrderPaymentTarget] = useState<PromoBookingRow | null>(null);
-  const [orderGcashInput, setOrderGcashInput] = useState<string>("0");
-  const [orderCashInput, setOrderCashInput] = useState<string>("0");
-  const [savingOrderPayment, setSavingOrderPayment] = useState<boolean>(false);
+const [orderPaymentTarget, setOrderPaymentTarget] = useState<PromoBookingRow | null>(null);
+const [orderGcashInput, setOrderGcashInput] = useState<string>("0");
+const [orderCashInput, setOrderCashInput] = useState<string>("0");
+const [savingOrderPayment, setSavingOrderPayment] = useState<boolean>(false);
+const [loadingOrderPayment, setLoadingOrderPayment] = useState<boolean>(false);
+  const [orderPaymentMap, setOrderPaymentMap] = useState<
+    Record<
+      string,
+      {
+        gcash: number;
+        cash: number;
+        order_total: number;
+        is_paid: boolean;
+        paid_at: string | null;
+      }
+    >
+  >({});
 
   const [discountTarget, setDiscountTarget] = useState<PromoBookingRow | null>(null);
   const [discountKind, setDiscountKind] = useState<DiscountKind>("none");
@@ -929,12 +942,53 @@ const Customer_Promo_List: React.FC = () => {
       });
     });
 
-    Object.keys(itemMap).forEach((code) => {
-      itemMap[code] = itemMap[code].sort((a, b) => a.name.localeCompare(b.name));
-    });
+      Object.keys(itemMap).forEach((code) => {
+        itemMap[code] = itemMap[code].sort((a, b) => a.name.localeCompare(b.name));
+      });
 
-    setOrdersMap(itemMap);
-    setOrderParentsMap(parentMap);
+      const { data: paymentRows, error: paymentErr } = await supabase
+        .from("customer_order_payments")
+        .select("booking_code, order_total, gcash_amount, cash_amount, is_paid, paid_at")
+        .in("booking_code", cleanCodes);
+
+      if (paymentErr) {
+        console.warn("customer_order_payments load error:", paymentErr.message);
+      }
+
+      const paymentMap: Record<
+        string,
+        {
+          gcash: number;
+          cash: number;
+          order_total: number;
+          is_paid: boolean;
+          paid_at: string | null;
+        }
+      > = {};
+
+      ((paymentRows ?? []) as Array<{
+        booking_code: string | null;
+        order_total: number | string | null;
+        gcash_amount: number | string | null;
+        cash_amount: number | string | null;
+        is_paid: boolean | number | string | null;
+        paid_at: string | null;
+      }>).forEach((r) => {
+        const key = String(r.booking_code ?? "").trim();
+        if (!key) return;
+
+        paymentMap[key] = {
+          gcash: round2(Math.max(0, toNumber(r.gcash_amount))),
+          cash: round2(Math.max(0, toNumber(r.cash_amount))),
+          order_total: round2(Math.max(0, toNumber(r.order_total))),
+          is_paid: toBool(r.is_paid),
+          paid_at: r.paid_at ?? null,
+        };
+      });
+
+      setOrdersMap(itemMap);
+      setOrderParentsMap(parentMap);
+      setOrderPaymentMap(paymentMap);
   };
 
   const fetchPromoBookings = async (): Promise<PromoBookingRow[]> => {
@@ -1008,10 +1062,17 @@ const Customer_Promo_List: React.FC = () => {
   const getOrderPaidInfo = (
     code: string | null
   ): { gcash: number; cash: number; totalPaid: number } => {
-    const parents = getOrderParents(code);
-    const gcash = round2(parents.reduce((sum, r) => sum + round2(Math.max(0, r.gcash_amount)), 0));
-    const cash = round2(parents.reduce((sum, r) => sum + round2(Math.max(0, r.cash_amount)), 0));
-    return { gcash, cash, totalPaid: round2(gcash + cash) };
+    const key = String(code ?? "").trim();
+    const row = key ? orderPaymentMap[key] : null;
+
+    const gcash = round2(Math.max(0, toNumber(row?.gcash)));
+    const cash = round2(Math.max(0, toNumber(row?.cash)));
+
+    return {
+      gcash,
+      cash,
+      totalPaid: round2(gcash + cash),
+    };
   };
 
   const getSystemDue = (r: PromoBookingRow): number =>
@@ -1068,9 +1129,9 @@ const Customer_Promo_List: React.FC = () => {
   };
 
     const isFinalPaidRow = (r: PromoBookingRow): boolean => {
-      const systemDue = getSystemDue(r);
-      const systemPaid = getSystemPaidInfo(r).totalPaid;
-      return systemDue <= 0 ? true : systemPaid >= systemDue;
+      const grandDue = getGrandDue(r);
+      const grandPaid = getGrandPaid(r);
+      return grandDue <= 0 ? true : grandPaid >= grandDue;
     };
 
     const syncPromoFinalPaid = async (row: PromoBookingRow): Promise<void> => {
@@ -1246,6 +1307,21 @@ const Customer_Promo_List: React.FC = () => {
           return;
         }
 
+        // delete matching actual record from customer_session_add_ons
+        const { error: realDeleteErr } = await supabase
+          .from("customer_session_add_ons")
+          .delete()
+          .eq("add_on_id", item.source_item_id)
+          .eq("full_name", booking.full_name)
+          .eq("seat_number", seatLabel(booking))
+          .eq("quantity", item.quantity)
+          .eq("price", item.price);
+
+        if (realDeleteErr) {
+          alert(`Order item removed, but actual add-on record delete failed: ${realDeleteErr.message}`);
+          return;
+        }
+
         if (item.source_item_id) {
           const { data: addonRow, error: addonFetchErr } = await supabase
             .from("add_ons")
@@ -1299,33 +1375,51 @@ const Customer_Promo_List: React.FC = () => {
           return;
         }
 
-        const { error: deleteErr } = await supabase
-          .from("consignment_order_items")
-          .delete()
-          .eq("id", item.id);
+    const { error: deleteErr } = await supabase
+      .from("consignment_order_items")
+      .delete()
+      .eq("id", item.id);
 
-        if (deleteErr) {
-          alert(`Cancelled copy saved, but item delete failed: ${deleteErr.message}`);
-          return;
-        }
+    if (deleteErr) {
+      alert(`Cancelled copy saved, but item delete failed: ${deleteErr.message}`);
+      return;
+    }
 
-        if (item.source_item_id) {
-          const { data: conRow, error: conFetchErr } = await supabase
-            .from("consignment")
-            .select("stocks")
-            .eq("id", item.source_item_id)
-            .maybeSingle();
+    const { error: realDeleteErr } = await supabase
+      .from("customer_session_consignment")
+      .delete()
+      .eq("consignment_id", item.source_item_id)
+      .eq("full_name", booking.full_name)
+      .eq("seat_number", seatLabel(booking))
+      .eq("quantity", item.quantity)
+      .eq("price", item.price)
+      .eq("voided", false);
 
-          if (!conFetchErr && conRow) {
-            const nextStocks = Math.max(
-              0,
-              round2(toNumber((conRow as { stocks?: number | string | null }).stocks) + item.quantity)
-            );
-            await supabase.from("consignment").update({ stocks: nextStocks }).eq("id", item.source_item_id);
-          }
-        }
+    if (realDeleteErr) {
+      alert(`Order item removed, but actual consignment record delete failed: ${realDeleteErr.message}`);
+      return;
+    }
 
-        await recalcConsignmentParentAfterDelete(item.parent_order_id);
+    if (item.source_item_id) {
+      const { data: conRow, error: conFetchErr } = await supabase
+        .from("consignment")
+        .select("stocks")
+        .eq("id", item.source_item_id)
+        .maybeSingle();
+
+      if (!conFetchErr && conRow) {
+        const nextStocks = Math.max(
+          0,
+          round2(toNumber((conRow as { stocks?: number | string | null }).stocks) + item.quantity)
+        );
+        await supabase
+          .from("consignment")
+          .update({ stocks: nextStocks })
+          .eq("id", item.source_item_id);
+      }
+    }
+
+    await recalcConsignmentParentAfterDelete(item.parent_order_id);
       }
 
       setOrderCancelTarget(null);
@@ -1339,6 +1433,153 @@ const Customer_Promo_List: React.FC = () => {
       setCancellingOrderItemId(null);
     }
   };
+  
+  const syncParentOrdersPaidState = async (
+  code: string,
+  totalGcash: number,
+  totalCash: number
+): Promise<void> => {
+  const [addonParentsRes, consignmentParentsRes] = await Promise.all([
+    supabase
+      .from("addon_orders")
+      .select("id, booking_code, total_amount")
+      .eq("booking_code", code),
+
+    supabase
+      .from("consignment_orders")
+      .select("id, booking_code, total_amount")
+      .eq("booking_code", code),
+  ]);
+
+  if (addonParentsRes.error) throw addonParentsRes.error;
+  if (consignmentParentsRes.error) throw consignmentParentsRes.error;
+
+  const parents = [
+    ...normalizeOrderParents(
+      (addonParentsRes.data ?? []) as AddonOrderParentDBRow[],
+      "addon_orders"
+    ),
+    ...normalizeOrderParents(
+      (consignmentParentsRes.data ?? []) as ConsignmentOrderParentDBRow[],
+      "consignment_orders"
+    ),
+  ];
+
+  if (parents.length === 0) return;
+
+  const allocations = allocateAmountsAcrossOrders(parents, totalGcash, totalCash);
+
+  for (const row of allocations) {
+    if (row.source === "addon_orders") {
+      const { error } = await supabase
+        .from("addon_orders")
+        .update({
+          gcash_amount: row.gcash_amount,
+          cash_amount: row.cash_amount,
+          is_paid: row.is_paid,
+          paid_at: row.paid_at,
+        })
+        .eq("id", row.id);
+
+      if (error) throw error;
+    } else {
+      const { error } = await supabase
+        .from("consignment_orders")
+        .update({
+          gcash_amount: row.gcash_amount,
+          cash_amount: row.cash_amount,
+          is_paid: row.is_paid,
+          paid_at: row.paid_at,
+        })
+        .eq("id", row.id);
+
+      if (error) throw error;
+    }
+  }
+};
+
+const syncDetailRowsPaidStateByBooking = async (
+  booking: PromoBookingRow,
+  orderPaid: { gcash: number; cash: number; totalPaid: number }
+): Promise<void> => {
+  const orderDue = getOrderDue(booking.promo_code);
+  const orderIsPaid = orderDue <= 0 ? true : orderPaid.totalPaid >= orderDue;
+  const paidAt = orderIsPaid ? new Date().toISOString() : null;
+
+  const addOnItems = getOrderItems(booking.promo_code).filter((x) => x.kind === "add_on");
+  const consignmentItems = getOrderItems(booking.promo_code).filter((x) => x.kind === "consignment");
+
+  for (const item of addOnItems) {
+    const { error } = await supabase
+      .from("customer_session_add_ons")
+      .update({
+        is_paid: orderIsPaid,
+        paid_at: orderIsPaid ? paidAt : null,
+      })
+      .eq("add_on_id", item.source_item_id)
+      .eq("full_name", booking.full_name)
+      .eq("seat_number", seatLabel(booking))
+      .eq("quantity", item.quantity)
+      .eq("price", item.price);
+
+    if (error) throw error;
+  }
+
+  for (const item of consignmentItems) {
+    const { error } = await supabase
+      .from("customer_session_consignment")
+      .update({
+        is_paid: orderIsPaid,
+        paid_at: orderIsPaid ? paidAt : null,
+      })
+      .eq("consignment_id", item.source_item_id)
+      .eq("full_name", booking.full_name)
+      .eq("seat_number", seatLabel(booking))
+      .eq("quantity", item.quantity)
+      .eq("price", item.price)
+      .eq("voided", false);
+
+    if (error) throw error;
+  }
+};
+
+const syncPromoPaidFromGrandTotal = async (
+  booking: PromoBookingRow,
+  nextSystemGcash: number,
+  nextSystemCash: number,
+  nextOrderGcash: number,
+  nextOrderCash: number
+): Promise<PromoBookingRow> => {
+  const nextSystemPaidTotal = round2(nextSystemGcash + nextSystemCash);
+  const nextOrderPaidTotal = round2(nextOrderGcash + nextOrderCash);
+
+  const grandDue = round2(getSystemDue(booking) + getOrderDue(booking.promo_code));
+  const grandPaid = round2(nextSystemPaidTotal + nextOrderPaidTotal);
+  const nextPaid = grandDue <= 0 ? true : grandPaid >= grandDue;
+  const nextPaidAt = nextPaid ? new Date().toISOString() : null;
+
+  const { data, error } = await supabase
+    .from("promo_bookings")
+    .update({
+      gcash_amount: nextSystemGcash,
+      cash_amount: nextSystemCash,
+      is_paid: nextPaid,
+      paid_at: nextPaidAt,
+    })
+    .eq("id", booking.id)
+    .select("id, gcash_amount, cash_amount, is_paid, paid_at")
+    .maybeSingle();
+
+  if (error) throw error;
+
+  return {
+    ...booking,
+    gcash_amount: Number(data?.gcash_amount ?? nextSystemGcash),
+    cash_amount: Number(data?.cash_amount ?? nextSystemCash),
+    is_paid: Boolean(data?.is_paid ?? nextPaid),
+    paid_at: (data?.paid_at as string | null) ?? nextPaidAt,
+  };
+};
 
   const openPaymentModal = (row: PromoBookingRow): void => {
     setPaymentTarget(row);
@@ -1346,141 +1587,260 @@ const Customer_Promo_List: React.FC = () => {
     setCashInput("0");
   };
 
-  const submitSystemPayment = async (): Promise<void> => {
-    if (!paymentTarget) return;
+const submitSystemPayment = async (): Promise<void> => {
+  if (!paymentTarget) return;
 
-    try {
-      setSavingPayment(true);
+  try {
+    setSavingPayment(true);
 
-      const addGcash = moneyFromStr(gcashInput);
-      const addCash = moneyFromStr(cashInput);
+    const nextSystemGcash = round2(moneyFromStr(gcashInput));
+    const nextSystemCash = round2(moneyFromStr(cashInput));
 
-    const nextGcash = round2(addGcash);
-    const nextCash = round2(addCash);
+    const orderInfo = getOrderPaidInfo(paymentTarget.promo_code);
 
-    const systemDue = getSystemDue(paymentTarget);
-    const nextTotalPaid = round2(nextGcash + nextCash);
-    const nextPaid = nextTotalPaid >= systemDue;
-    const nextPaidAt = nextPaid ? new Date().toISOString() : null;
-
-    console.log("PAY DEBUG", {
-      id: paymentTarget.id,
-      price: paymentTarget.price,
-      discount_kind: paymentTarget.discount_kind,
-      discount_value: paymentTarget.discount_value,
-      computedSystemDue: getSystemDue(paymentTarget),
-      forcedSystemDue: systemDue,
-      nextGcash,
-      nextCash,
-      nextTotalPaid,
-      nextPaid,
-    });
-
-const { data: savedRow, error } = await supabase
-  .from("promo_bookings")
-  .update({
-    gcash_amount: nextGcash,
-    cash_amount: nextCash,
-    is_paid: nextPaid,
-    paid_at: nextPaidAt,
-  })
-  .eq("id", paymentTarget.id)
-  .select("id, gcash_amount, cash_amount, is_paid, paid_at, price")
-  .maybeSingle();
-
-console.log("UPDATE RESULT", { savedRow, nextGcash, nextCash, nextPaid, nextPaidAt, error });
-
-if (error) {
-  alert(`Payment failed: ${error.message}`);
-  return;
-}
-
-if (!savedRow) {
-  alert("Payment was not saved to database from the app. Check RLS update policy for promo_bookings.");
-  return;
-}
-
-const updatedRow: PromoBookingRow = {
-  ...paymentTarget,
-  gcash_amount: Number(savedRow.gcash_amount ?? nextGcash),
-  cash_amount: Number(savedRow.cash_amount ?? nextCash),
-  is_paid: Boolean(savedRow.is_paid ?? nextPaid),
-  paid_at: (savedRow.paid_at as string | null) ?? nextPaidAt,
-};
-
-
-    setRows((prev) =>
-      prev.map((r) => (r.id === paymentTarget.id ? updatedRow : r))
+    const updatedRow = await syncPromoPaidFromGrandTotal(
+      paymentTarget,
+      nextSystemGcash,
+      nextSystemCash,
+      orderInfo.gcash,
+      orderInfo.cash
     );
 
-    setSelected((prev) =>
-      prev?.id === paymentTarget.id ? updatedRow : prev
-    );
-
-    setSelectedOrderBooking((prev) =>
-      prev?.id === paymentTarget.id ? updatedRow : prev
-    );
+    setRows((prev) => prev.map((r) => (r.id === paymentTarget.id ? updatedRow : r)));
+    setSelected((prev) => (prev?.id === paymentTarget.id ? updatedRow : prev));
+    setSelectedOrderBooking((prev) => (prev?.id === paymentTarget.id ? updatedRow : prev));
 
     setPaymentTarget(null);
-    } finally {
-      setSavingPayment(false);
-    }
-  };
+  } catch (error: any) {
+    console.error(error);
+    alert(`Payment failed: ${error?.message ?? "Unknown error"}`);
+  } finally {
+    setSavingPayment(false);
+  }
+};
 
-  const openOrderPaymentModal = (row: PromoBookingRow): void => {
+    const openOrderPaymentModal = (row: PromoBookingRow): void => {
+    const code = String(row.promo_code ?? "").trim();
+
+    if (!code) {
+      alert("Promo code not found.");
+      return;
+    }
+
+    // open modal immediately
     setOrderPaymentTarget(row);
     setOrderGcashInput("0");
     setOrderCashInput("0");
+    setLoadingOrderPayment(true);
+
+    void (async () => {
+      const [addonParentsRes, consignmentParentsRes, paymentRes] = await Promise.all([
+        supabase
+          .from("addon_orders")
+          .select("id, booking_code, total_amount")
+          .eq("booking_code", code),
+
+        supabase
+          .from("consignment_orders")
+          .select("id, booking_code, total_amount")
+          .eq("booking_code", code),
+
+        supabase
+          .from("customer_order_payments")
+          .select("booking_code, order_total, gcash_amount, cash_amount, is_paid, paid_at")
+          .eq("booking_code", code)
+          .maybeSingle(),
+      ]);
+
+      if (addonParentsRes.error) {
+        alert(`Load order failed: ${addonParentsRes.error.message}`);
+        setLoadingOrderPayment(false);
+        setOrderPaymentTarget(null);
+        return;
+      }
+
+      if (consignmentParentsRes.error) {
+        alert(`Load order failed: ${consignmentParentsRes.error.message}`);
+        setOrderPaymentTarget(null);
+        return;
+      }
+
+      if (paymentRes.error) {
+        alert(`Load order payment failed: ${paymentRes.error.message}`);
+        setOrderPaymentTarget(null);
+        return;
+      }
+
+      const freshParents = [
+        ...normalizeOrderParents(
+          (addonParentsRes.data ?? []) as AddonOrderParentDBRow[],
+          "addon_orders"
+        ),
+        ...normalizeOrderParents(
+          (consignmentParentsRes.data ?? []) as ConsignmentOrderParentDBRow[],
+          "consignment_orders"
+        ),
+      ];
+
+      if (freshParents.length === 0) {
+        alert("No order found for this promo code.");
+        setOrderPaymentTarget(null);
+        return;
+      }
+
+      const computedOrderTotal = round2(
+        freshParents.reduce((sum, p) => sum + round2(Math.max(0, p.total_amount)), 0)
+      );
+
+      const gcash = round2(Math.max(0, toNumber(paymentRes.data?.gcash_amount)));
+      const cash = round2(Math.max(0, toNumber(paymentRes.data?.cash_amount)));
+      const orderTotal = round2(
+        Math.max(0, toNumber(paymentRes.data?.order_total || computedOrderTotal))
+      );
+      const isPaid = toBool(paymentRes.data?.is_paid);
+      const paidAt = paymentRes.data?.paid_at ?? null;
+
+      setOrderParentsMap((prev) => ({
+        ...prev,
+        [code]: freshParents,
+      }));
+
+      setOrderPaymentMap((prev) => ({
+        ...prev,
+        [code]: {
+          gcash,
+          cash,
+          order_total: orderTotal,
+          is_paid: isPaid,
+          paid_at: paidAt,
+        },
+      }));
+
+    setOrderGcashInput(String(gcash));
+    setOrderCashInput(String(cash));
+    setLoadingOrderPayment(false);
+    })();
   };
 
-  const submitOrderPayment = async (): Promise<void> => {
-    if (!orderPaymentTarget) return;
+const submitOrderPayment = async (): Promise<void> => {
+  if (!orderPaymentTarget) return;
 
-    const code = orderPaymentTarget.promo_code;
-    const parents = getOrderParents(code);
+  const code = String(orderPaymentTarget.promo_code ?? "").trim();
 
-    if (parents.length === 0) {
+  if (!code) {
+    alert("Promo code not found.");
+    return;
+  }
+
+  try {
+    setSavingOrderPayment(true);
+
+    const [addonParentsRes, consignmentParentsRes] = await Promise.all([
+      supabase
+        .from("addon_orders")
+        .select("id, booking_code, total_amount")
+        .eq("booking_code", code),
+
+      supabase
+        .from("consignment_orders")
+        .select("id, booking_code, total_amount")
+        .eq("booking_code", code),
+    ]);
+
+    if (addonParentsRes.error) throw addonParentsRes.error;
+    if (consignmentParentsRes.error) throw consignmentParentsRes.error;
+
+    const freshParents = [
+      ...normalizeOrderParents(
+        (addonParentsRes.data ?? []) as AddonOrderParentDBRow[],
+        "addon_orders"
+      ),
+      ...normalizeOrderParents(
+        (consignmentParentsRes.data ?? []) as ConsignmentOrderParentDBRow[],
+        "consignment_orders"
+      ),
+    ];
+
+    if (freshParents.length === 0) {
       alert("No order found for this promo code.");
       return;
     }
 
-    try {
-      setSavingOrderPayment(true);
+    const nextTotalGcash = moneyFromStr(orderGcashInput);
+    const nextTotalCash = moneyFromStr(orderCashInput);
 
-      const addGcash = moneyFromStr(orderGcashInput);
-      const addCash = moneyFromStr(orderCashInput);
+    const computedOrderTotal = round2(
+      freshParents.reduce((sum, p) => sum + round2(Math.max(0, p.total_amount)), 0)
+    );
 
-      const current = getOrderPaidInfo(code);
-      const nextTotalGcash = round2(current.gcash + addGcash);
-      const nextTotalCash = round2(current.cash + addCash);
+    const totalPaid = round2(nextTotalGcash + nextTotalCash);
+    const isPaid = computedOrderTotal <= 0 ? true : totalPaid >= computedOrderTotal;
+    const paidAt = isPaid ? new Date().toISOString() : null;
 
-      const allocations = allocateAmountsAcrossOrders(parents, nextTotalGcash, nextTotalCash);
+    const { error: paymentSaveErr } = await supabase
+      .from("customer_order_payments")
+      .upsert(
+        {
+          booking_code: code,
+          full_name: orderPaymentTarget.full_name,
+          seat_number: seatLabel(orderPaymentTarget),
+          order_total: computedOrderTotal,
+          gcash_amount: nextTotalGcash,
+          cash_amount: nextTotalCash,
+          is_paid: isPaid,
+          paid_at: paidAt,
+        },
+        { onConflict: "booking_code" }
+      );
 
-      for (const alloc of allocations) {
-        const table = alloc.source === "addon_orders" ? "addon_orders" : "consignment_orders";
-        const { error } = await supabase
-          .from(table)
-          .update({
-            gcash_amount: alloc.gcash_amount,
-            cash_amount: alloc.cash_amount,
-            is_paid: alloc.is_paid,
-            paid_at: alloc.paid_at,
-          })
-          .eq("id", alloc.id);
+    if (paymentSaveErr) throw paymentSaveErr;
 
-        if (error) {
-          alert(`Order payment failed: ${error.message}`);
-          return;
-        }
-      }
+    await syncParentOrdersPaidState(code, nextTotalGcash, nextTotalCash);
 
-      await fetchOrdersForPromoCodes([String(code ?? "")]);
-      setOrderPaymentTarget(null);
-      await syncPromoFinalPaid(orderPaymentTarget);
-    } finally {
-      setSavingOrderPayment(false);
-    }
-  };
+    const orderPaidInfo = {
+      gcash: nextTotalGcash,
+      cash: nextTotalCash,
+      totalPaid: round2(nextTotalGcash + nextTotalCash),
+    };
+
+    await syncDetailRowsPaidStateByBooking(orderPaymentTarget, orderPaidInfo);
+
+    const systemInfo = getSystemPaidInfo(orderPaymentTarget);
+
+    const updatedPromo = await syncPromoPaidFromGrandTotal(
+      orderPaymentTarget,
+      systemInfo.gcash,
+      systemInfo.cash,
+      nextTotalGcash,
+      nextTotalCash
+    );
+
+    setOrderPaymentMap((prev) => ({
+      ...prev,
+      [code]: {
+        gcash: nextTotalGcash,
+        cash: nextTotalCash,
+        order_total: computedOrderTotal,
+        is_paid: isPaid,
+        paid_at: paidAt,
+      },
+    }));
+
+    setRows((prev) => prev.map((r) => (r.id === orderPaymentTarget.id ? updatedPromo : r)));
+    setSelected((prev) => (prev?.id === orderPaymentTarget.id ? updatedPromo : prev));
+    setSelectedOrderBooking((prev) =>
+      prev?.id === orderPaymentTarget.id ? updatedPromo : prev
+    );
+
+    await fetchOrdersForPromoCodes([code]);
+    setOrderPaymentTarget(null);
+  } catch (error: any) {
+    console.error(error);
+    alert(`Order payment failed: ${error?.message ?? "Unknown error"}`);
+  } finally {
+    setSavingOrderPayment(false);
+  }
+};
 
   const openDiscountModal = (row: PromoBookingRow): void => {
     setDiscountTarget(row);
@@ -1967,7 +2327,7 @@ const updatedRow: PromoBookingRow = {
                               </span>
                               <button
                                 className="cpl-btn-mini"
-                                onClick={() => openOrderPaymentModal(row)}
+                                onClick={() => void openOrderPaymentModal(row)}
                                 type="button"
                               >
                                 Order Payment
