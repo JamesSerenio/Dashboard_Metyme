@@ -1220,35 +1220,7 @@ const Customer_Promo_List: React.FC = () => {
       setCancellingOrderItemId(item.id);
 
       if (item.kind === "add_on") {
-        const systemPay = getSystemPaidInfo(booking);
-
-        const cancelPayload = {
-          original_id: item.id,
-          created_at: item.created_at,
-          add_on_id: item.source_item_id || null,
-          quantity: item.quantity,
-          price: item.price,
-          full_name: booking.full_name,
-          seat_number: booking.seat_number ?? seatLabel(booking),
-          gcash_amount: systemPay.gcash,
-          cash_amount: systemPay.cash,
-          is_paid: toBool(booking.is_paid),
-          paid_at: booking.paid_at ?? null,
-          description: note,
-        };
-
-        const { error: insertErr } = await supabase
-          .from("customer_session_add_ons_cancelled")
-          .insert(cancelPayload);
-
-        if (insertErr) {
-          alert(`Cancel add-on failed: ${insertErr.message}`);
-          return;
-        }
-
-          const rawSeat = String(booking.seat_number ?? "").trim();
-
-          const itemCreatedMs = item.created_at ? new Date(item.created_at).getTime() : NaN;
+      const itemCreatedMs = item.created_at ? new Date(item.created_at).getTime() : NaN;
           const fromIso =
             Number.isFinite(itemCreatedMs) ? new Date(itemCreatedMs - 10_000).toISOString() : null;
           const toIso =
@@ -1256,10 +1228,9 @@ const Customer_Promo_List: React.FC = () => {
 
           let legacyLookup = supabase
             .from("customer_session_add_ons")
-            .select("id, created_at")
+            .select("id, seat_number, created_at")
             .eq("add_on_id", item.source_item_id)
             .eq("full_name", booking.full_name)
-            .eq("seat_number", rawSeat)
             .order("created_at", { ascending: true });
 
           if (fromIso && toIso) {
@@ -1273,55 +1244,24 @@ const Customer_Promo_List: React.FC = () => {
             return;
           }
 
-          const matchedLegacyRows = (legacyRows ?? []) as Array<{
-            id: string;
-            created_at: string | null;
-          }>;
+          const legacyIds = ((legacyRows ?? []) as Array<{ id: string }>).map((r) => r.id);
 
-          if (matchedLegacyRows.length === 0) {
-            alert("No matching customer_session_add_ons row found to delete.");
+          if (legacyIds.length === 0) {
+            alert("No matching customer_session_add_ons row found.");
             return;
           }
 
-          const legacyIds = matchedLegacyRows.map((r) => r.id);
+          const { error: cancelRpcErr } = await supabase.rpc("cancel_add_on_order", {
+            p_item_ids: legacyIds,
+            p_description: note,
+          });
 
-          const { error: legacyDeleteErr } = await supabase
-            .from("customer_session_add_ons")
-            .delete()
-            .in("id", legacyIds);
-
-          if (legacyDeleteErr) {
-            alert(`Legacy add-on delete failed: ${legacyDeleteErr.message}`);
+          if (cancelRpcErr) {
+            alert(`Cancel add-on failed: ${cancelRpcErr.message}`);
             return;
           }
 
-          const { error: deleteErr } = await supabase
-            .from("addon_order_items")
-            .delete()
-            .eq("id", item.id);
-
-          if (deleteErr) {
-            alert(`Cancelled copy saved, but item delete failed: ${deleteErr.message}`);
-            return;
-          }
-
-        if (item.source_item_id) {
-          const { data: addonRow, error: addonFetchErr } = await supabase
-            .from("add_ons")
-            .select("sold")
-            .eq("id", item.source_item_id)
-            .maybeSingle();
-
-          if (!addonFetchErr && addonRow) {
-            const nextSold = Math.max(
-              0,
-              round2(toNumber((addonRow as { sold?: number | string | null }).sold) - item.quantity)
-            );
-            await supabase.from("add_ons").update({ sold: nextSold }).eq("id", item.source_item_id);
-          }
-        }
-
-        await recalcAddonParentAfterDelete(item.parent_order_id);
+          await fetchOrdersForPromoCodes([String(booking.promo_code ?? "")]);
       } else {
         const systemPay = getSystemPaidInfo(booking);
 
