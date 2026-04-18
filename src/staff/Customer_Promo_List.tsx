@@ -1229,7 +1229,7 @@ const Customer_Promo_List: React.FC = () => {
           quantity: item.quantity,
           price: item.price,
           full_name: booking.full_name,
-          seat_number: seatLabel(booking),
+          seat_number: booking.seat_number ?? seatLabel(booking),
           gcash_amount: systemPay.gcash,
           cash_amount: systemPay.cash,
           is_paid: toBool(booking.is_paid),
@@ -1246,15 +1246,64 @@ const Customer_Promo_List: React.FC = () => {
           return;
         }
 
-        const { error: deleteErr } = await supabase
-          .from("addon_order_items")
-          .delete()
-          .eq("id", item.id);
+          const rawSeat = String(booking.seat_number ?? "").trim();
 
-        if (deleteErr) {
-          alert(`Cancelled copy saved, but item delete failed: ${deleteErr.message}`);
-          return;
-        }
+          const itemCreatedMs = item.created_at ? new Date(item.created_at).getTime() : NaN;
+          const fromIso =
+            Number.isFinite(itemCreatedMs) ? new Date(itemCreatedMs - 10_000).toISOString() : null;
+          const toIso =
+            Number.isFinite(itemCreatedMs) ? new Date(itemCreatedMs + 10_000).toISOString() : null;
+
+          let legacyLookup = supabase
+            .from("customer_session_add_ons")
+            .select("id, created_at")
+            .eq("add_on_id", item.source_item_id)
+            .eq("full_name", booking.full_name)
+            .eq("seat_number", rawSeat)
+            .order("created_at", { ascending: true });
+
+          if (fromIso && toIso) {
+            legacyLookup = legacyLookup.gte("created_at", fromIso).lte("created_at", toIso);
+          }
+
+          const { data: legacyRows, error: legacyLookupErr } = await legacyLookup;
+
+          if (legacyLookupErr) {
+            alert(`Legacy add-on lookup failed: ${legacyLookupErr.message}`);
+            return;
+          }
+
+          const matchedLegacyRows = (legacyRows ?? []) as Array<{
+            id: string;
+            created_at: string | null;
+          }>;
+
+          if (matchedLegacyRows.length === 0) {
+            alert("No matching customer_session_add_ons row found to delete.");
+            return;
+          }
+
+          const legacyIds = matchedLegacyRows.map((r) => r.id);
+
+          const { error: legacyDeleteErr } = await supabase
+            .from("customer_session_add_ons")
+            .delete()
+            .in("id", legacyIds);
+
+          if (legacyDeleteErr) {
+            alert(`Legacy add-on delete failed: ${legacyDeleteErr.message}`);
+            return;
+          }
+
+          const { error: deleteErr } = await supabase
+            .from("addon_order_items")
+            .delete()
+            .eq("id", item.id);
+
+          if (deleteErr) {
+            alert(`Cancelled copy saved, but item delete failed: ${deleteErr.message}`);
+            return;
+          }
 
         if (item.source_item_id) {
           const { data: addonRow, error: addonFetchErr } = await supabase
@@ -1284,7 +1333,7 @@ const Customer_Promo_List: React.FC = () => {
           price: item.price,
           total: item.subtotal,
           full_name: booking.full_name,
-          seat_number: seatLabel(booking),
+          seat_number: booking.seat_number ?? seatLabel(booking),
           gcash_amount: systemPay.gcash,
           cash_amount: systemPay.cash,
           is_paid: toBool(booking.is_paid),
