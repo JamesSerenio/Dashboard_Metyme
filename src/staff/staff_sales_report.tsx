@@ -667,13 +667,13 @@ const StaffSalesReport: React.FC = () => {
     const { startIso, endIso } = manilaDayRange(dateYMD);
 
     const res = await supabase
-      .from("customer_order_payments")
+      .from("customer_session_add_ons")
       .select("paid_at, is_paid, gcash_amount, cash_amount")
       .gte("paid_at", startIso)
       .lt("paid_at", endIso);
 
     if (res.error) {
-      console.error("customer_order_payments query error:", res.error.message);
+      console.error("customer_session_add_ons payment query error:", res.error.message);
       setCustomerOrderPaid(0);
       return;
     }

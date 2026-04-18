@@ -179,20 +179,12 @@ type AddonOrderParentDBRow = {
   id: string;
   booking_code: string | null;
   total_amount: number | string | null;
-  gcash_amount: number | string | null;
-  cash_amount: number | string | null;
-  is_paid: boolean | number | string | null;
-  paid_at: string | null;
 };
 
 type ConsignmentOrderParentDBRow = {
   id: string;
   booking_code: string | null;
   total_amount: number | string | null;
-  gcash_amount: number | string | null;
-  cash_amount: number | string | null;
-  is_paid: boolean | number | string | null;
-  paid_at: string | null;
 };
 
 type CancelOrderTarget = {
@@ -446,10 +438,10 @@ const normalizeOrderParents = (
     booking_code: String(r.booking_code ?? "").trim(),
     source,
     total_amount: round2(toNumber(r.total_amount)),
-    gcash_amount: round2(toNumber(r.gcash_amount)),
-    cash_amount: round2(toNumber(r.cash_amount)),
-    is_paid: toBool(r.is_paid),
-    paid_at: r.paid_at ?? null,
+    gcash_amount: 0,
+    cash_amount: 0,
+    is_paid: false,
+    paid_at: null,
   }));
 };
 
@@ -835,17 +827,17 @@ const [loadingOrderPayment, setLoadingOrderPayment] = useState<boolean>(false);
       return;
     }
 
-    const [addonParentsRes, consignmentParentsRes, addonItemsRes, consignmentItemsRes] =
-      await Promise.all([
-        supabase
-          .from("addon_orders")
-          .select("id, booking_code, total_amount, gcash_amount, cash_amount, is_paid, paid_at")
-          .in("booking_code", cleanCodes),
+const [addonParentsRes, consignmentParentsRes, addonItemsRes, consignmentItemsRes] =
+  await Promise.all([
+    supabase
+      .from("addon_orders")
+      .select("id, booking_code, total_amount")
+      .in("booking_code", cleanCodes),
 
-        supabase
-          .from("consignment_orders")
-          .select("id, booking_code, total_amount, gcash_amount, cash_amount, is_paid, paid_at")
-          .in("booking_code", cleanCodes),
+    supabase
+      .from("consignment_orders")
+      .select("id, booking_code, total_amount")
+      .in("booking_code", cleanCodes),
 
         supabase
           .from("addon_order_items")
@@ -1433,70 +1425,14 @@ const [loadingOrderPayment, setLoadingOrderPayment] = useState<boolean>(false);
       setCancellingOrderItemId(null);
     }
   };
-  
+
   const syncParentOrdersPaidState = async (
-  code: string,
-  totalGcash: number,
-  totalCash: number
-): Promise<void> => {
-  const [addonParentsRes, consignmentParentsRes] = await Promise.all([
-    supabase
-      .from("addon_orders")
-      .select("id, booking_code, total_amount")
-      .eq("booking_code", code),
-
-    supabase
-      .from("consignment_orders")
-      .select("id, booking_code, total_amount")
-      .eq("booking_code", code),
-  ]);
-
-  if (addonParentsRes.error) throw addonParentsRes.error;
-  if (consignmentParentsRes.error) throw consignmentParentsRes.error;
-
-  const parents = [
-    ...normalizeOrderParents(
-      (addonParentsRes.data ?? []) as AddonOrderParentDBRow[],
-      "addon_orders"
-    ),
-    ...normalizeOrderParents(
-      (consignmentParentsRes.data ?? []) as ConsignmentOrderParentDBRow[],
-      "consignment_orders"
-    ),
-  ];
-
-  if (parents.length === 0) return;
-
-  const allocations = allocateAmountsAcrossOrders(parents, totalGcash, totalCash);
-
-  for (const row of allocations) {
-    if (row.source === "addon_orders") {
-      const { error } = await supabase
-        .from("addon_orders")
-        .update({
-          gcash_amount: row.gcash_amount,
-          cash_amount: row.cash_amount,
-          is_paid: row.is_paid,
-          paid_at: row.paid_at,
-        })
-        .eq("id", row.id);
-
-      if (error) throw error;
-    } else {
-      const { error } = await supabase
-        .from("consignment_orders")
-        .update({
-          gcash_amount: row.gcash_amount,
-          cash_amount: row.cash_amount,
-          is_paid: row.is_paid,
-          paid_at: row.paid_at,
-        })
-        .eq("id", row.id);
-
-      if (error) throw error;
-    }
-  }
-};
+    _code: string,
+    _totalGcash: number,
+    _totalCash: number
+  ): Promise<void> => {
+    return;
+  };
 
 const syncDetailRowsPaidStateByBooking = async (
   booking: PromoBookingRow,
