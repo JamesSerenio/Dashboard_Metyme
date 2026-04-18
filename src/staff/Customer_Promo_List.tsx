@@ -1360,7 +1360,7 @@ const Customer_Promo_List: React.FC = () => {
       const nextPaid = round2(nextGcash + nextCash) >= systemDue;
       const nextPaidAt = nextPaid ? new Date().toISOString() : null;
 
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from("promo_bookings")
         .update({
           gcash_amount: nextGcash,
@@ -1368,26 +1368,22 @@ const Customer_Promo_List: React.FC = () => {
           is_paid: nextPaid,
           paid_at: nextPaidAt,
         })
-        .eq("id", paymentTarget.id)
-        .select("id, is_paid, paid_at, gcash_amount, cash_amount")
-        .single();
+        .eq("id", paymentTarget.id);
 
       if (error) {
         alert(`Payment failed: ${error.message}`);
         return;
       }
 
-      const fresh = data as PromoBookingPaidUpdateRow;
-
       setRows((prev) =>
         prev.map((r) =>
           r.id === paymentTarget.id
             ? {
                 ...r,
-                gcash_amount: round2(toNumber(fresh.gcash_amount)),
-                cash_amount: round2(toNumber(fresh.cash_amount)),
-                is_paid: toBool(fresh.is_paid),
-                paid_at: fresh.paid_at ?? null,
+                gcash_amount: nextGcash,
+                cash_amount: nextCash,
+                is_paid: nextPaid,
+                paid_at: nextPaidAt,
               }
             : r
         )
@@ -1397,10 +1393,22 @@ const Customer_Promo_List: React.FC = () => {
         prev?.id === paymentTarget.id
           ? {
               ...prev,
-              gcash_amount: round2(toNumber(fresh.gcash_amount)),
-              cash_amount: round2(toNumber(fresh.cash_amount)),
-              is_paid: toBool(fresh.is_paid),
-              paid_at: fresh.paid_at ?? null,
+              gcash_amount: nextGcash,
+              cash_amount: nextCash,
+              is_paid: nextPaid,
+              paid_at: nextPaidAt,
+            }
+          : prev
+      );
+
+      setSelectedOrderBooking((prev) =>
+        prev?.id === paymentTarget.id
+          ? {
+              ...prev,
+              gcash_amount: nextGcash,
+              cash_amount: nextCash,
+              is_paid: nextPaid,
+              paid_at: nextPaidAt,
             }
           : prev
       );
@@ -1412,22 +1420,48 @@ const Customer_Promo_List: React.FC = () => {
     }
   };
 
-  const openOrderPaymentModal = (row: PromoBookingRow): void => {
-    setOrderPaymentTarget(row);
-    setOrderGcashInput("0");
-    setOrderCashInput("0");
-  };
+const openOrderPaymentModal = async (row: PromoBookingRow): Promise<void> => {
+  const code = String(row.promo_code ?? "").trim();
 
+  if (!code) {
+    alert("Promo code not found.");
+    return;
+  }
+
+  await fetchOrdersForPromoCodes([code]);
+
+  const parents = getOrderParents(code);
+  const items = getOrderItems(code);
+
+  if (parents.length === 0 && items.length === 0) {
+    alert("No order found for this promo code.");
+    return;
+  }
+
+  const gcash = round2(
+    parents.reduce((sum, p) => sum + round2(Math.max(0, p.gcash_amount)), 0)
+  );
+  const cash = round2(
+    parents.reduce((sum, p) => sum + round2(Math.max(0, p.cash_amount)), 0)
+  );
+
+  setOrderPaymentTarget(row);
+  setOrderGcashInput(String(gcash));
+  setOrderCashInput(String(cash));
+};
+
+  
   const submitOrderPayment = async (): Promise<void> => {
     if (!orderPaymentTarget) return;
 
-    const code = orderPaymentTarget.promo_code;
-    const parents = getOrderParents(code);
+  const code = orderPaymentTarget.promo_code;
+  const parents = getOrderParents(code);
+  const items = getOrderItems(code);
 
-    if (parents.length === 0) {
-      alert("No order found for this promo code.");
-      return;
-    }
+  if (parents.length === 0 && items.length === 0) {
+    alert("No order found for this promo code.");
+    return;
+  }
 
     try {
       setSavingOrderPayment(true);
@@ -1459,9 +1493,46 @@ const Customer_Promo_List: React.FC = () => {
         }
       }
 
-      await fetchOrdersForPromoCodes([String(code ?? "")]);
-      setOrderPaymentTarget(null);
-      await syncPromoFinalPaid(orderPaymentTarget.id);
+      const due = getOrderDue(code);
+      const totalPaid = round2(nextTotalGcash + nextTotalCash);
+      const orderPaid = due <= 0 ? true : totalPaid >= due;
+
+      const { error: paymentUpsertErr } = await supabase
+        .from("customer_order_payments")
+        .upsert(
+          {
+            booking_code: String(code ?? "").trim(),
+            full_name: orderPaymentTarget.full_name,
+            seat_number: orderPaymentTarget.seat_number ?? "N/A",
+            order_total: due,
+            gcash_amount: nextTotalGcash,
+            cash_amount: nextTotalCash,
+            is_paid: orderPaid,
+            paid_at: orderPaid ? new Date().toISOString() : null,
+          },
+          { onConflict: "booking_code" }
+        );
+
+      if (paymentUpsertErr) {
+        alert(`Order payment save failed: ${paymentUpsertErr.message}`);
+        return;
+      }
+
+    await fetchOrdersForPromoCodes([String(code ?? "")]);
+
+    setRows((prev) => [...prev]);
+    setSelected((prev) =>
+      prev?.id === orderPaymentTarget.id ? { ...prev } : prev
+    );
+    setSelectedOrderBooking((prev) =>
+      prev?.id === orderPaymentTarget.id ? { ...prev } : prev
+    );
+
+    setOrderGcashInput(String(nextTotalGcash));
+    setOrderCashInput(String(nextTotalCash));
+
+    setOrderPaymentTarget(null);
+    await syncPromoFinalPaid(orderPaymentTarget.id);
     } finally {
       setSavingOrderPayment(false);
     }
