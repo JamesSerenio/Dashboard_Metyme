@@ -1188,83 +1188,64 @@ const [conferenceDurationFilter, setConferenceDurationFilter] =
       };
     }, [filteredRows, ordersMap, orderParentsMap]);
 
-  const isFinalPaidRow = (r: PromoBookingRow): boolean => {
-    const systemDue = getSystemDue(r);
-    const systemPaid = getSystemPaidInfo(r).totalPaid;
-    const systemOk = systemDue <= 0 ? true : systemPaid >= systemDue;
+    const isFinalPaidRow = (r: PromoBookingRow): boolean => {
+      const systemDue = getSystemDue(r);
+      const systemPaid = getSystemPaidInfo(r).totalPaid;
+      return systemDue <= 0 ? true : systemPaid >= systemDue;
+    };
 
-    if (!hasOrder(r.promo_code)) return systemOk;
+    const syncPromoFinalPaid = async (promoId: string): Promise<void> => {
+      const row = rows.find((r) => r.id === promoId);
+      if (!row) return;
 
-    const orderDue = getOrderDue(r.promo_code);
-    const orderPaid = getOrderPaidInfo(r.promo_code).totalPaid;
-    const orderOk = orderDue <= 0 ? true : orderPaid >= orderDue;
+      const finalPaid = isFinalPaidRow(row);
+      const nextPaidAt = finalPaid ? new Date().toISOString() : null;
 
-    return systemOk && orderOk;
-  };
+      const { error } = await supabase
+        .from("promo_bookings")
+        .update({
+          is_paid: finalPaid,
+          paid_at: nextPaidAt,
+        })
+        .eq("id", promoId);
 
-  const syncPromoFinalPaid = async (promoId: string): Promise<void> => {
-    const row = rows.find((r) => r.id === promoId);
-    if (!row) return;
+      if (error) {
+        console.warn("syncPromoFinalPaid error:", error.message);
+        return;
+      }
 
-    const systemDue = getSystemDue(row);
-    const systemPaid = getSystemPaidInfo(row).totalPaid;
-    const systemOk = systemDue <= 0 ? true : systemPaid >= systemDue;
+      setRows((prev) =>
+        prev.map((x) =>
+          x.id === promoId
+            ? {
+                ...x,
+                is_paid: finalPaid,
+                paid_at: nextPaidAt,
+              }
+            : x
+        )
+      );
 
-    const orderDue = getOrderDue(row.promo_code);
-    const orderPaid = getOrderPaidInfo(row.promo_code).totalPaid;
-    const hasAnyOrder = hasOrder(row.promo_code);
-
-    const finalPaid = hasAnyOrder
-      ? systemOk && (orderDue <= 0 ? true : orderPaid >= orderDue)
-      : systemOk;
-
-    const nextPaidAt = finalPaid ? new Date().toISOString() : null;
-
-    const { error } = await supabase
-      .from("promo_bookings")
-      .update({
-        is_paid: finalPaid,
-        paid_at: nextPaidAt,
-      })
-      .eq("id", promoId);
-
-    if (error) {
-      console.warn("syncPromoFinalPaid error:", error.message);
-      return;
-    }
-
-    setRows((prev) =>
-      prev.map((x) =>
-        x.id === promoId
+      setSelected((prev) =>
+        prev?.id === promoId
           ? {
-              ...x,
+              ...prev,
               is_paid: finalPaid,
               paid_at: nextPaidAt,
             }
-          : x
-      )
-    );
+          : prev
+      );
 
-    setSelected((prev) =>
-      prev?.id === promoId
-        ? {
-            ...prev,
-            is_paid: finalPaid,
-            paid_at: nextPaidAt,
-          }
-        : prev
-    );
-
-    setSelectedOrderBooking((prev) =>
-      prev?.id === promoId
-        ? {
-            ...prev,
-            is_paid: finalPaid,
-            paid_at: nextPaidAt,
-          }
-        : prev
-    );
-  };
+      setSelectedOrderBooking((prev) =>
+        prev?.id === promoId
+          ? {
+              ...prev,
+              is_paid: finalPaid,
+              paid_at: nextPaidAt,
+            }
+          : prev
+      );
+    };
 
   const recalcAddonParentAfterDelete = async (parentOrderId: string): Promise<void> => {
     const { data: remainingItems, error: remErr } = await supabase
@@ -1531,28 +1512,25 @@ const [conferenceDurationFilter, setConferenceDurationFilter] =
     const savePayment = async (): Promise<void> => {
       if (!paymentTarget) return;
 
-      const due = getSystemDue(paymentTarget);
-      const g = moneyFromStr(gcashInput);
-      const c = moneyFromStr(cashInput);
-      const totalPaid = round2(g + c);
-      const systemPaidAuto = due <= 0 ? true : totalPaid >= due;
+    const due = round2(Number(paymentTarget.price) || 0);
+    const g = moneyFromStr(gcashInput);
+    const c = moneyFromStr(cashInput);
+    const totalPaid = round2(g + c);
+    const systemPaidAuto = totalPaid >= due;
 
       try {
         setSavingPayment(true);
 
-        const dbRow = await updateBookingThenFetch(
-          paymentTarget.id,
-          {
-            gcash_amount: g,
-            cash_amount: c,
-            is_paid: false,
-            paid_at:
-              systemPaidAuto && !hasOrder(paymentTarget.promo_code)
-                ? new Date().toISOString()
-                : null,
-          },
-          selectPromoBookings
-        );
+      const dbRow = await updateBookingThenFetch(
+        paymentTarget.id,
+        {
+          gcash_amount: g,
+          cash_amount: c,
+          is_paid: systemPaidAuto,
+          paid_at: systemPaidAuto ? new Date().toISOString() : null,
+        },
+        selectPromoBookings
+      );
 
         const updated = normalizeRow(dbRow);
 
@@ -1570,7 +1548,6 @@ const [conferenceDurationFilter, setConferenceDurationFilter] =
 
         setPaymentTarget(null);
 
-        await syncPromoFinalPaid(updated.id);
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Save payment failed.";
         alert(`Save payment error: ${msg}`);
@@ -1800,7 +1777,7 @@ const [conferenceDurationFilter, setConferenceDurationFilter] =
               discount_reason: discountReasonInput.trim() || null,
               gcash_amount: g,
               cash_amount: c,
-              is_paid: false,
+              is_paid: systemPaidAuto,
               paid_at:
                 systemPaidAuto && !hasOrder(discountTarget.promo_code)
                   ? new Date().toISOString()
