@@ -1337,24 +1337,43 @@ const Customer_Lists: React.FC = () => {
         ? existingOrderRow?.paid_at ?? new Date().toISOString()
         : null;
 
-      // 👉 ADD THIS (both addon + consignment)
-      const addonRes = await supabase.rpc("pay_addon_order_by_booking_code", {
-        p_booking_code: bookingCode,
-        p_full_name: orderPaymentTarget.full_name,
-        p_seat_number: orderPaymentTarget.seat_number || "N/A",
-        p_order_total: due,
-        p_gcash_amount: gcash,
-        p_cash_amount: cash,
-      });
+      const addonBundleTotal = orderPaymentTarget
+        ? getOrderBundle(orderPaymentTarget).addonOrders.reduce(
+            (sum, o) => sum + wholePeso(toMoney(o.total_amount)),
+            0
+          )
+        : 0;
 
-      const consignmentRes = await supabase.rpc("pay_consignment_order_by_booking_code", {
-        p_booking_code: bookingCode,
-        p_full_name: orderPaymentTarget.full_name,
-        p_seat_number: orderPaymentTarget.seat_number || "N/A",
-        p_order_total: due,
-        p_gcash_amount: gcash,
-        p_cash_amount: cash,
-      });
+      const consignmentBundleTotal = orderPaymentTarget
+        ? getOrderBundle(orderPaymentTarget).consignmentOrders.reduce(
+            (sum, o) => sum + wholePeso(toMoney(o.total_amount)),
+            0
+          )
+        : 0;
+
+      const addonRes =
+        addonBundleTotal > 0
+          ? await supabase.rpc("pay_addon_order_by_booking_code", {
+              p_booking_code: bookingCode,
+              p_full_name: orderPaymentTarget.full_name,
+              p_seat_number: orderPaymentTarget.seat_number || "N/A",
+              p_order_total: addonBundleTotal,
+              p_gcash_amount: gcash,
+              p_cash_amount: cash,
+            })
+          : { error: null };
+
+      const consignmentRes =
+        consignmentBundleTotal > 0
+          ? await supabase.rpc("pay_consignment_order_by_booking_code", {
+              p_booking_code: bookingCode,
+              p_full_name: orderPaymentTarget.full_name,
+              p_seat_number: orderPaymentTarget.seat_number || "N/A",
+              p_order_total: consignmentBundleTotal,
+              p_gcash_amount: gcash,
+              p_cash_amount: cash,
+            })
+          : { error: null };
 
       // 👉 FIX ERROR HANDLING
       if (addonRes.error && consignmentRes.error) {
@@ -1379,11 +1398,18 @@ const Customer_Lists: React.FC = () => {
         [bookingCode]: paymentRow as CustomerOrderPayment,
       }));
 
-      const systemPaid = getSystemIsPaid(orderPaymentTarget);
+      const refreshedSessions = await fetchCustomerSessions();
+      await fetchOrdersForSessions(refreshedSessions);
+      await fetchOrderPayments(refreshedSessions);
+
+      const freshTarget =
+        refreshedSessions.find((s) => s.id === orderPaymentTarget.id) ?? orderPaymentTarget;
+
+      const systemPaid = getSystemIsPaid(freshTarget);
       const nextFinalPaid = systemPaid && orderPaid;
 
       const sessionPaidAtValue = nextFinalPaid
-        ? orderPaymentTarget.paid_at ?? new Date().toISOString()
+        ? freshTarget.paid_at ?? new Date().toISOString()
         : null;
 
       const { data: updatedSession, error: updErr } = await supabase
@@ -1392,7 +1418,7 @@ const Customer_Lists: React.FC = () => {
           is_paid: nextFinalPaid,
           paid_at: sessionPaidAtValue,
         })
-        .eq("id", orderPaymentTarget.id)
+        .eq("id", freshTarget.id)
         .select("*")
         .single();
 
@@ -1596,6 +1622,24 @@ const Customer_Lists: React.FC = () => {
       if (deleteErr) {
         alert(`Order item delete failed: ${deleteErr.message}`);
         return;
+      }
+
+      const { data: addonRow, error: addonFetchErr } = await supabase
+        .from("add_ons")
+        .select("sold")
+        .eq("id", item.source_item_id)
+        .maybeSingle();
+
+      if (!addonFetchErr && addonRow) {
+        const nextSold = Math.max(
+          0,
+          wholePeso(toMoney((addonRow as { sold?: number | string | null }).sold) - item.qty)
+        );
+
+        await supabase
+          .from("add_ons")
+          .update({ sold: nextSold })
+          .eq("id", item.source_item_id);
       }
 
       await recalcAddonParentAfterDelete(item.parent_order_id);

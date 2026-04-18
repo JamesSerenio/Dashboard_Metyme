@@ -58,6 +58,16 @@ type OrderItem = {
   total: number;
 };
 
+type CustomerOrderPayment = {
+  booking_code: string;
+  full_name?: string | null;
+  seat_number?: string | null;
+  gcash_amount: number | string;
+  cash_amount: number | string;
+  is_paid: boolean | number | string | null;
+  paid_at: string | null;
+};
+
 type OrderGroup = {
   key: string;
   created_at: string;
@@ -213,6 +223,15 @@ const Customer_Add_ons: React.FC = () => {
   const [cancelTarget, setCancelTarget] = useState<OrderGroup | null>(null);
   const [cancelDesc, setCancelDesc] = useState<string>("");
   const [cancellingKey, setCancellingKey] = useState<string | null>(null);
+  const [orderPayments, setOrderPayments] = useState<Record<string, CustomerOrderPayment>>({});
+  const [addonOrderLookup, setAddonOrderLookup] = useState<
+  Array<{
+    booking_code: string;
+    created_at: string | null;
+    full_name: string | null;
+    seat_number: string | null;
+  }>
+>([]);
 
   useEffect(() => {
     void fetchAddOns(selectedDate);
@@ -285,26 +304,91 @@ const Customer_Add_ons: React.FC = () => {
       };
     });
 
-    setRecords(merged);
+  setRecords(merged);
+
+  const addonOrdersRes = await supabase
+    .from("addon_orders")
+    .select("booking_code, created_at, full_name, seat_number")
+    .gte("created_at", startIso)
+    .lt("created_at", endIso)
+    .order("created_at", { ascending: true });
+
+  if (addonOrdersRes.error) {
+    console.error("FETCH ADDON ORDERS ERROR:", addonOrdersRes.error);
+    setOrderPayments({});
     setLoading(false);
+    return;
+  }
+
+  const addonOrderRows = (addonOrdersRes.data ?? []) as Array<{
+    booking_code?: string | null;
+    created_at?: string | null;
+    full_name?: string | null;
+    seat_number?: string | null;
+  }>;
+
+  setAddonOrderLookup(
+  addonOrderRows.map((r) => ({
+    booking_code: String(r.booking_code ?? "").trim().toUpperCase(),
+    created_at: r.created_at ?? null,
+    full_name: r.full_name ?? null,
+    seat_number: r.seat_number ?? null,
+  }))
+);
+
+  const bookingCodes = Array.from(
+    new Set(
+      addonOrderRows
+        .map((r) => String(r.booking_code ?? "").trim().toUpperCase())
+        .filter(Boolean)
+    )
+  );
+
+  if (bookingCodes.length === 0) {
+    setOrderPayments({});
+    setLoading(false);
+    return;
+  }
+
+const paymentRes = await supabase
+  .from("customer_order_payments")
+  .select("booking_code, full_name, seat_number, gcash_amount, cash_amount, is_paid, paid_at")
+  .in("booking_code", bookingCodes);;
+
+  if (paymentRes.error) {
+    console.error("FETCH ORDER PAYMENTS ERROR:", paymentRes.error);
+    setOrderPayments({});
+    setLoading(false);
+    return;
+  }
+
+  const paymentMap: Record<string, CustomerOrderPayment> = {};
+  for (const row of (paymentRes.data ?? []) as CustomerOrderPayment[]) {
+    const code = String(row.booking_code ?? "").trim().toUpperCase();
+    if (!code) continue;
+    paymentMap[code] = row;
+  }
+
+  setOrderPayments(paymentMap);
+  setLoading(false);
   };
 
   const groupedOrdersAll = useMemo<OrderGroup[]>(() => {
-    if (records.length === 0) return [];
+  if (records.length === 0) return [];
 
-    const groups: OrderGroup[] = [];
-    let current: OrderGroup | null = null;
-    let lastRow: CustomerAddOnMerged | null = null;
+  const groups: OrderGroup[] = [];
+  let current: OrderGroup | null = null;
+  let lastRow: CustomerAddOnMerged | null = null;
 
-    for (const row of records) {
-      const startNew =
-        current === null ||
-        lastRow === null ||
-        !samePersonSeat(row, lastRow) ||
-        Math.abs(ms(row.created_at) - ms(lastRow.created_at)) > GROUP_WINDOW_MS;
+  for (const row of records) {
+    const startNew =
+      current === null ||
+      lastRow === null ||
+      !samePersonSeat(row, lastRow) ||
+      Math.abs(ms(row.created_at) - ms(lastRow.created_at)) > GROUP_WINDOW_MS;
 
-      if (startNew) {
-        const key = `${norm(row.full_name)}|${norm(row.seat_number)}|${ms(row.created_at)}`;
+    if (startNew) {
+      const key = `${norm(row.full_name)}|${norm(row.seat_number)}|${ms(row.created_at)}`;
 
       current = {
         key,
@@ -320,33 +404,82 @@ const Customer_Add_ons: React.FC = () => {
         paid_at: null,
       };
 
-        groups.push(current);
-      }
-
-      if (!current) continue;
-
-      current.items.push({
-        id: row.id,
-        add_on_id: row.add_on_id,
-        category: row.category,
-        size: row.size,
-        item_name: row.item_name,
-        quantity: Number(row.quantity) || 0,
-        price: row.price,
-        total: row.total,
-      });
-
-      current.grand_total = round2(current.grand_total + row.total);
-      current.gcash_amount = round2(current.gcash_amount + row.gcash_amount);
-      current.cash_amount = round2(current.cash_amount + row.cash_amount);
-      current.is_paid = current.is_paid || row.is_paid;
-      current.paid_at = current.paid_at ?? row.paid_at;
-
-      lastRow = row;
+      groups.push(current);
     }
 
-    return groups.sort((a, b) => ms(b.created_at) - ms(a.created_at));
-  }, [records]);
+    if (!current) continue;
+
+    current.items.push({
+      id: row.id,
+      add_on_id: row.add_on_id,
+      category: row.category,
+      size: row.size,
+      item_name: row.item_name,
+      quantity: Number(row.quantity) || 0,
+      price: row.price,
+      total: row.total,
+    });
+
+    current.grand_total = round2(current.grand_total + row.total);
+    current.gcash_amount = round2(current.gcash_amount + row.gcash_amount);
+    current.cash_amount = round2(current.cash_amount + row.cash_amount);
+    current.is_paid = current.is_paid || row.is_paid;
+    current.paid_at = current.paid_at ?? row.paid_at;
+
+    lastRow = row;
+  }
+
+  const findBookingCodeForGroupLocal = (g: OrderGroup): string | null => {
+    const groupTime = ms(g.created_at);
+
+    const candidates = addonOrderLookup.filter((r) => {
+      return (
+        norm(r.full_name) === norm(g.full_name) &&
+        norm(r.seat_number) === norm(g.seat_number)
+      );
+    });
+
+    if (candidates.length === 0) return null;
+
+    let bestCode: string | null = null;
+    let bestDiff = Number.POSITIVE_INFINITY;
+
+    for (const row of candidates) {
+      const rowTime = ms(String(row.created_at ?? ""));
+      if (!Number.isFinite(rowTime)) continue;
+
+      const diff = Math.abs(rowTime - groupTime);
+      if (diff < bestDiff) {
+        bestDiff = diff;
+        bestCode = String(row.booking_code ?? "").trim().toUpperCase() || null;
+      }
+    }
+
+    return bestCode;
+  };
+
+  return groups
+    .map((g) => {
+      const bookingCode = findBookingCodeForGroupLocal(g);
+      const payment = bookingCode ? orderPayments[bookingCode] ?? null : null;
+
+      return {
+        ...g,
+        booking_code: bookingCode,
+        gcash_amount:
+          payment && round2(Math.max(0, toNumber(g.gcash_amount))) <= 0
+            ? round2(Math.max(0, toNumber(payment.gcash_amount)))
+            : g.gcash_amount,
+        cash_amount:
+          payment && round2(Math.max(0, toNumber(g.cash_amount))) <= 0
+            ? round2(Math.max(0, toNumber(payment.cash_amount)))
+            : g.cash_amount,
+        is_paid: payment ? toBool(payment.is_paid) || g.is_paid : g.is_paid,
+        paid_at: payment?.paid_at ?? g.paid_at ?? null,
+      };
+    })
+    .sort((a, b) => ms(b.created_at) - ms(a.created_at));
+}, [records, orderPayments, addonOrderLookup]);
 
 const groupedOrders = useMemo<OrderGroup[]>(() => {
   const q = searchText.trim().toLowerCase();

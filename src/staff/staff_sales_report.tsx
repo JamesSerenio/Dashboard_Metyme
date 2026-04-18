@@ -667,13 +667,13 @@ const StaffSalesReport: React.FC = () => {
     const { startIso, endIso } = manilaDayRange(dateYMD);
 
     const res = await supabase
-      .from("customer_session_add_ons")
+      .from("customer_order_payments")
       .select("paid_at, is_paid, gcash_amount, cash_amount")
       .gte("paid_at", startIso)
       .lt("paid_at", endIso);
 
     if (res.error) {
-      console.error("customer_session_add_ons payment query error:", res.error.message);
+      console.error("customer_order_payments query error:", res.error.message);
       setCustomerOrderPaid(0);
       return;
     }
@@ -749,60 +749,60 @@ const StaffSalesReport: React.FC = () => {
     setReservationAdvanceGcash(round2(advanceGcash));
   };
 
-    const loadPromoPaymentPlacement = async (dateYMD: string): Promise<void> => {
-      if (!isYMD(dateYMD)) {
-        setPromoTodayCash(0);
-        setPromoTodayGcash(0);
-        setPromoAdvanceCash(0);
-        setPromoAdvanceGcash(0);
-        return;
+  const loadPromoPaymentPlacement = async (dateYMD: string): Promise<void> => {
+    if (!isYMD(dateYMD)) {
+      setPromoTodayCash(0);
+      setPromoTodayGcash(0);
+      setPromoAdvanceCash(0);
+      setPromoAdvanceGcash(0);
+      return;
+    }
+
+    const { startIso, endIso } = manilaDayRange(dateYMD);
+
+    const res = await supabase
+      .from("promo_bookings")
+      .select("paid_at, is_paid, start_at, gcash_amount, cash_amount")
+      .gte("paid_at", startIso)
+      .lt("paid_at", endIso);
+
+    if (res.error) {
+      console.error("promo payment placement query error:", res.error.message);
+      setPromoTodayCash(0);
+      setPromoTodayGcash(0);
+      setPromoAdvanceCash(0);
+      setPromoAdvanceGcash(0);
+      return;
+    }
+
+    const rows = (res.data ?? []) as PromoPaymentRow[];
+
+    let todayCash = 0;
+    let todayGcash = 0;
+    let advanceCash = 0;
+    let advanceGcash = 0;
+
+    for (const r of rows) {
+      if (!toBool(r.is_paid) || !r.paid_at) continue;
+
+      const availYMD = r.start_at ? isoToLocalYMD(r.start_at) : "";
+      const cash = Math.max(0, toNumber(r.cash_amount));
+      const gcash = Math.max(0, toNumber(r.gcash_amount));
+
+      if (availYMD === dateYMD) {
+        todayCash += cash;
+        todayGcash += gcash;
+      } else if (availYMD > dateYMD) {
+        advanceCash += cash;
+        advanceGcash += gcash;
       }
+    }
 
-      const { startIso, endIso } = manilaDayRange(dateYMD);
-
-      const res = await supabase
-        .from("promo_bookings")
-        .select("paid_at, is_paid, start_at, gcash_amount, cash_amount")
-        .gte("paid_at", startIso)
-        .lt("paid_at", endIso);
-
-      if (res.error) {
-        console.error("promo payment placement query error:", res.error.message);
-        setPromoTodayCash(0);
-        setPromoTodayGcash(0);
-        setPromoAdvanceCash(0);
-        setPromoAdvanceGcash(0);
-        return;
-      }
-
-      const rows = (res.data ?? []) as PromoPaymentRow[];
-
-      let todayCash = 0;
-      let todayGcash = 0;
-      let advanceCash = 0;
-      let advanceGcash = 0;
-
-      for (const r of rows) {
-        if (!toBool(r.is_paid) || !r.paid_at) continue;
-
-        const availYMD = r.start_at ? isoToLocalYMD(r.start_at) : "";
-        const cash = Math.max(0, toNumber(r.cash_amount));
-        const gcash = Math.max(0, toNumber(r.gcash_amount));
-
-        if (availYMD === dateYMD) {
-          todayCash += cash;
-          todayGcash += gcash;
-        } else if (availYMD > dateYMD) {
-          advanceCash += cash;
-          advanceGcash += gcash;
-        }
-      }
-
-      setPromoTodayCash(round2(todayCash));
-      setPromoTodayGcash(round2(todayGcash));
-      setPromoAdvanceCash(round2(advanceCash));
-      setPromoAdvanceGcash(round2(advanceGcash));
-    };
+    setPromoTodayCash(round2(todayCash));
+    setPromoTodayGcash(round2(todayGcash));
+    setPromoAdvanceCash(round2(advanceCash));
+    setPromoAdvanceGcash(round2(advanceGcash));
+  };
 
   const loadWalkinSystemPaidAndDiscount = async (dateYMD: string): Promise<void> => {
     if (!isYMD(dateYMD)) {
