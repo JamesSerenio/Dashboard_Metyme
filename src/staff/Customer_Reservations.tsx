@@ -1606,6 +1606,30 @@ const Customer_Reservations: React.FC = () => {
 
       setOrderPayments((prev) => ({ ...prev, [bookingCode]: paymentRow as CustomerOrderPayment }));
 
+      // 🔥 SYNC ADD-ONS + CONSIGNMENT (same sa customer promo list)
+const paidAt = orderPaid ? new Date().toISOString() : null;
+
+// 👉 ADD-ONS
+await supabase
+  .from("customer_session_add_ons")
+  .update({
+    is_paid: orderPaid,
+    paid_at: paidAt,
+  })
+  .eq("full_name", orderPaymentTarget.full_name)
+  .eq("seat_number", orderPaymentTarget.seat_number);
+
+// 👉 CONSIGNMENT
+await supabase
+  .from("customer_session_consignment")
+  .update({
+    is_paid: orderPaid,
+    paid_at: paidAt,
+  })
+  .eq("full_name", orderPaymentTarget.full_name)
+  .eq("seat_number", orderPaymentTarget.seat_number)
+  .eq("voided", false);
+
       const systemPaid = getSystemIsPaid(orderPaymentTarget);
       const nextFinalPaid = systemPaid && orderPaid;
 
@@ -1631,6 +1655,7 @@ const Customer_Reservations: React.FC = () => {
       setSelectedSession((prev) => (prev?.id === updatedRow.id ? updatedRow : prev));
       setSelectedOrderSession((prev) => (prev?.id === updatedRow.id ? updatedRow : prev));
       setOrderPaymentTarget(null);
+      await refreshAll();
     } catch (e) {
       console.error(e);
       alert("Save order payment failed.");
@@ -1638,6 +1663,7 @@ const Customer_Reservations: React.FC = () => {
       setSavingOrderPayment(false);
     }
   };
+  
 
   const openCancelModal = (s: CustomerSession): void => {
     setCancelTarget(s);
@@ -2108,7 +2134,7 @@ const Customer_Reservations: React.FC = () => {
             <strong>{filteredSessions.filter((s) => !toBool(s.is_paid)).length}</strong>
           </div>
         </div>
-        
+
         <section className="crv-table-wrap">
           {loading ? (
             <div className="crv-empty">Loading reservation records...</div>
