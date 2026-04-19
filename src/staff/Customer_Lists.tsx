@@ -851,8 +851,16 @@ const Customer_Lists: React.FC = () => {
     wholePeso(Math.max(0, toMoney(s.down_payment ?? 0)));
 
   const isOpenTimeSession = (s: CustomerSession): boolean => {
-    if ((s.hour_avail || "").toUpperCase() === "OPEN") return true;
-    const end = new Date(s.time_ended);
+    const hourAvail = String(s.hour_avail ?? "").trim().toUpperCase();
+
+    if (hourAvail === "OPEN") return true;
+
+    const endRaw = String(s.time_ended ?? "").trim();
+    if (!endRaw) return true;
+
+    const end = new Date(endRaw);
+    if (!Number.isFinite(end.getTime())) return true;
+
     return end.getFullYear() >= 2999;
   };
 
@@ -1053,35 +1061,59 @@ const Customer_Lists: React.FC = () => {
     }
   };
 
-  const stopOpenTime = async (session: CustomerSession): Promise<void> => {
+    const stopOpenTime = async (session: CustomerSession): Promise<void> => {
     try {
       setStoppingId(session.id);
 
-      const nowIso = new Date().toISOString();
-      const totalHours = computeHours(session.time_started, nowIso);
+      const now = new Date();
+      const nowIso = now.toISOString();
+
+      const totalMinutes = diffMinutes(session.time_started, nowIso);
       const totalCost = computeCostWithFreeMinutes(session.time_started, nowIso);
 
-      const { data: updated, error } = await supabase
+      const { error } = await supabase
         .from("customer_sessions")
         .update({
           time_ended: nowIso,
-          total_time: totalHours,
+          total_time: totalMinutes,
           total_amount: totalCost,
           hour_avail: "CLOSED",
+          expected_end_at: null,
         })
-        .eq("id", session.id)
-        .select("*")
-        .single();
+        .eq("id", session.id);
 
-      if (error || !updated) {
-        alert(`Stop Time error: ${error?.message ?? "Unknown error"}`);
+      if (error) {
+        alert(`Stop Time error: ${error.message}`);
         return;
       }
 
-      const updatedRow = updated as CustomerSession;
-      setSessions((prev) => prev.map((s) => (s.id === session.id ? updatedRow : s)));
-      setSelectedSession((prev) => (prev?.id === session.id ? updatedRow : prev));
+      const { data: freshUpdated, error: freshErr } = await supabase
+        .from("customer_sessions")
+        .select("*")
+        .eq("id", session.id)
+        .single();
+
+      if (freshErr || !freshUpdated) {
+        alert(`Stop Time refresh error: ${freshErr?.message ?? "Unknown error"}`);
+        return;
+      }
+
+      const updatedRow = freshUpdated as CustomerSession;
+
+      setSessions((prev) =>
+        prev.map((row) => (row.id === session.id ? updatedRow : row))
+      );
+
+      setSelectedSession((prev) =>
+        prev?.id === session.id ? updatedRow : prev
+      );
+
+      setSelectedOrderSession((prev) =>
+        prev?.id === session.id ? updatedRow : prev
+      );
+
       await syncSingleSessionPaidState(updatedRow);
+      await refreshAll();
     } catch (e) {
       console.error(e);
       alert("Stop Time failed.");
