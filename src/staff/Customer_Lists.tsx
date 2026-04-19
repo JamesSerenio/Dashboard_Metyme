@@ -874,25 +874,29 @@ const refreshAll = async (): Promise<void> => {
   const getDownPayment = (s: CustomerSession): number =>
     wholePeso(Math.max(0, toMoney(s.down_payment ?? 0)));
 
-const isOpenTimeSession = (s: CustomerSession): boolean => {
-  const hourAvail = String(s.hour_avail ?? "").trim().toUpperCase();
-  const endRaw = String(s.time_ended ?? "").trim();
+  const isOpenTimeSession = (s: CustomerSession): boolean => {
+    // ✅ kapag fully paid na, hindi na dapat considered open
+    if (getFinalPaidStatus(s)) return false;
 
-  if (hourAvail === "CLOSED") return false;
-  if (!endRaw) return true;
+    const hourAvail = String(s.hour_avail ?? "").trim().toUpperCase();
+    const endRaw = String(s.time_ended ?? "").trim();
 
-  const end = new Date(endRaw);
-  if (!Number.isFinite(end.getTime())) return true;
+    if (hourAvail === "CLOSED") return false;
+    if (!endRaw) return true;
 
-  if (hourAvail === "OPEN") return true;
-  return end.getFullYear() >= 2999;
-};
+    const end = new Date(endRaw);
+    if (!Number.isFinite(end.getTime())) return true;
 
-const canShowStopTimeButton = (s: CustomerSession): boolean => {
-  if (locallyStoppedIds[s.id]) return false;
-  if (stoppingId === s.id) return false;
-  return isOpenTimeSession(s);
-};
+    if (hourAvail === "OPEN") return true;
+    return end.getFullYear() >= 2999;
+  };
+
+  const canShowStopTimeButton = (s: CustomerSession): boolean => {
+    if (getFinalPaidStatus(s)) return false;
+    if (locallyStoppedIds[s.id]) return false;
+    if (stoppingId === s.id) return false;
+    return isOpenTimeSession(s);
+  };
 
   const diffMinutes = (startIso: string, endIso: string): number => {
     const start = new Date(startIso).getTime();
@@ -1208,7 +1212,11 @@ const canShowStopTimeButton = (s: CustomerSession): boolean => {
   };
 
   const renderStatus = (s: CustomerSession): string => {
+    // ✅ paid = finished agad
+    if (getFinalPaidStatus(s)) return "Finished";
+
     if (isOpenTimeSession(s)) return "Ongoing";
+
     const end = new Date(s.time_ended);
     if (!Number.isFinite(end.getTime())) return "Finished";
     return new Date() > end ? "Finished" : "Ongoing";

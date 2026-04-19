@@ -634,6 +634,103 @@ const getCommonAreaDurationLabel = (r: PromoBookingRow): string => {
       return () => window.clearInterval(t);
     }, []);
 
+    const getManilaNowParts = (): { date: string; minutes: number } => {
+    const now = new Date();
+
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Manila",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    }).formatToParts(now);
+
+    const year = parts.find((p) => p.type === "year")?.value ?? "0000";
+    const month = parts.find((p) => p.type === "month")?.value ?? "01";
+    const day = parts.find((p) => p.type === "day")?.value ?? "01";
+    const hour = Number(parts.find((p) => p.type === "hour")?.value ?? "0");
+    const minute = Number(parts.find((p) => p.type === "minute")?.value ?? "0");
+
+    return {
+      date: `${year}-${month}-${day}`,
+      minutes: hour * 60 + minute,
+    };
+  };
+
+  const getPreviousManilaDate = (): string => {
+    const now = new Date();
+    const manilaNow = new Date(
+      now.toLocaleString("en-US", { timeZone: "Asia/Manila" })
+    );
+
+    manilaNow.setDate(manilaNow.getDate() - 1);
+
+    const y = manilaNow.getFullYear();
+    const m = String(manilaNow.getMonth() + 1).padStart(2, "0");
+    const d = String(manilaNow.getDate()).padStart(2, "0");
+
+    return `${y}-${m}-${d}`;
+  };
+
+  const autoOutOpenAttendanceAtMidnight = async (): Promise<void> => {
+    const { minutes } = getManilaNowParts();
+
+    // 12:00 AM hanggang 12:05 AM Manila lang
+    if (minutes > 5) return;
+
+    const previousManilaDate = getPreviousManilaDate();
+
+    // auto-out lang kapag may IN noong previous day at wala pang OUT
+    const { data, error } = await supabase
+      .from("promo_booking_attendance")
+      .select("id, promo_booking_id, local_day, in_at, out_at, auto_out")
+      .eq("local_day", previousManilaDate)
+      .not("in_at", "is", null)
+      .is("out_at", null);
+
+    if (error) {
+      console.warn("autoOutOpenAttendanceAtMidnight load error:", error.message);
+      return;
+    }
+
+    const openRows = (data ?? []) as Array<{
+      id: string;
+      promo_booking_id: string;
+      local_day: string;
+      in_at: string;
+      out_at: string | null;
+      auto_out: boolean;
+    }>;
+
+    if (openRows.length === 0) return;
+
+    const outStamp = new Date().toISOString();
+
+    for (const row of openRows) {
+      if (!String(row.in_at ?? "").trim()) continue;
+
+      const { error: updErr } = await supabase
+        .from("promo_booking_attendance")
+        .update({
+          out_at: outStamp,
+          auto_out: true,
+          note: "Auto OUT at 12 midnight",
+        })
+        .eq("id", row.id)
+        .eq("local_day", previousManilaDate)
+        .not("in_at", "is", null)
+        .is("out_at", null);
+
+      if (updErr) {
+        console.warn("autoOutOpenAttendanceAtMidnight update error:", updErr.message);
+      }
+    }
+
+    await fetchAttendanceForBookings(rows.map((r) => r.id));
+  };
+
     const [, setViewTick] = useState<number>(0);
     const [viewEnabled, setViewEnabled] = useState<boolean>(false);
     const [viewSessionId, setViewSessionId] = useState<string>("");
@@ -1078,6 +1175,13 @@ const getCommonAreaDurationLabel = (r: PromoBookingRow): string => {
 
     useEffect(() => {
       void fetchPromoBookings();
+      void autoOutOpenAttendanceAtMidnight();
+
+      const midnightWatcher = window.setInterval(() => {
+        void autoOutOpenAttendanceAtMidnight();
+      }, 60000);
+
+      return () => window.clearInterval(midnightWatcher);
     }, []);
 
     const refreshAll = async (): Promise<void> => {
