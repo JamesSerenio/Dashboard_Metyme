@@ -453,6 +453,7 @@ const Customer_Lists: React.FC = () => {
   const [selectedSession, setSelectedSession] = useState<CustomerSession | null>(null);
   const [selectedOrderSession, setSelectedOrderSession] = useState<CustomerSession | null>(null);
   const [stoppingId, setStoppingId] = useState<string | null>(null);
+  const [locallyStoppedIds, setLocallyStoppedIds] = useState<Record<string, boolean>>({});
 
   const [activeView, setActiveView] = useState<CustomerViewRow | null>(null);
   const [viewBusy, setViewBusy] = useState<boolean>(false);
@@ -827,20 +828,43 @@ const Customer_Lists: React.FC = () => {
     };
   };
 
-  const refreshAll = async (): Promise<void> => {
-    try {
-      setRefreshing(true);
-      const loadedSessions = await fetchCustomerSessions();
-      await Promise.all([
-        fetchOrdersForSessions(loadedSessions),
-        fetchOrderPayments(loadedSessions),
-        readActiveCustomerView(),
-      ]);
-      await syncSessionPaidStates(loadedSessions);
-    } finally {
-      setRefreshing(false);
-    }
-  };
+const refreshAll = async (): Promise<void> => {
+  try {
+    setRefreshing(true);
+    const loadedSessions = await fetchCustomerSessions();
+    await Promise.all([
+      fetchOrdersForSessions(loadedSessions),
+      fetchOrderPayments(loadedSessions),
+      readActiveCustomerView(),
+    ]);
+    await syncSessionPaidStates(loadedSessions);
+
+    // linisin lang yung local stopped ids kapag talagang closed na sa fetched rows
+    setLocallyStoppedIds((prev) => {
+      const next = { ...prev };
+
+      for (const row of loadedSessions) {
+        const hourAvail = String(row.hour_avail ?? "").trim().toUpperCase();
+        const endRaw = String(row.time_ended ?? "").trim();
+        const end = endRaw ? new Date(endRaw) : null;
+        const isReallyClosed =
+          hourAvail === "CLOSED" &&
+          !!endRaw &&
+          !!end &&
+          Number.isFinite(end.getTime()) &&
+          end.getFullYear() < 2999;
+
+        if (isReallyClosed) {
+          delete next[row.id];
+        }
+      }
+
+      return next;
+    });
+  } finally {
+    setRefreshing(false);
+  }
+};
 
   const phoneText = (s: CustomerSession): string => {
     const p = String(s.phone_number ?? "").trim();
@@ -850,19 +874,25 @@ const Customer_Lists: React.FC = () => {
   const getDownPayment = (s: CustomerSession): number =>
     wholePeso(Math.max(0, toMoney(s.down_payment ?? 0)));
 
-  const isOpenTimeSession = (s: CustomerSession): boolean => {
-    const hourAvail = String(s.hour_avail ?? "").trim().toUpperCase();
+const isOpenTimeSession = (s: CustomerSession): boolean => {
+  const hourAvail = String(s.hour_avail ?? "").trim().toUpperCase();
+  const endRaw = String(s.time_ended ?? "").trim();
 
-    if (hourAvail === "OPEN") return true;
+  if (hourAvail === "CLOSED") return false;
+  if (!endRaw) return true;
 
-    const endRaw = String(s.time_ended ?? "").trim();
-    if (!endRaw) return true;
+  const end = new Date(endRaw);
+  if (!Number.isFinite(end.getTime())) return true;
 
-    const end = new Date(endRaw);
-    if (!Number.isFinite(end.getTime())) return true;
+  if (hourAvail === "OPEN") return true;
+  return end.getFullYear() >= 2999;
+};
 
-    return end.getFullYear() >= 2999;
-  };
+const canShowStopTimeButton = (s: CustomerSession): boolean => {
+  if (locallyStoppedIds[s.id]) return false;
+  if (stoppingId === s.id) return false;
+  return isOpenTimeSession(s);
+};
 
   const diffMinutes = (startIso: string, endIso: string): number => {
     const start = new Date(startIso).getTime();
@@ -1061,7 +1091,7 @@ const Customer_Lists: React.FC = () => {
     }
   };
 
-    const stopOpenTime = async (session: CustomerSession): Promise<void> => {
+      const stopOpenTime = async (session: CustomerSession): Promise<void> => {
     try {
       setStoppingId(session.id);
 
@@ -1070,6 +1100,33 @@ const Customer_Lists: React.FC = () => {
 
       const totalMinutes = diffMinutes(session.time_started, nowIso);
       const totalCost = computeCostWithFreeMinutes(session.time_started, nowIso);
+
+      // optimistic UI update para mawala agad button
+      setLocallyStoppedIds((prev) => ({
+        ...prev,
+        [session.id]: true,
+      }));
+
+      const optimisticRow: CustomerSession = {
+        ...session,
+        time_ended: nowIso,
+        total_time: totalMinutes,
+        total_amount: totalCost,
+        hour_avail: "CLOSED",
+        expected_end_at: null,
+      };
+
+      setSessions((prev) =>
+        prev.map((row) => (row.id === session.id ? optimisticRow : row))
+      );
+
+      setSelectedSession((prev) =>
+        prev?.id === session.id ? optimisticRow : prev
+      );
+
+      setSelectedOrderSession((prev) =>
+        prev?.id === session.id ? optimisticRow : prev
+      );
 
       const { error } = await supabase
         .from("customer_sessions")
@@ -1083,6 +1140,24 @@ const Customer_Lists: React.FC = () => {
         .eq("id", session.id);
 
       if (error) {
+        setLocallyStoppedIds((prev) => {
+          const next = { ...prev };
+          delete next[session.id];
+          return next;
+        });
+
+        setSessions((prev) =>
+          prev.map((row) => (row.id === session.id ? session : row))
+        );
+
+        setSelectedSession((prev) =>
+          prev?.id === session.id ? session : prev
+        );
+
+        setSelectedOrderSession((prev) =>
+          prev?.id === session.id ? session : prev
+        );
+
         alert(`Stop Time error: ${error.message}`);
         return;
       }
@@ -1099,6 +1174,10 @@ const Customer_Lists: React.FC = () => {
       }
 
       const updatedRow = freshUpdated as CustomerSession;
+      setLocallyStoppedIds((prev) => ({
+        ...prev,
+        [session.id]: true,
+      }));
 
       setSessions((prev) =>
         prev.map((row) => (row.id === session.id ? updatedRow : row))
@@ -2190,16 +2269,16 @@ const Customer_Lists: React.FC = () => {
                               Discount
                             </button>
 
-                          {isOpenTimeSession(session) && (
-                            <button
-                              className="cll-action-btn cll-action-gold"
-                              onClick={() => void stopOpenTime(session)}
-                              disabled={stoppingId === session.id}
-                              type="button"
-                            >
-                              {stoppingId === session.id ? "Stopping..." : "Stop Time"}
-                            </button>
-                          )}
+                            {canShowStopTimeButton(session) && (
+                              <button
+                                className="cll-action-btn cll-action-gold"
+                                onClick={() => void stopOpenTime(session)}
+                                disabled={stoppingId === session.id}
+                                type="button"
+                              >
+                                {stoppingId === session.id ? "Stopping..." : "Stop Time"}
+                              </button>
+                            )}
 
                             <button
                               className={`cll-action-btn ${
