@@ -2505,16 +2505,6 @@ const Admin_customer_list: React.FC = () => {
                             >
                               View Receipt
                             </button>
-
-                            <button
-                              className={`acl-action-btn ${customerViewActive ? "active-view" : ""}`}
-                              type="button"
-                              onClick={() => void (customerViewActive ? hideCustomerView() : showCustomerView(s))}
-                              disabled={viewBusy}
-                            >
-                              {customerViewActive ? "Hide Customer View" : "Show Customer View"}
-                            </button>
-
                             {isOpenTimeSession(s) && (
                               <button
                                 className="acl-action-btn acl-action-gold"
