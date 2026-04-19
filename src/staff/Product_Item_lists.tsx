@@ -218,6 +218,7 @@ const Product_Item_lists: React.FC = () => {
 
   const [fullName, setFullName] = useState<string>("");
   const [selectedAddOnId, setSelectedAddOnId] = useState<string>("");
+  const [productSearch, setProductSearch] = useState<string>("");
   const [expenseType, setExpenseType] = useState<ExpenseType>("expired");
   const [qty, setQty] = useState<string>("1");
   const [expenseAmount, setExpenseAmount] = useState<string>("0");
@@ -298,6 +299,19 @@ const Product_Item_lists: React.FC = () => {
     [addOns, selectedAddOnId]
   );
 
+  const filteredProducts = useMemo(() => {
+    const q = productSearch.trim().toLowerCase();
+    if (!q) return addOns;
+
+    return addOns.filter((a) => {
+      const name = (a.name ?? "").toLowerCase();
+      const cat = (a.category ?? "").toLowerCase();
+      const size = (a.size ?? "").toLowerCase();
+
+      return name.includes(q) || cat.includes(q) || size.includes(q);
+    });
+  }, [addOns, productSearch]);
+
   useEffect(() => {
     const total = computeAmount(selectedAddOn, expenseType, qty);
     setExpenseAmount(String(total));
@@ -306,15 +320,16 @@ const Product_Item_lists: React.FC = () => {
 const totalProducts = addOns.length;
 const lowStockCount = addOns.filter((a) => toNumber(a.stocks) <= 10).length;
 
-  const openExpenseModal = (): void => {
-    setFullName("");
-    setSelectedAddOnId("");
-    setExpenseType("expired");
-    setQty("1");
-    setExpenseAmount("0");
-    setDescription("");
-    setIsExpenseOpen(true);
-  };
+const openExpenseModal = (): void => {
+  setFullName("");
+  setSelectedAddOnId("");
+  setProductSearch("");
+  setExpenseType("expired");
+  setQty("1");
+  setExpenseAmount("0");
+  setDescription("");
+  setIsExpenseOpen(true);
+};
 
   const closeExpenseModal = (): void => {
     if (savingExpense) return;
@@ -659,22 +674,53 @@ const lowStockCount = addOns.filter((a) => toNumber(a.stocks) <= 10).length;
             />
           </div>
 
-          <div className="prod-items-form-group">
-            <label>Product</label>
-            <select
-              className="prod-items-input"
-              value={selectedAddOnId}
-              onChange={(e) => setSelectedAddOnId(e.target.value)}
+     <div className="prod-items-form-group">
+      <label>Product</label>
+
+    <div className="prod-items-custom-select">
+      <input
+        className="prod-items-input prod-items-product-search"
+        placeholder="Search & select product..."
+        value={
+          selectedAddOnId && selectedAddOn
+            ? `${selectedAddOn.category} — ${selectedAddOn.name}${normSize(selectedAddOn.size) ? ` (${normSize(selectedAddOn.size)})` : ""} (Stock: ${toNumber(selectedAddOn.stocks)})`
+            : productSearch
+        }
+        onChange={(e) => {
+          setProductSearch(e.target.value);
+          setSelectedAddOnId("");
+        }}
+        onFocus={() => {
+          if (selectedAddOnId && selectedAddOn) {
+            setProductSearch("");
+          }
+        }}
+      />
+
+      {productSearch.trim().length > 0 && (
+        <div className="prod-items-dropdown">
+          {filteredProducts.map((a) => (
+            <button
+              type="button"
+              key={a.id}
+              className="prod-items-dropdown-item"
+              onClick={() => {
+                setSelectedAddOnId(a.id);
+                setProductSearch("");
+              }}
             >
-              <option value="">Select product</option>
-              {addOns.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.category} — {a.name}
-                  {normSize(a.size) ? ` (${normSize(a.size)})` : ""} (Stock: {toNumber(a.stocks)})
-                </option>
-              ))}
-            </select>
-          </div>
+              {a.category} — {a.name}
+              {normSize(a.size) ? ` (${normSize(a.size)})` : ""} (Stock: {toNumber(a.stocks)})
+            </button>
+          ))}
+
+          {filteredProducts.length === 0 && (
+            <div className="prod-items-dropdown-empty">No product found</div>
+          )}
+        </div>
+      )}
+    </div>
+    </div>
 
           <div className="prod-items-form-grid">
             <div className="prod-items-form-group">

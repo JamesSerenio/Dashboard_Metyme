@@ -2159,7 +2159,7 @@ const canShowStopTimeButton = (s: CustomerSession): boolean => {
                             <div className="cll-grand-amount">₱{grandTotal}</div>
                             <div className="cll-grand-breakdown">
                               <div className="cll-break-row">
-                                <span>System</span>
+                                <span>Time</span>
                                 <strong>₱{getSystemDue(session)}</strong>
                               </div>
                               <div className="cll-break-row">
@@ -2475,7 +2475,7 @@ const canShowStopTimeButton = (s: CustomerSession): boolean => {
 
                     <div className="cll-plain-summary">
                       <div className="cll-plain-row">
-                        <span>System Cost</span>
+                        <span>Time Cost</span>
                         <strong>₱{systemCost}</strong>
                       </div>
 

@@ -2265,7 +2265,7 @@ const getCommonAreaDurationLabel = (r: PromoBookingRow): string => {
                       <th>Option</th>
                       <th>Start</th>
                       <th>End</th>
-                      <th>System Cost</th>
+                      <th>Time Cost</th>
                       <th>Order</th>
                       <th>Discount</th>
                       <th>Status</th>
@@ -2869,7 +2869,7 @@ const getCommonAreaDurationLabel = (r: PromoBookingRow): string => {
                   <>
                     <div className="cpl-receipt-block">
                       <div className="cpl-receipt-row">
-                        <span>System Cost (Before)</span>
+                        <span>Time Cost (Before)</span>
                         <strong>₱{selected.price.toFixed(2)}</strong>
                       </div>
                       <div className="cpl-receipt-row">
@@ -2881,7 +2881,7 @@ const getCommonAreaDurationLabel = (r: PromoBookingRow): string => {
                         <strong>₱{di.discountAmount.toFixed(2)}</strong>
                       </div>
                       <div className="cpl-receipt-row">
-                        <span>System Cost</span>
+                        <span>Time Cost</span>
                         <strong>₱{systemDue.toFixed(2)}</strong>
                       </div>
                       <div className="cpl-receipt-row">
@@ -2924,7 +2924,7 @@ const getCommonAreaDurationLabel = (r: PromoBookingRow): string => {
                     </div>
 
                     <div className="cpl-receipt-total">
-                      <span>Total System Cost</span>
+                      <span>Total Time Cost</span>
                       <strong>₱{systemDue.toFixed(2)}</strong>
                     </div>
 

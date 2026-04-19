@@ -2265,7 +2265,7 @@ await supabase
                             <div className="crv-grand-amount">₱{grandTotal}</div>
                             <div className="crv-grand-breakdown">
                               <div className="crv-break-row">
-                                <span>System</span>
+                                <span>Time</span>
                                 <strong>₱{getSystemDue(session)}</strong>
                               </div>
                               <div className="crv-break-row">
@@ -2645,7 +2645,7 @@ await supabase
 
                   <div className="crv-plain-summary">
                     <div className="crv-plain-row">
-                      <span>System Cost</span>
+                      <span>Time Cost</span>
                       <strong>₱{systemCost}</strong>
                     </div>
 
