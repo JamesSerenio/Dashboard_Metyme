@@ -2338,16 +2338,6 @@ const submitOrderPayment = async (): Promise<void> => {
                               Discount
                             </button>
                             <button
-                              className="cpl-btn-mini"
-                              onClick={() => {
-                                const on = isCustomerViewOnFor(row.id);
-                                void setCustomerViewRealtime(!on, !on ? row.id : null);
-                              }}
-                              type="button"
-                            >
-                              {isCustomerViewOnFor(row.id) ? "Stop Customer View" : "View to Customer"}
-                            </button>
-                            <button
                               className="cpl-btn-mini cpl-btn-mini-danger"
                               onClick={() => {
                                 setCancelTarget(row);
@@ -2860,17 +2850,6 @@ const submitOrderPayment = async (): Promise<void> => {
             })()}
 
             <div className="cpl-modal-actions">
-              <button
-                className="cpl-btn cpl-btn-dark"
-                onClick={() => {
-                  const on = isCustomerViewOnFor(selected.id);
-                  void setCustomerViewRealtime(!on, !on ? selected.id : null);
-                }}
-                type="button"
-              >
-                {isCustomerViewOnFor(selected.id) ? "Stop View to Customer" : "View to Customer"}
-              </button>
-
               <button className="cpl-btn cpl-btn-light" onClick={() => setSelected(null)} type="button">
                 Close
               </button>

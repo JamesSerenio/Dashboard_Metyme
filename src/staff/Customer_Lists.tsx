@@ -2279,22 +2279,6 @@ const canShowStopTimeButton = (s: CustomerSession): boolean => {
                                 {stoppingId === session.id ? "Stopping..." : "Stop Time"}
                               </button>
                             )}
-
-                            <button
-                              className={`cll-action-btn ${
-                                isCustomerViewOnForSession(activeView, session.id)
-                                  ? "active-view"
-                                  : ""
-                              }`}
-                              onClick={() => void toggleCustomerViewForSession(session)}
-                              disabled={viewBusy}
-                              type="button"
-                            >
-                              {isCustomerViewOnForSession(activeView, session.id)
-                                ? "Stop View"
-                                : "View Customer"}
-                            </button>
-
                             <button
                               className="cll-action-btn"
                               onClick={() => setSelectedSession(session)}
