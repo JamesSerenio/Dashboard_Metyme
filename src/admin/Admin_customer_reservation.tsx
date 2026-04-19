@@ -1700,6 +1700,31 @@ const totals = useMemo(() => {
 
       await fetchOrderPayments([orderPaymentTarget]);
 
+      // 🔥 SYNC ADD-ONS + CONSIGNMENT (FIX)
+      const paidAt = isPaid ? new Date().toISOString() : null;
+
+      // 👉 ADD-ONS
+      await supabase
+        .from("customer_session_add_ons")
+        .update({
+          is_paid: isPaid,
+          paid_at: paidAt,
+        })
+        .eq("full_name", orderPaymentTarget.full_name)
+        .eq("seat_number", orderPaymentTarget.seat_number)
+        .eq("is_paid", false)
+
+      // 👉 CONSIGNMENT
+      await supabase
+        .from("customer_session_consignment")
+        .update({
+          is_paid: isPaid,
+          paid_at: paidAt,
+        })
+        .eq("full_name", orderPaymentTarget.full_name)
+        .eq("seat_number", orderPaymentTarget.seat_number)
+        .eq("voided", false);
+
       const { data: updatedSession, error: updErr } = await supabase
         .from("customer_sessions")
         .update({
@@ -1723,6 +1748,7 @@ const totals = useMemo(() => {
       setSelectedSession((prev) => (prev?.id === updatedRow.id ? updatedRow : prev));
       setSelectedOrderSession((prev) => (prev?.id === updatedRow.id ? updatedRow : prev));
       setOrderPaymentTarget(null);
+      await refreshAll();
       await syncSingleSessionPaidState(updatedRow);
     } catch (e) {
       console.error(e);
