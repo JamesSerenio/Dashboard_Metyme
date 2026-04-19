@@ -11,7 +11,7 @@ type DurationUnit = "hour" | "day" | "month" | "year";
 type DiscountKind = "none" | "percent" | "amount";
 
 type AreaFilter = "all" | PackageArea;
-type AttendanceFilter = "all" | "in_out_customers";
+type AttendanceFilter = "all" | "in_out_customers" | "active_promo";
 type CommonDurationFilter = "all" | "1_day" | "week" | "half_month" | "month";
 type ConferenceDurationFilter = "all" | "1_hour" | "3_hours" | "6_hours" | "8_hours";
 
@@ -770,7 +770,7 @@ const [conferenceDurationFilter, setConferenceDurationFilter] =
   useEffect(() => {
     setCommonDurationFilter("all");
     setConferenceDurationFilter("all");
-  }, [areaFilter]);
+  }, [areaFilter, attendanceFilter]);
 
   const fetchAttendanceForBookings = async (bookingIds: string[]): Promise<void> => {
     if (bookingIds.length === 0) {
@@ -1018,8 +1018,16 @@ const [conferenceDurationFilter, setConferenceDurationFilter] =
     return logsFor(bookingId).filter((log) => String(log.local_day ?? "").trim() === day);
   };
 
-  const hasAttendanceOnSelectedDay = (bookingId: string, day: string): boolean => {
-    return logsForSelectedDay(bookingId, day).length > 0;
+  const hasInAndOutOnSelectedDay = (bookingId: string, day: string): boolean => {
+    const dayLogs = logsForSelectedDay(bookingId, day);
+
+    return dayLogs.some((log) => {
+      const hasIn = String(log.in_at ?? "").trim().length > 0;
+      const hasOut = String(log.out_at ?? "").trim().length > 0;
+
+      // kahit IN lang OR OUT lang OR both
+      return hasIn || hasOut;
+    });
   };
 
   const lastLogForSelectedDay = (
@@ -1032,10 +1040,16 @@ const [conferenceDurationFilter, setConferenceDurationFilter] =
 
   const filteredRows = useMemo(() => {
     return rows.filter((r) => {
-      const hasDayAttendance = hasAttendanceOnSelectedDay(r.id, selectedDay);
+      const hasDayAttendance = hasInAndOutOnSelectedDay(r.id, selectedDay);
+
+      const promoCode = String(r.promo_code ?? "").trim();
+      const validitySource = String(r.validity_end_at ?? r.end_at ?? "").trim();
+      const isActivePromo = promoCode.length > 0 && !isExpired(validitySource);
 
       if (attendanceFilter === "in_out_customers") {
         if (!hasDayAttendance) return false;
+      } else if (attendanceFilter === "active_promo") {
+        if (!isActivePromo) return false;
       } else {
         if (!bookingOverlapsRange(r.start_at, r.end_at, activeRange) && !hasDayAttendance) {
           return false;
@@ -1044,14 +1058,20 @@ const [conferenceDurationFilter, setConferenceDurationFilter] =
 
       if (areaFilter !== "all" && r.area !== areaFilter) return false;
 
-      if (areaFilter === "common_area" && commonDurationFilter !== "all") {
-        const bucket = getCommonAreaDurationBucket(r);
-        if (bucket !== commonDurationFilter) return false;
+      // Common Area Duration same sa customer promo list
+      if (r.area === "common_area") {
+        if (commonDurationFilter !== "all") {
+          const bucket = getCommonAreaDurationBucket(r);
+          if (bucket !== commonDurationFilter) return false;
+        }
       }
 
-      if (areaFilter === "conference_room" && conferenceDurationFilter !== "all") {
-        const bucket = getConferenceDurationBucket(r);
-        if (bucket !== conferenceDurationFilter) return false;
+      // Conference Room Duration same sa customer promo list
+      if (r.area === "conference_room") {
+        if (conferenceDurationFilter !== "all") {
+          const bucket = getConferenceDurationBucket(r);
+          if (bucket !== conferenceDurationFilter) return false;
+        }
       }
 
       return true;
@@ -1066,7 +1086,6 @@ const [conferenceDurationFilter, setConferenceDurationFilter] =
     selectedDay,
     attMap,
   ]);
-
   const getOrderItems = (code: string | null): PromoOrderItemRow[] => {
     if (!code) return [];
     return ordersMap[code] ?? [];
@@ -2387,8 +2406,9 @@ if (latestRow) {
               value={attendanceFilter}
               onChange={(e) => setAttendanceFilter(e.target.value as AttendanceFilter)}
             >
-              <option value="all">All Customers</option>
-              <option value="in_out_customers">IN & OUT Customers</option>
+            <option value="all">All Customers</option>
+            <option value="in_out_customers">With Attendance Today</option>
+            <option value="active_promo">Active Promo</option>
             </select>
           </div>
 
