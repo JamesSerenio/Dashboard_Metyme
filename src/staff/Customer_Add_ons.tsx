@@ -224,6 +224,7 @@ const Customer_Add_ons: React.FC = () => {
   const [cancelDesc, setCancelDesc] = useState<string>("");
   const [cancellingKey, setCancellingKey] = useState<string | null>(null);
   const [orderPayments, setOrderPayments] = useState<Record<string, CustomerOrderPayment>>({});
+  const [useSharedOrderPayments] = useState<boolean>(true);
   const [addonOrderLookup, setAddonOrderLookup] = useState<
     Array<{
       booking_code: string;
@@ -350,10 +351,16 @@ const Customer_Add_ons: React.FC = () => {
     return;
   }
 
-const paymentRes = await supabase
-  .from("customer_order_payments")
-  .select("booking_code, full_name, seat_number, gcash_amount, cash_amount, is_paid, paid_at")
-  .in("booking_code", bookingCodes);
+  if (!useSharedOrderPayments) {
+    setOrderPayments({});
+    setLoading(false);
+    return;
+  }
+
+  const paymentRes = await supabase
+    .from("customer_order_payments")
+    .select("booking_code, full_name, seat_number, gcash_amount, cash_amount, is_paid, paid_at")
+    .in("booking_code", bookingCodes);
 
   if (paymentRes.error) {
     console.error("FETCH ORDER PAYMENTS ERROR:", paymentRes.error);
@@ -461,26 +468,42 @@ const paymentRes = await supabase
     return groups
       .map((g) => {
         const bookingCode = findBookingCodeForGroupLocal(g);
-        const payment = bookingCode ? orderPayments[bookingCode] ?? null : null;
+        const payment =
+          useSharedOrderPayments && bookingCode ? orderPayments[bookingCode] ?? null : null;
 
         const hasOwnManualAmounts =
-          round2(Math.max(0, toNumber(g.gcash_amount)) + Math.max(0, toNumber(g.cash_amount))) > 0;
+          round2(
+            Math.max(0, toNumber(g.gcash_amount)) + Math.max(0, toNumber(g.cash_amount))
+          ) > 0;
+
+        const paymentGcash = payment ? round2(Math.max(0, toNumber(payment.gcash_amount))) : 0;
+        const paymentCash = payment ? round2(Math.max(0, toNumber(payment.cash_amount))) : 0;
+        const paymentTotal = round2(paymentGcash + paymentCash);
+
+        const cappedSharedTotal = round2(Math.min(paymentTotal, g.grand_total));
+
+        let allocatedSharedGcash = 0;
+        let allocatedSharedCash = 0;
+
+        if (paymentTotal > 0 && cappedSharedTotal > 0) {
+          const gcashRatio = paymentGcash / paymentTotal;
+          allocatedSharedGcash = round2(cappedSharedTotal * gcashRatio);
+          allocatedSharedCash = round2(cappedSharedTotal - allocatedSharedGcash);
+        }
 
         const nextGcash =
-          payment && !hasOwnManualAmounts
-            ? round2(Math.max(0, toNumber(payment.gcash_amount)))
-            : g.gcash_amount;
+          payment && !hasOwnManualAmounts ? allocatedSharedGcash : g.gcash_amount;
 
         const nextCash =
-          payment && !hasOwnManualAmounts
-            ? round2(Math.max(0, toNumber(payment.cash_amount)))
-            : g.cash_amount;
+          payment && !hasOwnManualAmounts ? allocatedSharedCash : g.cash_amount;
+
+        const nextPaidAmount = round2(nextGcash + nextCash);
 
         const nextIsPaid =
           hasOwnManualAmounts
             ? g.is_paid
             : payment
-            ? toBool(payment.is_paid)
+            ? nextPaidAmount >= g.grand_total
             : g.is_paid;
 
         const nextPaidAt =

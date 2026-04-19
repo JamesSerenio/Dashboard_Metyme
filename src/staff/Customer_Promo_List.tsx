@@ -1104,6 +1104,17 @@ const [addonParentsRes, consignmentParentsRes, addonItemsRes, consignmentItemsRe
     return { remaining: 0, change: round2(Math.abs(diff)), label: "Change" };
   };
 
+  const hasUnpaidOrderCarryOver = (r: PromoBookingRow): boolean => {
+  const code = String(r.promo_code ?? "").trim();
+  if (!code) return false;
+
+  const orderDue = getOrderDue(code);
+  if (orderDue <= 0) return false;
+
+  const orderPaid = getOrderPaidInfo(code).totalPaid;
+  return round2(orderPaid) < round2(orderDue);
+};
+
   const getGrandDue = (r: PromoBookingRow): number =>
     round2(getSystemDue(r) + getOrderDue(r.promo_code));
 
@@ -1942,56 +1953,80 @@ const submitOrderPayment = async (): Promise<void> => {
   }
 };
 
-    const filteredRows = useMemo(() => {
-      const nowMs = tick;
+  const filteredRows = useMemo(() => {
+    const nowMs = tick;
 
-      return rows
-        .filter((r) => {
-          const hasDayAttendance = hasAttendanceOnSelectedDay(r.id, selectedDate);
+    return rows
+      .filter((r) => {
+        const hasDayAttendance = hasAttendanceOnSelectedDay(r.id, selectedDate);
+        const coversSelectedDate = bookingCoversLocalDate(r.start_at, r.end_at, selectedDate);
+        const keepBecauseUnpaidOrder = hasUnpaidOrderCarryOver(r);
 
-          if (attendanceFilter === "in_out_customers") {
-            if (!hasDayAttendance) return false;
-          } else {
-            if (!bookingCoversLocalDate(r.start_at, r.end_at, selectedDate) && !hasDayAttendance) {
-              return false;
-            }
+        if (attendanceFilter === "in_out_customers") {
+          if (!hasDayAttendance && !keepBecauseUnpaidOrder) return false;
+        } else {
+          // normal selected-date rule
+          // OR keep old rows only when order payment is still unpaid
+          if (!coversSelectedDate && !hasDayAttendance && !keepBecauseUnpaidOrder) {
+            return false;
           }
+        }
 
-          if (searchName.trim()) {
-            const q = searchName.trim().toLowerCase();
-            if (!String(r.full_name ?? "").toLowerCase().includes(q)) return false;
+        if (searchName.trim()) {
+          const q = searchName.trim().toLowerCase();
+          const fullName = String(r.full_name ?? "").toLowerCase();
+          const promoCode = String(r.promo_code ?? "").toLowerCase();
+          const phone = String(r.phone_number ?? "").toLowerCase();
+
+          if (
+            !fullName.includes(q) &&
+            !promoCode.includes(q) &&
+            !phone.includes(q)
+          ) {
+            return false;
           }
+        }
 
-          if (areaFilter !== "all" && r.area !== areaFilter) return false;
+        if (areaFilter !== "all" && r.area !== areaFilter) return false;
 
-          if (areaFilter === "common_area" && commonDurationFilter !== "all") {
-            if (getCommonAreaDurationBucket(r) !== commonDurationFilter) return false;
-          }
+        if (areaFilter === "common_area" && commonDurationFilter !== "all") {
+          if (getCommonAreaDurationBucket(r) !== commonDurationFilter) return false;
+        }
 
-          if (areaFilter === "conference_room" && conferenceDurationFilter !== "all") {
-            if (getConferenceDurationBucket(r) !== conferenceDurationFilter) return false;
-          }
+        if (areaFilter === "conference_room" && conferenceDurationFilter !== "all") {
+          if (getConferenceDurationBucket(r) !== conferenceDurationFilter) return false;
+        }
 
-          return true;
-        })
-        .sort((a, b) => {
-          const sa = getStatus(a.start_at, a.end_at, nowMs);
-          const sb = getStatus(b.start_at, b.end_at, nowMs);
-          const order = { ONGOING: 0, UPCOMING: 1, FINISHED: 2 } as const;
-          if (order[sa] !== order[sb]) return order[sa] - order[sb];
-          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-        });
-    }, [
-      rows,
-      selectedDate,
-      searchName,
-      areaFilter,
-      attendanceFilter,
-      commonDurationFilter,
-      conferenceDurationFilter,
-      tick,
-      attMap,
-    ]);
+        return true;
+      })
+      .sort((a, b) => {
+        const aCarry = hasUnpaidOrderCarryOver(a);
+        const bCarry = hasUnpaidOrderCarryOver(b);
+
+        // unpaid carry-over rows stay visible and appear first
+        if (aCarry !== bCarry) return aCarry ? -1 : 1;
+
+        const sa = getStatus(a.start_at, a.end_at, nowMs);
+        const sb = getStatus(b.start_at, b.end_at, nowMs);
+        const order = { ONGOING: 0, UPCOMING: 1, FINISHED: 2 } as const;
+        if (order[sa] !== order[sb]) return order[sa] - order[sb];
+
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      });
+  }, [
+    rows,
+    selectedDate,
+    searchName,
+    areaFilter,
+    attendanceFilter,
+    commonDurationFilter,
+    conferenceDurationFilter,
+    tick,
+    attMap,
+    orderPaymentMap,
+    ordersMap,
+    orderParentsMap,
+  ]);
 
   const totalRows = filteredRows.length;
   const paidRows = filteredRows.filter((r) => r.is_paid).length;
