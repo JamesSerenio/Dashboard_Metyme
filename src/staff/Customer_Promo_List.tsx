@@ -799,14 +799,21 @@ const [loadingOrderPayment, setLoadingOrderPayment] = useState<boolean>(false);
     const logs = logsFor(bookingId);
     return logs.length ? logs[0] : null;
   };
+  
 
   const logsForSelectedDay = (bookingId: string, day: string): PromoBookingAttendanceRow[] => {
     return logsFor(bookingId).filter((log) => String(log.local_day ?? "").trim() === day);
   };
 
-  const hasAttendanceOnSelectedDay = (bookingId: string, day: string): boolean => {
-    return logsForSelectedDay(bookingId, day).length > 0;
-  };
+const hasInAndOutOnSelectedDay = (bookingId: string, day: string): boolean => {
+  const dayLogs = logsForSelectedDay(bookingId, day);
+
+  return dayLogs.some((log) => {
+    const hasIn = String(log.in_at ?? "").trim().length > 0;
+    const hasOut = String(log.out_at ?? "").trim().length > 0;
+    return hasIn && hasOut;
+  });
+};
 
   const lastLogForSelectedDay = (
     bookingId: string,
@@ -1958,12 +1965,13 @@ const submitOrderPayment = async (): Promise<void> => {
 
     return rows
       .filter((r) => {
-        const hasDayAttendance = hasAttendanceOnSelectedDay(r.id, selectedDate);
+        
+        const hasDayAttendance = hasInAndOutOnSelectedDay(r.id, selectedDate);
         const coversSelectedDate = bookingCoversLocalDate(r.start_at, r.end_at, selectedDate);
         const keepBecauseUnpaidOrder = hasUnpaidOrderCarryOver(r);
 
         if (attendanceFilter === "in_out_customers") {
-          if (!hasDayAttendance && !keepBecauseUnpaidOrder) return false;
+          if (!hasDayAttendance) return false;
         } else {
           // normal selected-date rule
           // OR keep old rows only when order payment is still unpaid
