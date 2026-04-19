@@ -2389,20 +2389,6 @@ await supabase
                                 {stoppingId === session.id ? "Stopping..." : "Stop Time"}
                               </button>
                             )}
-
-                            <button
-                              className={`crv-action-btn ${
-                                isCustomerViewOnForSession(activeView, session.id) ? "active-view" : ""
-                              }`}
-                              onClick={() => void toggleCustomerViewForSession(session)}
-                              disabled={viewBusy}
-                              type="button"
-                            >
-                              {isCustomerViewOnForSession(activeView, session.id)
-                                ? "Stop View"
-                                : "View Customer"}
-                            </button>
-
                             <button
                               className="crv-action-btn"
                               onClick={() => setSelectedSession(session)}
@@ -2724,19 +2710,6 @@ await supabase
                   </p>
 
                   <div className="crv-plain-actions">
-                    <button
-                      className="crv-btn crv-btn-dark"
-                      onClick={() => void toggleCustomerViewForSession(selectedSession)}
-                      disabled={viewBusy}
-                      type="button"
-                    >
-                      {viewBusy
-                        ? "Updating..."
-                        : isCustomerViewOnForSession(activeView, selectedSession.id)
-                        ? "Hide Customer"
-                        : "View Customer"}
-                    </button>
-
                     <button
                       className="crv-btn crv-btn-light"
                       onClick={() => setSelectedSession(null)}
