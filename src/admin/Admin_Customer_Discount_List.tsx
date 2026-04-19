@@ -1341,6 +1341,122 @@ const [conferenceDurationFilter, setConferenceDurationFilter] =
     }
   };
 
+const syncParentOrdersPaidState = async (
+  code: string,
+  totalGcash: number,
+  totalCash: number
+): Promise<void> => {
+  const parents = getOrderParents(code);
+
+  if (parents.length === 0) return;
+
+  const allocations = allocateAmountsAcrossOrders(parents, totalGcash, totalCash);
+
+  for (const alloc of allocations) {
+    const table =
+      alloc.source === "addon_orders" ? "addon_orders" : "consignment_orders";
+
+    const { error } = await supabase
+      .from(table)
+      .update({
+        gcash_amount: alloc.gcash_amount,
+        cash_amount: alloc.cash_amount,
+        is_paid: alloc.is_paid,
+        paid_at: alloc.paid_at,
+      })
+      .eq("id", alloc.id);
+
+    if (error) throw error;
+  }
+
+  // ✅ DITO MO ILAGAY (NASA LOOB NG FUNCTION)
+  const bookingRow = rows.find(r => r.promo_code === code);
+
+  if (bookingRow) {
+    const orderDue = getOrderDue(code);
+    const totalPaid = round2(totalGcash + totalCash);
+
+    const isPaid = orderDue <= 0 ? true : totalPaid >= orderDue;
+
+    await supabase
+      .from("promo_bookings")
+      .update({
+        is_paid: isPaid,
+        paid_at: isPaid ? new Date().toISOString() : null,
+      })
+      .eq("id", bookingRow.id);
+  }
+};
+
+const syncDetailRowsPaidStateByBooking = async (
+  booking: PromoBookingRow,
+  orderPaid: { gcash: number; cash: number; totalPaid: number }
+): Promise<void> => {
+  const orderDue = getOrderDue(booking.promo_code);
+  const orderIsPaid = orderDue <= 0 ? true : orderPaid.totalPaid >= orderDue;
+  const paidAt = orderIsPaid ? new Date().toISOString() : null;
+
+  const addOnItems = getOrderItems(booking.promo_code).filter((x) => x.kind === "add_on");
+  const consignmentItems = getOrderItems(booking.promo_code).filter((x) => x.kind === "consignment");
+
+  for (const item of addOnItems) {
+    const { data: matchedRows, error: findErr } = await supabase
+      .from("customer_session_add_ons")
+      .select("id, created_at")
+      .eq("add_on_id", item.source_item_id)
+      .eq("full_name", booking.full_name)
+      .eq("seat_number", seatLabel(booking))
+      .eq("quantity", item.quantity)
+      .eq("price", item.price)
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    if (findErr) throw findErr;
+
+    const targetId = matchedRows?.[0]?.id ?? null;
+    if (!targetId) continue;
+
+    const { error } = await supabase
+      .from("customer_session_add_ons")
+      .update({
+        is_paid: orderIsPaid,
+        paid_at: paidAt,
+      })
+      .eq("id", targetId);
+
+    if (error) throw error;
+  }
+
+  for (const item of consignmentItems) {
+    const { data: matchedRows, error: findErr } = await supabase
+      .from("customer_session_consignment")
+      .select("id, created_at")
+      .eq("consignment_id", item.source_item_id)
+      .eq("full_name", booking.full_name)
+      .eq("seat_number", seatLabel(booking))
+      .eq("quantity", item.quantity)
+      .eq("price", item.price)
+      .eq("voided", false)
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    if (findErr) throw findErr;
+
+    const targetId = matchedRows?.[0]?.id ?? null;
+    if (!targetId) continue;
+
+    const { error } = await supabase
+      .from("customer_session_consignment")
+      .update({
+        is_paid: orderIsPaid,
+        paid_at: paidAt,
+      })
+      .eq("id", targetId);
+
+    if (error) throw error;
+  }
+};
+
   const openOrderCancelModal = (booking: PromoBookingRow, item: PromoOrderItemRow): void => {
     setOrderCancelTarget({ booking, item });
     setOrderCancelNote("");
@@ -1690,49 +1806,79 @@ const [conferenceDurationFilter, setConferenceDurationFilter] =
           }));
         }
 
-        const allocations = allocateAmountsAcrossOrders(parents, g, c);
+      await syncParentOrdersPaidState(code, g, c);
 
-        for (const alloc of allocations) {
-          const tableName =
-            alloc.source === "addon_orders" ? "addon_orders" : "consignment_orders";
+      const refreshedParents = getOrderParents(code).length
+        ? getOrderParents(code)
+        : parents;
 
-          const { error } = await supabase
-            .from(tableName)
-            .update({
-              gcash_amount: alloc.gcash_amount,
-              cash_amount: alloc.cash_amount,
-              is_paid: alloc.is_paid,
-              paid_at: alloc.paid_at,
-            })
-            .eq("id", alloc.id);
+      const allocations = allocateAmountsAcrossOrders(refreshedParents, g, c);
 
-          if (error) {
-            alert(`Save order payment error: ${error.message}`);
-            return;
-          }
-        }
+      const nextParents: PromoOrderParentRow[] = refreshedParents.map((p) => {
+        const found = allocations.find((a) => a.id === p.id && a.source === p.source);
+        if (!found) return p;
+        return {
+          ...p,
+          gcash_amount: found.gcash_amount,
+          cash_amount: found.cash_amount,
+          is_paid: found.is_paid,
+          paid_at: found.paid_at,
+        };
+      });
 
-        const nextParents: PromoOrderParentRow[] = parents.map((p) => {
-          const found = allocations.find((a) => a.id === p.id && a.source === p.source);
-          if (!found) return p;
-          return {
-            ...p,
-            gcash_amount: found.gcash_amount,
-            cash_amount: found.cash_amount,
-            is_paid: found.is_paid,
-            paid_at: found.paid_at,
-          };
-        });
+      setOrderParentsMap((prev) => ({
+        ...prev,
+        [code]: nextParents,
+      }));
 
-        setOrderParentsMap((prev) => ({
-          ...prev,
-          [code]: nextParents,
-        }));
+      await syncDetailRowsPaidStateByBooking(orderPaymentTarget, {
+        gcash: g,
+        cash: c,
+        totalPaid: round2(g + c),
+      });
 
-        setOrderPaymentTarget(null);
+      setOrderPaymentTarget(null);
 
-        await fetchOrdersForPromoCodes(rows.map((r) => String(r.promo_code ?? "")));
-        await syncPromoFinalPaid(orderPaymentTarget.id);
+      await fetchOrdersForPromoCodes(rows.map((r) => String(r.promo_code ?? "")));
+
+    const freshRows = await fetchPromoBookings();
+    const freshBooking =
+      freshRows.find((r) => r.id === orderPaymentTarget.id) ?? orderPaymentTarget;
+
+    // ✅ DITO MO ILAGAY
+    await syncPromoFinalPaid(freshBooking.id);
+
+    // (optional mo na lang itong manual block kung gusto mo extra safety)
+    const { data: latestRow } = await supabase
+      .from("promo_bookings")
+      .select("id, price, gcash_amount, cash_amount, discount_kind, discount_value")
+      .eq("id", freshBooking.id)
+      .single();
+
+if (latestRow) {
+  const base = Number(latestRow.price) || 0;
+
+  const discount = applyDiscount(
+    base,
+    normalizeDiscountKind(latestRow.discount_kind),
+    Number(latestRow.discount_value) || 0
+  );
+
+  const due = round2(discount.discountedCost);
+  const paid =
+    round2(Number(latestRow.gcash_amount) || 0) +
+    round2(Number(latestRow.cash_amount) || 0);
+
+  const finalPaid = due <= 0 ? true : paid >= due;
+
+  await supabase
+    .from("promo_bookings")
+    .update({
+      is_paid: finalPaid,
+      paid_at: finalPaid ? new Date().toISOString() : null,
+    })
+    .eq("id", freshBooking.id);
+}
       } catch (e) {
         console.error(e);
         alert("Save order payment failed.");
@@ -1890,134 +2036,63 @@ const [conferenceDurationFilter, setConferenceDurationFilter] =
   };
 
   const runCancel = async (): Promise<void> => {
-    if (!cancelTarget) return;
+  if (!cancelTarget) return;
 
-    const desc = cancelDesc.trim();
-    if (!desc) {
-      setCancelError("Description / reason is required.");
+  const desc = cancelDesc.trim();
+  if (!desc) {
+    setCancelError("Description / reason is required.");
+    return;
+  }
+
+  try {
+    setCancelling(true);
+    setCancellingId(cancelTarget.id);
+    setCancelError("");
+
+    const { error } = await supabase.rpc("cancel_promo_booking", {
+      p_original_id: cancelTarget.id,
+      p_description: desc,
+    });
+
+    if (error) {
+      setCancelError(error.message);
       return;
     }
 
-    try {
-      setCancelling(true);
-      setCancellingId(cancelTarget.id);
-      setCancelError("");
+    setCancelTarget(null);
+    setCancelDesc("");
+    setRows((prev) => prev.filter((x) => x.id !== cancelTarget.id));
+    setSelected((prev) => (prev?.id === cancelTarget.id ? null : prev));
+    setSelectedOrderBooking((prev) => (prev?.id === cancelTarget.id ? null : prev));
 
-      const { data, error } = await supabase
-        .from("promo_bookings")
-        .select(`
-          id,
-          created_at,
-          user_id,
-          full_name,
-          phone_number,
-          area,
-          package_id,
-          package_option_id,
-          seat_number,
-          start_at,
-          end_at,
-          price,
-          status,
-          gcash_amount,
-          cash_amount,
-          is_paid,
-          paid_at,
-          discount_reason,
-          discount_kind,
-          discount_value,
-          promo_code,
-          attempts_left,
-          max_attempts,
-          validity_end_at
-        `)
-        .eq("id", cancelTarget.id)
-        .limit(1);
+    setAttMap((prev) => {
+      const next = { ...prev };
+      delete next[cancelTarget.id];
+      return next;
+    });
 
-      if (error) {
-        setCancelError(`Failed to load booking: ${error.message}`);
-        return;
-      }
-
-      const fullRow = ((data ?? []) as unknown as Array<Record<string, unknown>>)[0] ?? null;
-      if (!fullRow) {
-        setCancelError("Failed to load booking: record not found.");
-        return;
-      }
-
-      const { error: insErr } = await supabase.from("promo_bookings_cancelled").insert({
-        original_id: String(fullRow.id),
-        description: desc,
-        created_at: fullRow.created_at,
-        user_id: (fullRow.user_id as string | null | undefined) ?? null,
-        full_name: String(fullRow.full_name ?? ""),
-        phone_number: (fullRow.phone_number as string | null | undefined) ?? null,
-        area: fullRow.area,
-        package_id: fullRow.package_id,
-        package_option_id: fullRow.package_option_id,
-        seat_number: (fullRow.seat_number as string | null | undefined) ?? null,
-        start_at: fullRow.start_at,
-        end_at: fullRow.end_at,
-        price: fullRow.price ?? 0,
-        status: (fullRow.status as string | null | undefined) ?? "pending",
-        gcash_amount: fullRow.gcash_amount ?? 0,
-        cash_amount: fullRow.cash_amount ?? 0,
-        is_paid: Boolean(fullRow.is_paid),
-        paid_at: (fullRow.paid_at as string | null | undefined) ?? null,
-        discount_reason: (fullRow.discount_reason as string | null | undefined) ?? null,
-        discount_kind: String(fullRow.discount_kind ?? "none"),
-        discount_value: fullRow.discount_value ?? 0,
-        promo_code: (fullRow.promo_code as string | null | undefined) ?? null,
-        attempts_left: Number(fullRow.attempts_left ?? 0) || 0,
-        max_attempts: Number(fullRow.max_attempts ?? 0) || 0,
-        validity_end_at: (fullRow.validity_end_at as string | null | undefined) ?? null,
-      });
-
-      if (insErr) {
-        setCancelError(`Cancel save failed: ${insErr.message}`);
-        return;
-      }
-
-      const { error: delErr } = await supabase
-        .from("promo_bookings")
-        .delete()
-        .eq("id", cancelTarget.id);
-
-      if (delErr) {
-        setCancelError(`Inserted to cancelled, but delete failed: ${delErr.message}.`);
-        return;
-      }
-
-      setRows((prev) => prev.filter((x) => x.id !== cancelTarget.id));
-      setSelected((prev) => (prev?.id === cancelTarget.id ? null : prev));
-      setSelectedOrderBooking((prev) => (prev?.id === cancelTarget.id ? null : prev));
-      setCancelTarget(null);
-
-      setAttMap((prev) => {
+    if (cancelTarget.promo_code) {
+      setOrdersMap((prev) => {
         const next = { ...prev };
-        delete next[cancelTarget.id];
+        delete next[cancelTarget.promo_code as string];
         return next;
       });
-
-      if (cancelTarget.promo_code) {
-        setOrdersMap((prev) => {
-          const next = { ...prev };
-          delete next[cancelTarget.promo_code as string];
-          return next;
-        });
-        setOrderParentsMap((prev) => {
-          const next = { ...prev };
-          delete next[cancelTarget.promo_code as string];
-          return next;
-        });
-      }
-    } catch {
-      setCancelError("Cancel failed (unexpected error).");
-    } finally {
-      setCancelling(false);
-      setCancellingId(null);
+      setOrderParentsMap((prev) => {
+        const next = { ...prev };
+        delete next[cancelTarget.promo_code as string];
+        return next;
+      });
     }
-  };
+
+    await refreshAll();
+  } catch (e) {
+    console.error(e);
+    setCancelError("Cancel failed (unexpected error).");
+  } finally {
+    setCancelling(false);
+    setCancellingId(null);
+  }
+};
 
   const deleteByRange = async (): Promise<void> => {
     if (filteredRows.length === 0) {
