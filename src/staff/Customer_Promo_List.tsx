@@ -9,7 +9,7 @@
   type DiscountKind = "none" | "percent" | "amount";
 
   type AreaFilter = "all" | PackageArea;
-  type AttendanceFilter = "all" | "in_out_customers";
+  type AttendanceFilter = "all" | "in_out_customers" | "active_promo";
   type CommonDurationFilter = "all" | "1_day" | "week" | "half_month" | "month";
   type ConferenceDurationFilter = "all" | "1_hour" | "3_hours" | "6_hours" | "8_hours";
 
@@ -2016,13 +2016,18 @@ const getCommonAreaDurationLabel = (r: PromoBookingRow): string => {
 
       return rows
         .filter((r) => {
-          
           const hasDayAttendance = hasInAndOutOnSelectedDay(r.id, selectedDate);
           const coversSelectedDate = bookingCoversLocalDate(r.start_at, r.end_at, selectedDate);
           const keepBecauseUnpaidOrder = hasUnpaidOrderCarryOver(r);
 
+          const promoCode = String(r.promo_code ?? "").trim();
+          const validitySource = String(r.validity_end_at ?? r.end_at ?? "").trim();
+          const isActivePromo = promoCode.length > 0 && !isExpired(validitySource);
+
           if (attendanceFilter === "in_out_customers") {
             if (!hasDayAttendance) return false;
+          } else if (attendanceFilter === "active_promo") {
+            if (!isActivePromo) return false;
           } else {
             // normal selected-date rule
             // OR keep old rows only when order payment is still unpaid
@@ -2034,12 +2039,12 @@ const getCommonAreaDurationLabel = (r: PromoBookingRow): string => {
           if (searchName.trim()) {
             const q = searchName.trim().toLowerCase();
             const fullName = String(r.full_name ?? "").toLowerCase();
-            const promoCode = String(r.promo_code ?? "").toLowerCase();
+            const promoCodeSearch = String(r.promo_code ?? "").toLowerCase();
             const phone = String(r.phone_number ?? "").toLowerCase();
 
             if (
               !fullName.includes(q) &&
-              !promoCode.includes(q) &&
+              !promoCodeSearch.includes(q) &&
               !phone.includes(q)
             ) {
               return false;
@@ -2048,12 +2053,22 @@ const getCommonAreaDurationLabel = (r: PromoBookingRow): string => {
 
           if (areaFilter !== "all" && r.area !== areaFilter) return false;
 
-          if (areaFilter === "common_area" && commonDurationFilter !== "all") {
-            if (getCommonAreaDurationBucket(r) !== commonDurationFilter) return false;
+          // ✅ COMMON AREA DURATION (CONNECTED)
+          if (r.area === "common_area") {
+            if (commonDurationFilter !== "all") {
+              const bucket = getCommonAreaDurationBucket(r);
+
+              if (bucket !== commonDurationFilter) return false;
+            }
           }
 
-          if (areaFilter === "conference_room" && conferenceDurationFilter !== "all") {
-            if (getConferenceDurationBucket(r) !== conferenceDurationFilter) return false;
+          // ✅ CONFERENCE ROOM DURATION (CONNECTED)
+          if (r.area === "conference_room") {
+            if (conferenceDurationFilter !== "all") {
+              const bucket = getConferenceDurationBucket(r);
+
+              if (bucket !== conferenceDurationFilter) return false;
+            }
           }
 
           return true;
@@ -2145,7 +2160,8 @@ const getCommonAreaDurationLabel = (r: PromoBookingRow): string => {
                 onChange={(e) => setAttendanceFilter(e.target.value as AttendanceFilter)}
               >
                 <option value="all">All Customers</option>
-                <option value="in_out_customers">IN & OUT Customers</option>
+                <option value="in_out_customers">With Attendance Today</option>
+                <option value="active_promo">Active Promo</option>
               </select>
             </div>
 
