@@ -2270,7 +2270,7 @@ const getCommonAreaDurationLabel = (r: PromoBookingRow): string => {
                       <th>Discount</th>
                       <th>Status</th>
                       <th>Paid?</th>
-                      <th>System Payment</th>
+                      <th>Time Payment</th>
                       <th>Order Payment</th>
                       <th>Code / Rules</th>
                       <th>Attendance</th>
@@ -2382,7 +2382,7 @@ const getCommonAreaDurationLabel = (r: PromoBookingRow): string => {
                                 onClick={() => openPaymentModal(row)}
                                 type="button"
                               >
-                                System Payment
+                                Time Payment
                               </button>
                             </div>
                           </td>
@@ -2573,7 +2573,7 @@ const getCommonAreaDurationLabel = (r: PromoBookingRow): string => {
 
         <FixedCenterModal
           open={!!paymentTarget}
-          title="System Payment"
+          title="Time Payment"
           size="sm"
           onClose={() => setPaymentTarget(null)}
         >
@@ -2904,7 +2904,7 @@ const getCommonAreaDurationLabel = (r: PromoBookingRow): string => {
 
                     <div className="cpl-receipt-block">
                       <div className="cpl-receipt-row">
-                        <span>System Payment</span>
+                        <span>Time Payment</span>
                         <strong>GCash ₱{systemPay.gcash.toFixed(2)} / Cash ₱{systemPay.cash.toFixed(2)}</strong>
                       </div>
 

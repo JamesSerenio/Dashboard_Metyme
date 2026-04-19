@@ -2287,7 +2287,7 @@ await supabase
                         <td>
                           <div className="crv-payment-card">
                             <div className="crv-payment-section">
-                              <div className="crv-payment-title">System Payment</div>
+                              <div className="crv-payment-title">Time Payment</div>
                               <div className="crv-pay-box">
                                 <div className="crv-pay-line">
                                   <span>GCash</span>
@@ -2313,7 +2313,7 @@ await supabase
                                   onClick={() => openPaymentModal(session)}
                                   type="button"
                                 >
-                                  System Payment
+                                  Time Payment
                                 </button>
 
                                 <button
@@ -2811,7 +2811,7 @@ await supabase
 
         <FixedCenterModal
           open={!!paymentTarget}
-          title="System Payment"
+          title="Time Payment"
           size="sm"
           onClose={() => setPaymentTarget(null)}
         >

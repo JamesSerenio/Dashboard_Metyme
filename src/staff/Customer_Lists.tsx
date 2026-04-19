@@ -2177,7 +2177,7 @@ const canShowStopTimeButton = (s: CustomerSession): boolean => {
                         <td>
                           <div className="cll-payment-card">
                             <div className="cll-payment-section">
-                              <div className="cll-payment-title">System Payment</div>
+                              <div className="cll-payment-title">Time Payment</div>
                               <div className="cll-pay-box">
                                 <div className="cll-pay-line">
                                   <span>GCash</span>
@@ -2203,7 +2203,7 @@ const canShowStopTimeButton = (s: CustomerSession): boolean => {
                                   onClick={() => openPaymentModal(session)}
                                   type="button"
                                 >
-                                  System Payment
+                                  Time Payment
                                 </button>
 
                                 <button
@@ -2541,19 +2541,6 @@ const canShowStopTimeButton = (s: CustomerSession): boolean => {
 
                     <div className="cll-plain-actions">
                       <button
-                        className="cll-btn cll-btn-dark"
-                        onClick={() => void toggleCustomerViewForSession(selectedSession)}
-                        disabled={viewBusy}
-                        type="button"
-                      >
-                        {viewBusy
-                          ? "Updating..."
-                          : isCustomerViewOnForSession(activeView, selectedSession.id)
-                          ? "Hide Customer"
-                          : "View Customer"}
-                      </button>
-
-                      <button
                         className="cll-btn cll-btn-light"
                         onClick={() => setSelectedSession(null)}
                         type="button"
@@ -2665,7 +2652,7 @@ const canShowStopTimeButton = (s: CustomerSession): boolean => {
         {/* SYSTEM PAYMENT */}
         <FixedCenterModal
           open={!!paymentTarget}
-          title="System Payment"
+          title="Time Payment"
           size="sm"
           onClose={() => setPaymentTarget(null)}
         >
