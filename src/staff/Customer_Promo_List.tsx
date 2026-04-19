@@ -1011,6 +1011,10 @@ const [addonParentsRes, consignmentParentsRes, addonItemsRes, consignmentItemsRe
     void fetchAttendanceForBookings(normalized.map((r) => r.id));
     void fetchOrdersForPromoCodes(normalized.map((r) => String(r.promo_code ?? "")));
 
+    for (const r of normalized) {
+    await syncPromoFinalPaid(r);
+  }
+
     return normalized;
   };
 
@@ -1426,13 +1430,42 @@ const [addonParentsRes, consignmentParentsRes, addonItemsRes, consignmentItemsRe
     }
   };
 
-  const syncParentOrdersPaidState = async (
-    _code: string,
-    _totalGcash: number,
-    _totalCash: number
-  ): Promise<void> => {
-    return;
-  };
+const syncParentOrdersPaidState = async (
+  code: string,
+  totalGcash: number,
+  totalCash: number
+): Promise<void> => {
+  const parents = getOrderParents(code);
+
+  if (parents.length === 0) return;
+
+  const allocations = allocateAmountsAcrossOrders(
+    parents,
+    totalGcash,
+    totalCash
+  );
+
+  for (const alloc of allocations) {
+    const table =
+      alloc.source === "addon_orders"
+        ? "addon_orders"
+        : "consignment_orders";
+
+    const { error } = await supabase
+      .from(table)
+      .update({
+        gcash_amount: alloc.gcash_amount,
+        cash_amount: alloc.cash_amount,
+        is_paid: alloc.is_paid,
+        paid_at: alloc.is_paid ? new Date().toISOString() : null,
+      })
+      .eq("id", alloc.id);
+
+    if (error) {
+      console.error("Parent update error:", error.message);
+    }
+  }
+};
 
 const syncDetailRowsPaidStateByBooking = async (
   booking: PromoBookingRow,
@@ -1446,34 +1479,58 @@ const syncDetailRowsPaidStateByBooking = async (
   const consignmentItems = getOrderItems(booking.promo_code).filter((x) => x.kind === "consignment");
 
   for (const item of addOnItems) {
-    const { error } = await supabase
+    const { data: matchedRows, error: findErr } = await supabase
       .from("customer_session_add_ons")
-      .update({
-        is_paid: orderIsPaid,
-        paid_at: orderIsPaid ? paidAt : null,
-      })
+      .select("id, created_at")
       .eq("add_on_id", item.source_item_id)
       .eq("full_name", booking.full_name)
       .eq("seat_number", seatLabel(booking))
       .eq("quantity", item.quantity)
-      .eq("price", item.price);
+      .eq("price", item.price)
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    if (findErr) throw findErr;
+
+    const targetId = matchedRows?.[0]?.id ?? null;
+    if (!targetId) continue;
+
+    const { error } = await supabase
+      .from("customer_session_add_ons")
+      .update({
+        is_paid: orderIsPaid,
+        paid_at: paidAt,
+      })
+      .eq("id", targetId);
 
     if (error) throw error;
   }
 
   for (const item of consignmentItems) {
-    const { error } = await supabase
+    const { data: matchedRows, error: findErr } = await supabase
       .from("customer_session_consignment")
-      .update({
-        is_paid: orderIsPaid,
-        paid_at: orderIsPaid ? paidAt : null,
-      })
+      .select("id, created_at")
       .eq("consignment_id", item.source_item_id)
       .eq("full_name", booking.full_name)
       .eq("seat_number", seatLabel(booking))
       .eq("quantity", item.quantity)
       .eq("price", item.price)
-      .eq("voided", false);
+      .eq("voided", false)
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    if (findErr) throw findErr;
+
+    const targetId = matchedRows?.[0]?.id ?? null;
+    if (!targetId) continue;
+
+    const { error } = await supabase
+      .from("customer_session_consignment")
+      .update({
+        is_paid: orderIsPaid,
+        paid_at: paidAt,
+      })
+      .eq("id", targetId);
 
     if (error) throw error;
   }
@@ -1535,12 +1592,14 @@ const submitSystemPayment = async (): Promise<void> => {
     const orderInfo = getOrderPaidInfo(paymentTarget.promo_code);
 
     const updatedRow = await syncPromoPaidFromGrandTotal(
+      
       paymentTarget,
       nextSystemGcash,
       nextSystemCash,
       orderInfo.gcash,
       orderInfo.cash
     );
+    await syncPromoFinalPaid(updatedRow);
 
     setRows((prev) => prev.map((r) => (r.id === paymentTarget.id ? updatedRow : r)));
     setSelected((prev) => (prev?.id === paymentTarget.id ? updatedRow : prev));
@@ -1731,7 +1790,11 @@ const submitOrderPayment = async (): Promise<void> => {
 
     if (paymentSaveErr) throw paymentSaveErr;
 
-    await syncParentOrdersPaidState(code, nextTotalGcash, nextTotalCash);
+    await syncDetailRowsPaidStateByBooking(orderPaymentTarget, {
+      gcash: nextTotalGcash,
+      cash: nextTotalCash,
+      totalPaid: round2(nextTotalGcash + nextTotalCash),
+    });
 
     const orderPaidInfo = {
       gcash: nextTotalGcash,
@@ -1750,6 +1813,7 @@ const submitOrderPayment = async (): Promise<void> => {
       nextTotalGcash,
       nextTotalCash
     );
+    await syncPromoFinalPaid(updatedPromo);
 
     setOrderPaymentMap((prev) => ({
       ...prev,
@@ -1843,76 +1907,40 @@ const submitOrderPayment = async (): Promise<void> => {
       alert("Paid status is automatic based on payment.");
     };
 
-  const submitCancelPromo = async (): Promise<void> => {
-    if (!cancelTarget) return;
+    const submitCancelPromo = async (): Promise<void> => {
+  if (!cancelTarget) return;
 
-    const note = cancelDesc.trim();
-    if (!note) {
-      setCancelError("Cancellation reason is required.");
+  const note = cancelDesc.trim();
+  if (!note) {
+    setCancelError("Cancellation reason is required.");
+    return;
+  }
+
+  try {
+    setCancelling(true);
+    setCancelError("");
+
+    const { error } = await supabase.rpc("cancel_promo_booking", {
+      p_original_id: cancelTarget.id,
+      p_description: note,
+    });
+
+    if (error) {
+      setCancelError(error.message);
       return;
     }
 
-    try {
-      setCancelling(true);
-      setCancelError("");
+    setCancelTarget(null);
+    setCancelDesc("");
+    setSelected((prev) => (prev?.id === cancelTarget.id ? null : prev));
+    setSelectedOrderBooking((prev) => (prev?.id === cancelTarget.id ? null : prev));
 
-      const payload = {
-        original_id: cancelTarget.id,
-        description: note,
-        created_at: cancelTarget.created_at,
-        user_id: null,
-        full_name: cancelTarget.full_name,
-        phone_number: cancelTarget.phone_number,
-        area: cancelTarget.area,
-        package_id: cancelTarget.package_id,
-        package_option_id: cancelTarget.package_option_id,
-        seat_number: cancelTarget.seat_number,
-        start_at: cancelTarget.start_at,
-        end_at: cancelTarget.end_at,
-        price: cancelTarget.price,
-        status: getStatus(cancelTarget.start_at, cancelTarget.end_at).toLowerCase(),
-        gcash_amount: cancelTarget.gcash_amount,
-        cash_amount: cancelTarget.cash_amount,
-        is_paid: cancelTarget.is_paid,
-        paid_at: cancelTarget.paid_at,
-        discount_reason: cancelTarget.discount_reason,
-        discount_kind: cancelTarget.discount_kind,
-        discount_value: cancelTarget.discount_value,
-        promo_code: cancelTarget.promo_code,
-        attempts_left: cancelTarget.attempts_left,
-        max_attempts: cancelTarget.max_attempts,
-        validity_end_at: cancelTarget.validity_end_at,
-      };
-
-      const { error: insertErr } = await supabase
-        .from("promo_bookings_cancelled")
-        .insert(payload);
-
-      if (insertErr) {
-        setCancelError(insertErr.message);
-        return;
-      }
-
-      const { error: deleteErr } = await supabase
-        .from("promo_bookings")
-        .delete()
-        .eq("id", cancelTarget.id);
-
-      if (deleteErr) {
-        setCancelError(deleteErr.message);
-        return;
-      }
-
-      setRows((prev) => prev.filter((r) => r.id !== cancelTarget.id));
-      setSelected((prev) => (prev?.id === cancelTarget.id ? null : prev));
-      setSelectedOrderBooking((prev) => (prev?.id === cancelTarget.id ? null : prev));
-      setCancelTarget(null);
-      setCancelDesc("");
-      alert("Promo cancelled successfully.");
-    } finally {
-      setCancelling(false);
-    }
-  };
+    await refreshAll();
+    alert("Promo cancelled successfully.");
+  } finally {
+    setCancelling(false);
+  }
+};
 
     const filteredRows = useMemo(() => {
       const nowMs = tick;
