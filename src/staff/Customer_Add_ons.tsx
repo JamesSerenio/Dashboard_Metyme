@@ -416,24 +416,62 @@ const Customer_Add_ons: React.FC = () => {
 
       if (!current) continue;
 
-      current.items.push({
-        id: row.id,
-        add_on_id: row.add_on_id,
-        category: row.category,
-        size: row.size,
-        item_name: row.item_name,
-        quantity: Number(row.quantity) || 0,
-        price: row.price,
-        total: row.total,
-      });
+// use a simpler identity for same add-on item inside one grouped order
+const normalizedAddOnId = String(row.add_on_id ?? "").trim().toLowerCase();
+const normalizedPrice = round2(row.price);
 
-      current.grand_total = round2(current.grand_total + row.total);
-      current.gcash_amount = round2(current.gcash_amount + row.gcash_amount);
-      current.cash_amount = round2(current.cash_amount + row.cash_amount);
-      current.is_paid = current.is_paid || row.is_paid;
-      current.paid_at = current.paid_at ?? row.paid_at;
+const existingItem = current.items.find(
+  (it) =>
+    String(it.add_on_id ?? "").trim().toLowerCase() === normalizedAddOnId &&
+    round2(it.price) === normalizedPrice
+);
 
-      lastRow = row;
+if (existingItem) {
+  existingItem.quantity = Number(existingItem.quantity) + (Number(row.quantity) || 0);
+  existingItem.total = round2(existingItem.total + row.total);
+} else {
+  current.items.push({
+    id: row.id,
+    add_on_id: row.add_on_id,
+    category: row.category,
+    size: row.size,
+    item_name: row.item_name,
+    quantity: Number(row.quantity) || 0,
+    price: row.price,
+    total: row.total,
+  });
+}
+
+current.grand_total = round2(current.grand_total + row.total);
+
+current.gcash_amount = round2(
+  Math.max(current.gcash_amount, round2(Math.max(0, toNumber(row.gcash_amount))))
+);
+
+current.cash_amount = round2(
+  Math.max(current.cash_amount, round2(Math.max(0, toNumber(row.cash_amount))))
+);
+
+current.is_paid = current.is_paid || row.is_paid;
+current.paid_at = current.paid_at ?? row.paid_at;
+
+lastRow = row;
+/*
+  Do not sum payment amounts across item rows.
+  They can be duplicated on every row of the same order.
+*/
+current.gcash_amount = round2(
+  Math.max(current.gcash_amount, round2(Math.max(0, toNumber(row.gcash_amount))))
+);
+
+current.cash_amount = round2(
+  Math.max(current.cash_amount, round2(Math.max(0, toNumber(row.cash_amount))))
+);
+
+current.is_paid = current.is_paid || row.is_paid;
+current.paid_at = current.paid_at ?? row.paid_at;
+
+lastRow = row;
     }
 
     const findBookingCodeForGroupLocal = (g: OrderGroup): string | null => {
@@ -471,46 +509,37 @@ const Customer_Add_ons: React.FC = () => {
         const payment =
           useSharedOrderPayments && bookingCode ? orderPayments[bookingCode] ?? null : null;
 
-        const hasOwnManualAmounts =
-          round2(
-            Math.max(0, toNumber(g.gcash_amount)) + Math.max(0, toNumber(g.cash_amount))
-          ) > 0;
+      const paymentGcash = payment ? round2(Math.max(0, toNumber(payment.gcash_amount))) : 0;
+      const paymentCash = payment ? round2(Math.max(0, toNumber(payment.cash_amount))) : 0;
+      const paymentTotal = round2(paymentGcash + paymentCash);
 
-        const paymentGcash = payment ? round2(Math.max(0, toNumber(payment.gcash_amount))) : 0;
-        const paymentCash = payment ? round2(Math.max(0, toNumber(payment.cash_amount))) : 0;
-        const paymentTotal = round2(paymentGcash + paymentCash);
+      const cappedSharedTotal = round2(Math.min(paymentTotal, g.grand_total));
 
-        const cappedSharedTotal = round2(Math.min(paymentTotal, g.grand_total));
+      let allocatedSharedGcash = 0;
+      let allocatedSharedCash = 0;
 
-        let allocatedSharedGcash = 0;
-        let allocatedSharedCash = 0;
+      if (paymentTotal > 0 && cappedSharedTotal > 0) {
+        const gcashRatio = paymentGcash / paymentTotal;
+        allocatedSharedGcash = round2(cappedSharedTotal * gcashRatio);
+        allocatedSharedCash = round2(cappedSharedTotal - allocatedSharedGcash);
+      }
 
-        if (paymentTotal > 0 && cappedSharedTotal > 0) {
-          const gcashRatio = paymentGcash / paymentTotal;
-          allocatedSharedGcash = round2(cappedSharedTotal * gcashRatio);
-          allocatedSharedCash = round2(cappedSharedTotal - allocatedSharedGcash);
-        }
+      /*
+        If booking_code has a shared payment record, always use that as source of truth.
+        This prevents old row-level amounts from customer_session_add_ons from staying visible.
+      */
+      const nextGcash = payment ? allocatedSharedGcash : g.gcash_amount;
+      const nextCash = payment ? allocatedSharedCash : g.cash_amount;
 
-        const nextGcash =
-          payment && !hasOwnManualAmounts ? allocatedSharedGcash : g.gcash_amount;
+      const nextPaidAmount = round2(nextGcash + nextCash);
 
-        const nextCash =
-          payment && !hasOwnManualAmounts ? allocatedSharedCash : g.cash_amount;
+      const nextIsPaid = payment
+        ? nextPaidAmount >= g.grand_total
+        : g.is_paid;
 
-        const nextPaidAmount = round2(nextGcash + nextCash);
-
-        const nextIsPaid =
-          hasOwnManualAmounts
-            ? g.is_paid
-            : payment
-            ? nextPaidAmount >= g.grand_total
-            : g.is_paid;
-
-        const nextPaidAt =
-          hasOwnManualAmounts
-            ? g.paid_at
-            : payment?.paid_at ?? g.paid_at ?? null;
-
+      const nextPaidAt = payment
+        ? payment?.paid_at ?? null
+        : g.paid_at ?? null;
         return {
           ...g,
           booking_code: bookingCode,
