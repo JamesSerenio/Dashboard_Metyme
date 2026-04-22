@@ -1290,7 +1290,10 @@ const Staff_Consignment_Record: React.FC = () => {
             min="0"
             step="0.01"
             value={editForm.price}
-            onChange={(e) => setEditForm((p) => ({ ...p, price: e.currentTarget.value }))}
+            onChange={(e) => {
+            const value = e.currentTarget?.value ?? "";
+            setEditForm((p) => ({ ...p, price: value }));
+          }}
             disabled={savingEdit}
             placeholder="0.00"
           />
@@ -1327,7 +1330,10 @@ const Staff_Consignment_Record: React.FC = () => {
             min="1"
             step="1"
             value={restockQty}
-            onChange={(e) => setRestockQty(e.currentTarget.value)}
+            onChange={(e) => {
+            const value = e.currentTarget?.value ?? "";
+            setRestockQty(value);
+          }}
             placeholder="0"
             disabled={savingRestock}
           />
@@ -1338,7 +1344,10 @@ const Staff_Consignment_Record: React.FC = () => {
           <textarea
             className="scr-textarea"
             value={restockNote}
-            onChange={(e) => setRestockNote(e.currentTarget.value)}
+            onChange={(e) => {
+            const value = e.currentTarget?.value ?? "";
+            setRestockNote(value);
+          }}
             placeholder="Example: new stocks delivered / replenishment..."
             disabled={savingRestock}
           />
@@ -1404,7 +1413,10 @@ const Staff_Consignment_Record: React.FC = () => {
             min="1"
             step="1"
             value={returnQty}
-            onChange={(e) => setReturnQty(e.currentTarget.value)}
+            onChange={(e) => {
+            const value = e.currentTarget?.value ?? "";
+            setReturnQty(value);
+          }}
             placeholder="0"
             disabled={savingReturn}
           />
@@ -1415,7 +1427,10 @@ const Staff_Consignment_Record: React.FC = () => {
           <textarea
             className="scr-textarea"
             value={returnNote}
-            onChange={(e) => setReturnNote(e.currentTarget.value)}
+            onChange={(e) => {
+            const value = e.currentTarget?.value ?? "";
+            setReturnNote(value);
+          }}
             placeholder="Example: expired / returned to owner / damaged..."
             disabled={savingReturn}
           />
