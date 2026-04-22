@@ -794,7 +794,10 @@ const Staff_Consignment_Record: React.FC = () => {
                 type="text"
                 placeholder="Search fullname / category / item / size"
                 value={searchText}
-                onChange={(e) => setSearchText(e.currentTarget.value)}
+                onChange={(e) => {
+                const value = e.currentTarget?.value ?? "";
+                setSearchText(value);
+              }}
               />
               {searchText.trim() && (
                 <button className="scr-clear-btn" onClick={() => setSearchText("")} type="button">
@@ -1079,7 +1082,10 @@ const Staff_Consignment_Record: React.FC = () => {
                     min="0"
                     step="0.01"
                     value={cashAmount}
-                    onChange={(e) => setCashAmount(e.currentTarget.value)}
+                    onChange={(e) => {
+                    const value = e.currentTarget?.value ?? "";
+                    setCashAmount(value);
+                  }}
                     placeholder="0.00"
                     disabled={savingCashout}
                   />
@@ -1093,7 +1099,10 @@ const Staff_Consignment_Record: React.FC = () => {
                     min="0"
                     step="0.01"
                     value={gcashAmount}
-                    onChange={(e) => setGcashAmount(e.currentTarget.value)}
+                    onChange={(e) => {
+                    const value = e.currentTarget?.value ?? "";
+                    setGcashAmount(value);
+                  }}
                     placeholder="0.00"
                     disabled={savingCashout}
                   />
@@ -1109,7 +1118,10 @@ const Staff_Consignment_Record: React.FC = () => {
                 <textarea
                   className="scr-textarea"
                   value={cashoutNote}
-                  onChange={(e) => setCashoutNote(e.currentTarget.value)}
+                  onChange={(e) => {
+                  const value = e.currentTarget?.value ?? "";
+                  setCashoutNote(value);
+                }}
                   placeholder="Example: payout / release / partial cashout..."
                   disabled={savingCashout}
                 />
@@ -1186,9 +1198,13 @@ const Staff_Consignment_Record: React.FC = () => {
                 hidden
                 disabled={savingEdit}
                 onChange={(e) => {
-                  const f = e.currentTarget.files?.[0] ?? null;
+                  const input = e.currentTarget as HTMLInputElement | null;
+                  const f = input?.files?.[0] ?? null;
                   onPickImage(f);
-                  e.currentTarget.value = "";
+
+                  if (input) {
+                    input.value = "";
+                  }
                 }}
               />
             </label>
@@ -1215,7 +1231,10 @@ const Staff_Consignment_Record: React.FC = () => {
           <input
             className="scr-input"
             value={editForm.full_name}
-            onChange={(e) => setEditForm((p) => ({ ...p, full_name: e.currentTarget.value }))}
+            onChange={(e) => {
+            const value = e.currentTarget?.value ?? "";
+            setEditForm((p) => ({ ...p, full_name: value }));
+          }}
             disabled={savingEdit}
             placeholder="Owner full name"
           />
@@ -1226,7 +1245,10 @@ const Staff_Consignment_Record: React.FC = () => {
           <input
             className="scr-input"
             value={editForm.category}
-            onChange={(e) => setEditForm((p) => ({ ...p, category: e.currentTarget.value }))}
+            onChange={(e) => {
+            const value = e.currentTarget?.value ?? "";
+            setEditForm((p) => ({ ...p, category: value }));
+          }}
             disabled={savingEdit}
             placeholder="Optional category"
           />
@@ -1237,7 +1259,10 @@ const Staff_Consignment_Record: React.FC = () => {
           <input
             className="scr-input"
             value={editForm.item_name}
-            onChange={(e) => setEditForm((p) => ({ ...p, item_name: e.currentTarget.value }))}
+            onChange={(e) => {
+            const value = e.currentTarget?.value ?? "";
+            setEditForm((p) => ({ ...p, item_name: value }));
+          }}
             disabled={savingEdit}
             placeholder="Item name"
           />
@@ -1248,7 +1273,10 @@ const Staff_Consignment_Record: React.FC = () => {
           <input
             className="scr-input"
             value={editForm.size}
-            onChange={(e) => setEditForm((p) => ({ ...p, size: e.currentTarget.value }))}
+            onChange={(e) => {
+            const value = e.currentTarget?.value ?? "";
+            setEditForm((p) => ({ ...p, size: value }));
+          }}
             disabled={savingEdit}
             placeholder="Optional size"
           />
