@@ -1283,18 +1283,16 @@ const getCommonAreaDurationLabel = (r: PromoBookingRow): string => {
     const getGrandPaid = (r: PromoBookingRow): number =>
       round2(getSystemPaidInfo(r).totalPaid + getOrderPaidInfo(r.promo_code).totalPaid);
 
-    const getGrandBalanceInfo = (
+    const getGrandDisplay = (
       r: PromoBookingRow
-    ): { remaining: number; change: number; label: "Overall Remaining" | "Overall Change" } => {
-      const due = getGrandDue(r);
-      const paid = getGrandPaid(r);
-      const diff = round2(due - paid);
+    ): { label: string; value: number } => {
+      const systemRemaining = getSystemRemainingInfo(r).remaining;
+      const orderRemaining = getOrderRemainingInfo(r.promo_code).remaining;
 
-      if (diff > 0) {
-        return { remaining: diff, change: 0, label: "Overall Remaining" };
-      }
-
-      return { remaining: 0, change: round2(Math.abs(diff)), label: "Overall Change" };
+      return {
+        label: "Total Amount Due",
+        value: round2(systemRemaining + orderRemaining),
+      };
     };
 
       const isFinalPaidRow = (r: PromoBookingRow): boolean => {
@@ -3027,10 +3025,14 @@ const getCommonAreaDurationLabel = (r: PromoBookingRow): string => {
                       </div>
                     </div>
 
-                    <div className="cpl-receipt-total">
-                      <span>Total Time Cost</span>
-                      <strong>₱{systemDue.toFixed(2)}</strong>
-                    </div>
+                  <div className="cpl-receipt-total">
+                    <span>Total Amount Due</span>
+                    <strong>
+                      ₱{(
+                        getGrandPaid(selected) + getGrandDisplay(selected).value
+                      ).toFixed(2)}
+                    </strong>
+                  </div>
 
                     <div className="cpl-receipt-total">
                       <span>Total Order</span>
@@ -3043,21 +3045,21 @@ const getCommonAreaDurationLabel = (r: PromoBookingRow): string => {
                         <strong>₱{getGrandPaid(selected).toFixed(2)}</strong>
                       </div>
                       <div className="cpl-receipt-row">
-                        <span>{getGrandBalanceInfo(selected).label}</span>
-                        <strong>
-                          ₱
-                          {(
-                            getGrandBalanceInfo(selected).label === "Overall Remaining"
-                              ? getGrandBalanceInfo(selected).remaining
-                              : getGrandBalanceInfo(selected).change
-                          ).toFixed(2)}
-                        </strong>
+                      <span>{getGrandDisplay(selected).label}</span>
+                      <strong>₱{getGrandDisplay(selected).value.toFixed(2)}</strong>
                       </div>
                     </div>
 
                     <div className="cpl-receipt-total">
-                      <span>Grand Total</span>
-                      <strong>₱{getGrandDue(selected).toFixed(2)}</strong>
+                    <span>Total Amount Due</span>
+                    <strong>
+                      ₱{
+                        (
+                          getSystemRemainingInfo(selected).remaining +
+                          getOrderRemainingInfo(selected.promo_code).remaining
+                        ).toFixed(2)
+                      }
+                    </strong>
                     </div>
                   </>
                 );
