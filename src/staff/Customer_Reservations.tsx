@@ -1165,10 +1165,14 @@ const Customer_Reservations: React.FC = () => {
 
   const getDisplayAmount = (
     s: CustomerSession
-  ): { label: "Total Balance" | "Total Change"; value: number } => {
-    const balance = getSessionBalanceAfterDP(s);
-    if (balance > 0) return { label: "Total Balance", value: balance };
-    return { label: "Total Change", value: getSessionChangeAfterDP(s) };
+  ): { label: string; value: number } => {
+    const systemRemaining = getSystemRemaining(s);
+    const orderRemaining = getOrderRemaining(s);
+
+    return {
+      label: "Total Amount Due",
+      value: wholePeso(systemRemaining + orderRemaining),
+    };
   };
 
   const getSystemIsPaid = (s: CustomerSession): boolean => {
