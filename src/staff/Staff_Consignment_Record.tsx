@@ -274,29 +274,29 @@ const Staff_Consignment_Record: React.FC = () => {
   const fetchAll = async (): Promise<void> => {
     setLoading(true);
 
-  const { data: sales, error: sErr } = await supabase
-    .from("consignment")
-    .select(`
-      id,
-      created_at,
-      full_name,
-      category,
-      item_name,
-      size,
-      image_url,
-      price,
-      restocked,
-      sold,
-      expected_sales,
-      overall_sales,
-      stocks,
-      approval_status,
-      is_deleted,
-      deleted_at
-    `)
-    .eq("is_deleted", false)
-    .order("created_at", { ascending: false })
-    .returns<ConsignmentRow[]>();
+const { data: sales, error: sErr } = await supabase
+  .from("consignment")
+  .select(`
+    id,
+    created_at,
+    full_name,
+    category,
+    item_name,
+    size,
+    image_url,
+    price,
+    restocked,
+    sold,
+    expected_sales,
+    overall_sales,
+    stocks,
+    approval_status,
+    is_deleted,
+    deleted_at
+  `)
+  .eq("is_deleted", false)
+  .order("created_at", { ascending: false })
+  .returns<ConsignmentRow[]>();
 
     if (sErr) {
       console.error("FETCH CONSIGNMENT ERROR:", sErr);
