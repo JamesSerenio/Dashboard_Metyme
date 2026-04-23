@@ -1166,9 +1166,23 @@ const getCommonAreaDurationLabel = (r: PromoBookingRow): string => {
       void fetchAttendanceForBookings(normalized.map((r) => r.id));
       void fetchOrdersForPromoCodes(normalized.map((r) => String(r.promo_code ?? "")));
 
+      // ❌ REMOVE automatic sync on load
+      // for (const r of normalized) {
+      //   await syncPromoFinalPaid(r);
+      // }
+
+      // ✅ OPTIONAL: only sync when needed (example: may unpaid/paid mismatch)
       for (const r of normalized) {
-      await syncPromoFinalPaid(r);
-    }
+        const shouldSync = true; // pwede mo pa lagyan condition later
+
+        if (shouldSync) {
+          try {
+            await syncPromoFinalPaid(r);
+          } catch (e) {
+            console.warn("sync skipped:", e);
+          }
+        }
+      }
 
       return normalized;
     };
@@ -1314,7 +1328,6 @@ const getCommonAreaDurationLabel = (r: PromoBookingRow): string => {
           .eq("id", row.id);
 
         if (error) {
-          alert(`syncPromoFinalPaid error: ${error.message}`);
           console.warn("syncPromoFinalPaid error:", error.message);
           return;
         }
