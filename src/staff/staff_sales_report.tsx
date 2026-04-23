@@ -198,10 +198,13 @@ const computeDiscountAmountFromBaseCost = (
 };
 
 const todayYMD = (): string => {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
+  const now = new Date();
+  const manila = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Manila" }));
+
+  const y = manila.getFullYear();
+  const m = String(manila.getMonth() + 1).padStart(2, "0");
+  const day = String(manila.getDate()).padStart(2, "0");
+
   return `${y}-${m}-${day}`;
 };
 
@@ -215,8 +218,13 @@ const peso = (n: number): string =>
 
 const manilaDayRange = (yyyyMmDd: string): { startIso: string; endIso: string } => {
   const start = new Date(`${yyyyMmDd}T00:00:00+08:00`);
-  const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
-  return { startIso: start.toISOString(), endIso: end.toISOString() };
+  const end = new Date(`${yyyyMmDd}T00:00:00+08:00`);
+  end.setDate(end.getDate() + 1);
+
+  return {
+    startIso: start.toISOString(),
+    endIso: end.toISOString(),
+  };
 };
 
 const ms = (iso: string): number => {
@@ -650,8 +658,9 @@ const loadAddonsPaidBase = async (dateYMD: string): Promise<void> => {
   const res = await supabase
     .from("customer_session_add_ons")
     .select("created_at, full_name, seat_number, booking_code, is_paid, paid_at, gcash_amount, cash_amount")
-    .gte("created_at", startIso)
-    .lt("created_at", endIso);
+    .not("paid_at", "is", null)
+    .gte("paid_at", startIso)
+    .lt("paid_at", endIso);
 
   if (res.error) {
     console.error("addonsPaid(payment) query error:", res.error.message);
@@ -946,14 +955,17 @@ if (consignmentDue <= 0) {
       return;
     }
 
-    const nowIso = new Date().toISOString();
+      const { startIso, endIso } = manilaDayRange(dateYMD);
+      const nowIso = new Date().toISOString();
 
-    const res = await supabase
+      const res = await supabase
       .from("customer_sessions")
       .select("reservation_date, time_started, time_ended, hour_avail, is_paid, discount_kind, discount_value")
       .eq("reservation", "yes")
       .eq("reservation_date", dateYMD)
-      .eq("is_paid", true);
+      .eq("is_paid", true)
+      .gte("paid_at", startIso)
+      .lt("paid_at", endIso);
 
     if (res.error) {
       console.error("reservation time query error:", res.error.message);
@@ -1271,12 +1283,30 @@ if (consignmentDue <= 0) {
   const startingCash = report ? toNumber(report.starting_cash) : 0;
   const startingGcash = report ? toNumber(report.starting_gcash) : 0;
 
-  const addonsTotalWithCustomerOrders = round2(addonsPaidBase + customerOrderPaid);
-  const totalTimeAmount = round2(walkinSystemPaid + reservationTimeBase);
+const hasAnyTransactionToday =
+  addonsPaidBase > 0 ||
+  customerOrderPaid > 0 ||
+  walkinSystemPaid > 0 ||
+  reservationTimeBase > 0 ||
+  walkinDiscountAmount > 0 ||
+  reservationDiscountAmount > 0 ||
+  promoDiscountAmount > 0 ||
+  reservationDownCash > 0 ||
+  reservationDownGcash > 0 ||
+  promoTodayCash > 0 ||
+  promoTodayGcash > 0;
 
-  const discount = round2(
-    walkinDiscountAmount + reservationDiscountAmount + promoDiscountAmount
-  );
+const addonsTotalWithCustomerOrders = hasAnyTransactionToday
+  ? round2(addonsPaidBase + customerOrderPaid)
+  : 0;
+
+const totalTimeAmount = hasAnyTransactionToday
+  ? round2(walkinSystemPaid + reservationTimeBase)
+  : 0;
+
+const discount = hasAnyTransactionToday
+  ? round2(walkinDiscountAmount + reservationDiscountAmount + promoDiscountAmount)
+  : 0;
 
   const bilin = report ? toNumber(report.bilin_amount) : 0;
 
