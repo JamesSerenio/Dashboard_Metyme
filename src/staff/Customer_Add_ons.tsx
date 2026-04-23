@@ -506,8 +506,22 @@ lastRow = row;
     return groups
       .map((g) => {
         const bookingCode = findBookingCodeForGroupLocal(g);
-        const payment =
-          useSharedOrderPayments && bookingCode ? orderPayments[bookingCode] ?? null : null;
+          const directPayment =
+            useSharedOrderPayments && bookingCode ? orderPayments[bookingCode] ?? null : null;
+
+          const fallbackPayment =
+            useSharedOrderPayments && !directPayment
+              ? Object.values(orderPayments).find((p) => {
+                  const sameName = norm(p.full_name) === norm(g.full_name);
+                  const sameSeat = norm(p.seat_number) === norm(g.seat_number);
+                  const paidAmount = round2(
+                    Math.max(0, toNumber(p.gcash_amount)) + Math.max(0, toNumber(p.cash_amount))
+                  );
+                  return sameName && sameSeat && (paidAmount > 0 || toBool(p.is_paid));
+                }) ?? null
+              : null;
+
+          const payment = directPayment ?? fallbackPayment;
 
       const paymentGcash = payment ? round2(Math.max(0, toNumber(payment.gcash_amount))) : 0;
       const paymentCash = payment ? round2(Math.max(0, toNumber(payment.cash_amount))) : 0;
@@ -534,15 +548,15 @@ lastRow = row;
       const nextPaidAmount = round2(nextGcash + nextCash);
 
       const nextIsPaid = payment
-        ? nextPaidAmount >= g.grand_total
+        ? toBool(payment.is_paid) || nextPaidAmount >= g.grand_total
         : g.is_paid;
 
       const nextPaidAt = payment
-        ? payment?.paid_at ?? null
+        ? payment.paid_at ?? g.paid_at ?? null
         : g.paid_at ?? null;
         return {
           ...g,
-          booking_code: bookingCode,
+          booking_code: bookingCode ?? fallbackPayment?.booking_code ?? null,
           gcash_amount: nextGcash,
           cash_amount: nextCash,
           is_paid: nextIsPaid,
