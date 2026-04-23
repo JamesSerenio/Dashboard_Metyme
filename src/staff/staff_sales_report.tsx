@@ -71,6 +71,7 @@ type AddOnPaymentRow = {
   created_at: string;
   full_name: string;
   seat_number: string;
+  booking_code: string | null;
   is_paid: boolean | number | string | null;
   paid_at: string | null;
   gcash_amount: number | string | null;
@@ -648,7 +649,7 @@ const loadAddonsPaidBase = async (dateYMD: string): Promise<void> => {
 
   const res = await supabase
     .from("customer_session_add_ons")
-    .select("created_at, full_name, seat_number, is_paid, paid_at, gcash_amount, cash_amount")
+    .select("created_at, full_name, seat_number, booking_code, is_paid, paid_at, gcash_amount, cash_amount")
     .gte("created_at", startIso)
     .lt("created_at", endIso);
 
@@ -663,6 +664,7 @@ const loadAddonsPaidBase = async (dateYMD: string): Promise<void> => {
     (r) =>
       toBool(r.is_paid) &&
       !!r.paid_at &&
+      String(r.booking_code ?? "").trim() === "" &&
       (toNumber(r.gcash_amount) > 0 || toNumber(r.cash_amount) > 0)
   );
 
@@ -763,20 +765,21 @@ const loadAddonsPaidBase = async (dateYMD: string): Promise<void> => {
 
     if (combinedDue <= 0) continue;
 
-    if (consignmentDue <= 0) {
-      addonOnlyTotal += paid;
-      continue;
-    }
+if (consignmentDue <= 0) {
+  addonOnlyTotal += round2(Math.min(paid, addonDue));
+  continue;
+}
 
     if (addonDue <= 0) {
       continue;
     }
 
-    const addonShare = round2(paid * (addonDue / combinedDue));
+    const cappedPaid = round2(Math.min(paid, combinedDue));
+    const addonShare = round2(cappedPaid * (addonDue / combinedDue));
     addonOnlyTotal += addonShare;
-  }
+      }
 
-  setCustomerOrderPaid(round2(addonOnlyTotal));
+      setCustomerOrderPaid(round2(addonOnlyTotal));
 };
 
   const loadReservationPaymentPlacement = async (dateYMD: string): Promise<void> => {
