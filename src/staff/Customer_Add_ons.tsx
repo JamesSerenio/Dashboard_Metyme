@@ -49,6 +49,7 @@ interface CustomerAddOnMerged {
 
 type OrderItem = {
   id: string;
+  row_ids: string[];
   add_on_id: string;
   category: string;
   size: string | null;
@@ -427,11 +428,13 @@ const existingItem = current.items.find(
 );
 
 if (existingItem) {
+  existingItem.row_ids.push(row.id);
   existingItem.quantity = Number(existingItem.quantity) + (Number(row.quantity) || 0);
   existingItem.total = round2(existingItem.total + row.total);
 } else {
   current.items.push({
     id: row.id,
+    row_ids: [row.id],
     add_on_id: row.add_on_id,
     category: row.category,
     size: row.size,
@@ -456,22 +459,11 @@ current.is_paid = current.is_paid || row.is_paid;
 current.paid_at = current.paid_at ?? row.paid_at;
 
 lastRow = row;
+
 /*
   Do not sum payment amounts across item rows.
   They can be duplicated on every row of the same order.
 */
-current.gcash_amount = round2(
-  Math.max(current.gcash_amount, round2(Math.max(0, toNumber(row.gcash_amount))))
-);
-
-current.cash_amount = round2(
-  Math.max(current.cash_amount, round2(Math.max(0, toNumber(row.cash_amount))))
-);
-
-current.is_paid = current.is_paid || row.is_paid;
-current.paid_at = current.paid_at ?? row.paid_at;
-
-lastRow = row;
     }
 
     const findBookingCodeForGroupLocal = (g: OrderGroup): string | null => {
@@ -503,11 +495,23 @@ lastRow = row;
       return bestCode;
     };
 
+const usedBookingCodes = new Set<string>();
+
     return groups
       .map((g) => {
         const bookingCode = findBookingCodeForGroupLocal(g);
-        const payment =
-          useSharedOrderPayments && bookingCode ? orderPayments[bookingCode] ?? null : null;
+
+        let payment: CustomerOrderPayment | null = null;
+
+        if (
+          useSharedOrderPayments &&
+          bookingCode &&
+          orderPayments[bookingCode] &&
+          !usedBookingCodes.has(bookingCode)
+        ) {
+          payment = orderPayments[bookingCode];
+          usedBookingCodes.add(bookingCode); // ✅ mark as used
+        }
 
       const paymentGcash = payment ? round2(Math.max(0, toNumber(payment.gcash_amount))) : 0;
       const paymentCash = payment ? round2(Math.max(0, toNumber(payment.cash_amount))) : 0;
@@ -524,22 +528,32 @@ lastRow = row;
         allocatedSharedCash = round2(cappedSharedTotal - allocatedSharedGcash);
       }
 
-      /*
-        If booking_code has a shared payment record, always use that as source of truth.
-        This prevents old row-level amounts from customer_session_add_ons from staying visible.
-      */
-      const nextGcash = payment ? allocatedSharedGcash : g.gcash_amount;
-      const nextCash = payment ? allocatedSharedCash : g.cash_amount;
+      const rawGcash = round2(Math.max(0, g.gcash_amount));
+      const rawCash = round2(Math.max(0, g.cash_amount));
+      const rawTotal = round2(rawGcash + rawCash);
+      const cappedRawTotal = round2(Math.min(rawTotal, g.grand_total));
+
+      let allocatedRawGcash = 0;
+      let allocatedRawCash = 0;
+
+      if (rawTotal > 0 && cappedRawTotal > 0) {
+        const rawGcashRatio = rawGcash / rawTotal;
+        allocatedRawGcash = round2(cappedRawTotal * rawGcashRatio);
+        allocatedRawCash = round2(cappedRawTotal - allocatedRawGcash);
+      }
+
+      const nextGcash = payment ? allocatedSharedGcash : allocatedRawGcash;
+      const nextCash = payment ? allocatedSharedCash : allocatedRawCash;
 
       const nextPaidAmount = round2(nextGcash + nextCash);
-
       const nextIsPaid = payment
-        ? nextPaidAmount >= g.grand_total
-        : g.is_paid;
+        ? toBool(payment.is_paid)
+        : toBool(g.is_paid);
 
-      const nextPaidAt = payment
-        ? payment?.paid_at ?? null
-        : g.paid_at ?? null;
+      const nextPaidAt =
+        nextIsPaid
+          ? (payment ? payment?.paid_at ?? null : g.paid_at ?? null)  
+          : null;
         return {
           ...g,
           booking_code: bookingCode,
@@ -633,22 +647,46 @@ const totalUnpaidOrders = totalOrders - totalPaidOrders;
       const bookingCode =
         paymentTarget.booking_code ?? (await findBookingCodeForGroup(paymentTarget));
 
-      if (bookingCode) {
-        const { error } = await supabase.rpc("pay_addon_order_by_booking_code", {
-          p_booking_code: bookingCode,
-          p_full_name: paymentTarget.full_name,
-          p_seat_number: paymentTarget.seat_number,
-          p_order_total: paymentTarget.grand_total,
-          p_gcash_amount: g,
-          p_cash_amount: c,
-        });
+    if (bookingCode) {
+      const itemIds = paymentTarget.items.flatMap((it) => it.row_ids ?? [it.id]);
 
-        if (error) {
-          alert(`Save payment error: ${error.message}`);
-          return;
-        }
-      } else {
-        const itemIds = paymentTarget.items.map((it) => it.id);
+      const { error: payErr } = await supabase
+        .from("customer_order_payments")
+        .upsert(
+          {
+            booking_code: bookingCode,
+            full_name: paymentTarget.full_name,
+            seat_number: paymentTarget.seat_number,
+            order_total: paymentTarget.grand_total,
+            gcash_amount: g,
+            cash_amount: c,
+            is_paid: isPaid,
+            paid_at: paidAt,
+          },
+          { onConflict: "booking_code" }
+        );
+
+      if (payErr) {
+        alert(`Save payment error: ${payErr.message}`);
+        return;
+      }
+
+      const { error: rowErr } = await supabase
+        .from("customer_session_add_ons")
+        .update({
+          gcash_amount: 0,
+          cash_amount: 0,
+          is_paid: isPaid,
+          paid_at: paidAt,
+        })
+        .in("id", itemIds);
+
+      if (rowErr) {
+        alert(`Save row status error: ${rowErr.message}`);
+        return;
+      }
+    } else {
+        const itemIds = paymentTarget.items.flatMap((it) => it.row_ids ?? [it.id]);
 
         if (itemIds.length === 0) {
           alert("No add-on items found for this payment.");
@@ -681,33 +719,52 @@ const totalUnpaidOrders = totalOrders - totalPaidOrders;
     }
   };
 
-  const togglePaid = async (o: OrderGroup): Promise<void> => {
-    const itemIds = o.items.map((x) => x.id);
-    if (itemIds.length === 0) return;
+const togglePaid = async (o: OrderGroup): Promise<void> => {
+  const itemIds = o.items.flatMap((x) => x.row_ids ?? [x.id]);
+  if (itemIds.length === 0) return;
 
-    try {
-      setTogglingPaidKey(o.key);
+  try {
+    setTogglingPaidKey(o.key);
 
-      const nextPaid = !toBool(o.is_paid);
+    const nextPaid = !toBool(o.is_paid);
+    const paidAt = nextPaid ? new Date().toISOString() : null;
 
-      const { error } = await supabase.rpc("set_addon_paid_status", {
-        p_item_ids: itemIds,
-        p_is_paid: nextPaid,
-      });
+    const { error: rowErr } = await supabase
+      .from("customer_session_add_ons")
+      .update({
+        is_paid: nextPaid,
+        paid_at: paidAt,
+      })
+      .in("id", itemIds);
 
-      if (error) {
-        alert(`Toggle paid error: ${error.message}`);
+    if (rowErr) {
+      alert(`Toggle paid row error: ${rowErr.message}`);
+      return;
+    }
+
+    if (o.booking_code) {
+      const { error: sharedErr } = await supabase
+        .from("customer_order_payments")
+        .update({
+          is_paid: nextPaid,
+          paid_at: paidAt,
+        })
+        .eq("booking_code", o.booking_code);
+
+      if (sharedErr) {
+        alert(`Toggle paid shared payment error: ${sharedErr.message}`);
         return;
       }
-
-      await fetchAddOns(selectedDate);
-    } catch (e) {
-      console.error(e);
-      alert("Toggle paid failed.");
-    } finally {
-      setTogglingPaidKey(null);
     }
-  };
+
+    await fetchAddOns(selectedDate);
+  } catch (e) {
+    console.error(e);
+    alert("Toggle paid failed.");
+  } finally {
+    setTogglingPaidKey(null);
+  }
+};
 
   const openCancelModal = (o: OrderGroup): void => {
     setCancelTarget(o);
@@ -723,7 +780,7 @@ const totalUnpaidOrders = totalOrders - totalPaidOrders;
         return;
       }
 
-      const itemIds = cancelTarget.items.map((x) => x.id);
+      const itemIds = cancelTarget.items.flatMap((x) => x.row_ids ?? [x.id]);
       if (itemIds.length === 0) {
         alert("Nothing to cancel.");
         return;

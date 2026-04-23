@@ -53,6 +53,7 @@ type ReceiptGroup = {
   created_at: string | null;
   full_name: string;
   seat_number: string;
+  booking_code: string | null;
 
   items: ReceiptItem[];
   grand_total: number;
@@ -66,6 +67,16 @@ type ReceiptGroup = {
   is_voided: boolean;
   voided_at: string | null;
   void_note: string | null;
+};
+
+type CustomerOrderPayment = {
+  booking_code: string;
+  full_name?: string | null;
+  seat_number?: string | null;
+  gcash_amount: number | string;
+  cash_amount: number | string;
+  is_paid: boolean | number | string | null;
+  paid_at: string | null;
 };
 
 const toNumber = (v: NumericLike | null | undefined): number => {
@@ -190,60 +201,138 @@ const Customer_Consignment_Record: React.FC = () => {
   const [voidReason, setVoidReason] = useState<string>("");
   const [voiding, setVoiding] = useState<boolean>(false);
 
-  const [cancelTarget, setCancelTarget] = useState<CustomerConsignmentRow | null>(null);
-  const [cancelReason, setCancelReason] = useState<string>("");
-  const [cancelling, setCancelling] = useState<boolean>(false);
+const [cancelTarget, setCancelTarget] = useState<CustomerConsignmentRow | null>(null);
+const [cancelReason, setCancelReason] = useState<string>("");
+const [cancelling, setCancelling] = useState<boolean>(false);
+
+const [orderPayments, setOrderPayments] = useState<Record<string, CustomerOrderPayment>>({});
+const [consignmentOrderLookup, setConsignmentOrderLookup] = useState<
+  Array<{
+    booking_code: string;
+    created_at: string | null;
+    full_name: string | null;
+    seat_number: string | null;
+  }>
+>([]);
 
   useEffect(() => {
     void fetchByDate(selectedDate);
   }, [selectedDate]);
 
-  const fetchByDate = async (dateKey: string): Promise<void> => {
-    setLoading(true);
+const fetchByDate = async (dateKey: string): Promise<void> => {
+  setLoading(true);
 
-    const { startISO, endISO } = phDayRange(dateKey);
+  const { startISO, endISO } = phDayRange(dateKey);
 
-    const { data, error } = await supabase
-      .from("customer_session_consignment")
-      .select(`
-        id,
-        created_at,
-        consignment_id,
-        quantity,
-        price,
-        total,
-        full_name,
-        seat_number,
-        paid_at,
-        gcash_amount,
-        cash_amount,
-        is_paid,
-        voided,
-        voided_at,
-        void_note,
-        consignment:consignment_id (
-          item_name,
-          size,
-          image_url,
-          category
-        )
-      `)
-      .gte("created_at", startISO)
-      .lte("created_at", endISO)
-      .order("created_at", { ascending: false })
-      .returns<CustomerConsignmentRow[]>();
+  const { data, error } = await supabase
+    .from("customer_session_consignment")
+    .select(`
+      id,
+      created_at,
+      consignment_id,
+      quantity,
+      price,
+      total,
+      full_name,
+      seat_number,
+      paid_at,
+      gcash_amount,
+      cash_amount,
+      is_paid,
+      voided,
+      voided_at,
+      void_note,
+      consignment:consignment_id (
+        item_name,
+        size,
+        image_url,
+        category
+      )
+    `)
+    .gte("created_at", startISO)
+    .lte("created_at", endISO)
+    .order("created_at", { ascending: false })
+    .returns<CustomerConsignmentRow[]>();
 
-    if (error) {
-      console.error("FETCH customer_session_consignment ERROR:", error);
-      setRows([]);
-      setLoading(false);
-      return;
-    }
-
-    setRows(data ?? []);
+  if (error) {
+    console.error("FETCH customer_session_consignment ERROR:", error);
+    setRows([]);
+    setOrderPayments({});
+    setConsignmentOrderLookup([]);
     setLoading(false);
-  };
+    return;
+  }
 
+  const nextRows = data ?? [];
+  setRows(nextRows);
+
+  const orderRes = await supabase
+    .from("consignment_orders")
+    .select("booking_code, created_at, full_name, seat_number")
+    .gte("created_at", startISO)
+    .lte("created_at", endISO)
+    .order("created_at", { ascending: true });
+
+  if (orderRes.error) {
+    console.error("FETCH consignment_orders ERROR:", orderRes.error);
+    setOrderPayments({});
+    setConsignmentOrderLookup([]);
+    setLoading(false);
+    return;
+  }
+
+  const orderRows = (orderRes.data ?? []) as Array<{
+    booking_code?: string | null;
+    created_at?: string | null;
+    full_name?: string | null;
+    seat_number?: string | null;
+  }>;
+
+  setConsignmentOrderLookup(
+    orderRows.map((r) => ({
+      booking_code: String(r.booking_code ?? "").trim().toUpperCase(),
+      created_at: r.created_at ?? null,
+      full_name: r.full_name ?? null,
+      seat_number: r.seat_number ?? null,
+    }))
+  );
+
+  const bookingCodes = Array.from(
+    new Set(
+      orderRows
+        .map((r) => String(r.booking_code ?? "").trim().toUpperCase())
+        .filter(Boolean)
+    )
+  );
+
+  if (bookingCodes.length === 0) {
+    setOrderPayments({});
+    setLoading(false);
+    return;
+  }
+
+  const paymentRes = await supabase
+    .from("customer_order_payments")
+    .select("booking_code, full_name, seat_number, gcash_amount, cash_amount, is_paid, paid_at")
+    .in("booking_code", bookingCodes);
+
+  if (paymentRes.error) {
+    console.error("FETCH customer_order_payments ERROR:", paymentRes.error);
+    setOrderPayments({});
+    setLoading(false);
+    return;
+  }
+
+  const paymentMap: Record<string, CustomerOrderPayment> = {};
+  for (const row of (paymentRes.data ?? []) as CustomerOrderPayment[]) {
+    const code = String(row.booking_code ?? "").trim().toUpperCase();
+    if (!code) continue;
+    paymentMap[code] = row;
+  }
+
+  setOrderPayments(paymentMap);
+  setLoading(false);
+};
   const filtered = useMemo(() => {
     const q = norm(searchText);
     if (!q) return rows;
@@ -257,37 +346,146 @@ const Customer_Consignment_Record: React.FC = () => {
     });
   }, [rows, searchText]);
 
-  const totals = useMemo(() => {
-    let totalAmount = 0;
-    let totalCash = 0;
-    let totalGcash = 0;
+function findBookingCodeForRow(r: CustomerConsignmentRow): string | null {
+  const rowTime = new Date(String(r.created_at ?? "")).getTime();
 
-    for (const r of filtered) {
-      const isVoided = toBool(r.voided);
-      if (isVoided) continue;
-      totalAmount += round2(toNumber(r.total));
-      totalCash += round2(toNumber(r.cash_amount));
-      totalGcash += round2(toNumber(r.gcash_amount));
+  const candidates = consignmentOrderLookup.filter((x) => {
+    return (
+      norm(x.full_name) === norm(r.full_name) &&
+      norm(x.seat_number) === norm(r.seat_number)
+    );
+  });
+
+  if (candidates.length === 0) return null;
+
+  let bestCode: string | null = null;
+  let bestDiff = Number.POSITIVE_INFINITY;
+
+  for (const x of candidates) {
+    const t = new Date(String(x.created_at ?? "")).getTime();
+    if (!Number.isFinite(t)) continue;
+
+    const diff = Math.abs(t - rowTime);
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      bestCode = String(x.booking_code ?? "").trim().toUpperCase() || null;
     }
+  }
 
-    return {
-      totalAmount: round2(totalAmount),
-      totalCash: round2(totalCash),
-      totalGcash: round2(totalGcash),
-    };
-  }, [filtered]);
+  return bestCode;
+};
 
-  const stats = useMemo(() => {
+function makeReceiptGroup(r: CustomerConsignmentRow): ReceiptGroup {
+  const qty = Number(r.quantity ?? 0) || 0;
+  const price = round2(toNumber(r.price));
+  const total = round2(toNumber(r.total));
+
+  const itemName = show(r.consignment?.item_name);
+  const cat = show(r.consignment?.category);
+  const img = r.consignment?.image_url ?? null;
+
+  const bookingCode = findBookingCodeForRow(r);
+  const payment = bookingCode ? orderPayments[bookingCode] ?? null : null;
+
+  const rawGcash = round2(Math.max(0, toNumber(r.gcash_amount)));
+  const rawCash = round2(Math.max(0, toNumber(r.cash_amount)));
+  const rawTotal = round2(rawGcash + rawCash);
+
+  const paymentGcash = payment ? round2(Math.max(0, toNumber(payment.gcash_amount))) : 0;
+  const paymentCash = payment ? round2(Math.max(0, toNumber(payment.cash_amount))) : 0;
+  const paymentTotal = round2(paymentGcash + paymentCash);
+
+  const cappedSharedTotal = round2(Math.min(paymentTotal, total));
+  const cappedRawTotal = round2(Math.min(rawTotal, total));
+
+  let allocatedSharedGcash = 0;
+  let allocatedSharedCash = 0;
+
+  if (paymentTotal > 0 && cappedSharedTotal > 0) {
+    const gcashRatio = paymentGcash / paymentTotal;
+    allocatedSharedGcash = round2(cappedSharedTotal * gcashRatio);
+    allocatedSharedCash = round2(cappedSharedTotal - allocatedSharedGcash);
+  }
+
+  let allocatedRawGcash = 0;
+  let allocatedRawCash = 0;
+
+  if (rawTotal > 0 && cappedRawTotal > 0) {
+    const rawGcashRatio = rawGcash / rawTotal;
+    allocatedRawGcash = round2(cappedRawTotal * rawGcashRatio);
+    allocatedRawCash = round2(cappedRawTotal - allocatedRawGcash);
+  }
+
+  const gcash = payment ? allocatedSharedGcash : allocatedRawGcash;
+  const cash = payment ? allocatedSharedCash : allocatedRawCash;
+  const paidAmount = round2(gcash + cash);
+
+  const paid = payment ? paidAmount >= total : toBool(r.is_paid);
+  const isVoided = toBool(r.voided);
+
+  return {
+    id: r.id,
+    created_at: r.created_at,
+    full_name: r.full_name,
+    seat_number: r.seat_number,
+    booking_code: bookingCode,
+    items: [
+      {
+        id: r.id,
+        item_name: itemName,
+        category: cat,
+        size: r.consignment?.size ?? null,
+        quantity: qty,
+        price,
+        total,
+        image_url: img,
+      },
+    ],
+    grand_total: total,
+    gcash_amount: gcash,
+    cash_amount: cash,
+    is_paid: paid,
+    paid_at: payment ? payment.paid_at ?? null : r.paid_at ?? null,
+    is_voided: isVoided,
+    voided_at: r.voided_at ?? null,
+    void_note: r.void_note ?? null,
+  };
+};
+
+const displayRows = useMemo(() => {
+  return filtered.map((r) => makeReceiptGroup(r));
+}, [filtered, orderPayments, consignmentOrderLookup]);
+
+const totals = useMemo(() => {
+  let totalAmount = 0;
+  let totalCash = 0;
+  let totalGcash = 0;
+
+  for (const r of displayRows) {
+    if (r.is_voided) continue;
+    totalAmount += round2(r.grand_total);
+    totalCash += round2(r.cash_amount);
+    totalGcash += round2(r.gcash_amount);
+  }
+
+  return {
+    totalAmount: round2(totalAmount),
+    totalCash: round2(totalCash),
+    totalGcash: round2(totalGcash),
+  };
+}, [displayRows]);
+
+const stats = useMemo(() => {
   let totalOrders = 0;
   let paid = 0;
   let unpaid = 0;
 
-  for (const r of filtered) {
-    if (toBool(r.voided)) continue;
+  for (const r of displayRows) {
+    if (r.is_voided) continue;
 
     totalOrders++;
 
-    if (toBool(r.is_paid)) {
+    if (r.is_paid) {
       paid++;
     } else {
       unpaid++;
@@ -295,49 +493,7 @@ const Customer_Consignment_Record: React.FC = () => {
   }
 
   return { totalOrders, paid, unpaid };
-}, [filtered]);
-
-  const makeReceiptGroup = (r: CustomerConsignmentRow): ReceiptGroup => {
-    const qty = Number(r.quantity ?? 0) || 0;
-    const price = round2(toNumber(r.price));
-    const total = round2(toNumber(r.total));
-
-    const itemName = show(r.consignment?.item_name);
-    const cat = show(r.consignment?.category);
-    const img = r.consignment?.image_url ?? null;
-
-    const gcash = round2(Math.max(0, toNumber(r.gcash_amount)));
-    const cash = round2(Math.max(0, toNumber(r.cash_amount)));
-    const paid = toBool(r.is_paid);
-    const isVoided = toBool(r.voided);
-
-    return {
-      id: r.id,
-      created_at: r.created_at,
-      full_name: r.full_name,
-      seat_number: r.seat_number,
-      items: [
-        {
-          id: r.id,
-          item_name: itemName,
-          category: cat,
-          size: r.consignment?.size ?? null,
-          quantity: qty,
-          price,
-          total,
-          image_url: img,
-        },
-      ],
-      grand_total: total,
-      gcash_amount: gcash,
-      cash_amount: cash,
-      is_paid: paid,
-      paid_at: r.paid_at ?? null,
-      is_voided: isVoided,
-      voided_at: r.voided_at ?? null,
-      void_note: r.void_note ?? null,
-    };
-  };
+}, [displayRows]);
 
   const openReceipt = (r: CustomerConsignmentRow): void => setSelectedOrder(makeReceiptGroup(r));
 
@@ -593,21 +749,23 @@ const Customer_Consignment_Record: React.FC = () => {
                 </thead>
 
                 <tbody>
-                  {filtered.map((r) => {
-                    const qty = Number(r.quantity ?? 0) || 0;
-                    const price = round2(toNumber(r.price));
-                    const total = round2(toNumber(r.total));
+          {filtered.map((r) => {
+            const view = makeReceiptGroup(r);
 
-                    const cash = round2(toNumber(r.cash_amount));
-                    const gcash = round2(toNumber(r.gcash_amount));
+            const qty = Number(r.quantity ?? 0) || 0;
+            const price = round2(toNumber(r.price));
+            const total = round2(toNumber(r.total));
 
-                    const itemName = show(r.consignment?.item_name);
-                    const cat = show(r.consignment?.category);
-                    const img = r.consignment?.image_url ?? null;
+            const cash = round2(view.cash_amount);
+            const gcash = round2(view.gcash_amount);
 
-                    const isVoided = toBool(r.voided);
-                    const isPaid = toBool(r.is_paid);
-                    const busyPaid = togglingPaidId === r.id;
+            const itemName = show(r.consignment?.item_name);
+            const cat = show(r.consignment?.category);
+            const img = r.consignment?.image_url ?? null;
+
+            const isVoided = view.is_voided;
+            const isPaid = view.is_paid;
+            const busyPaid = togglingPaidId === r.id;
 
                     return (
                       <tr key={r.id} className={isVoided ? "is-voided" : ""}>
