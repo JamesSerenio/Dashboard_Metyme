@@ -2224,7 +2224,11 @@ const getCommonAreaDurationLabel = (r: PromoBookingRow): string => {
     const ordersTotal = round2(filteredRows.reduce((sum, r) => sum + getOrderDue(r.promo_code), 0));
 
     const currentOrderItems = selectedOrderBooking
-      ? getOrderItems(selectedOrderBooking.promo_code)
+      ? [...getOrderItems(selectedOrderBooking.promo_code)].sort((a, b) => {
+          const at = a.created_at ? new Date(a.created_at).getTime() : 0;
+          const bt = b.created_at ? new Date(b.created_at).getTime() : 0;
+          return bt - at; // latest first
+        })
       : [];
 
     const currentOrderParents = selectedOrderBooking
@@ -2658,9 +2662,28 @@ const getCommonAreaDurationLabel = (r: PromoBookingRow): string => {
                             {item.category || "—"}
                             {item.size ? ` • ${item.size}` : ""}
                           </span>
-                          <span>
-                            Qty {item.quantity} • ₱{item.price.toFixed(2)}
-                          </span>
+                            <span>
+                              Qty {item.quantity} • ₱{item.price.toFixed(2)}
+                            </span>
+
+                            <span>
+                              Ordered:{" "}
+                              {item.created_at
+                                ? new Date(item.created_at).toLocaleString("en-PH")
+                                : "No date"}
+                            </span>
+
+                            <span
+                              className={`cpl-order-paid-badge ${
+                                getOrderRemainingInfo(selectedOrderBooking.promo_code).remaining <= 0
+                                  ? "paid"
+                                  : "unpaid"
+                              }`}
+                            >
+                              {getOrderRemainingInfo(selectedOrderBooking.promo_code).remaining <= 0
+                                ? "PAID"
+                                : "UNPAID"}
+                            </span>
                         </div>
                       </div>
 
