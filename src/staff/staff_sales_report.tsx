@@ -90,7 +90,6 @@ type WalkinSystemPaidRow = {
   paid_at: string | null;
   is_paid: boolean | number | string | null;
   reservation: string | null;
-  promo_booking_id?: string | null;
   total_amount: number | string | null;
   discount_kind?: DiscountKind | null;
   discount_value?: number | string | null;
@@ -102,7 +101,6 @@ type ReservationForTimeRow = {
   time_ended: string | null;
   hour_avail: string | null;
   is_paid: boolean | null;
-  promo_booking_id?: string | null;
   discount_kind: string | null;
   discount_value: number | string | null;
 };
@@ -693,7 +691,6 @@ const loadAddonsPaidBase = async (dateYMD: string): Promise<void> => {
   const paymentRes = await supabase
     .from("customer_order_payments")
     .select("booking_code, paid_at, is_paid, gcash_amount, cash_amount")
-    .not("paid_at", "is", null)
     .gte("paid_at", startIso)
     .lt("paid_at", endIso);
 
@@ -807,10 +804,8 @@ if (consignmentDue <= 0) {
 
     const res = await supabase
       .from("customer_sessions")
-      .select("reservation_date, time_started, time_ended, hour_avail, is_paid, discount_kind, discount_value")
+      .select("paid_at, is_paid, reservation_date, gcash_amount, cash_amount")
       .eq("reservation", "yes")
-      .eq("reservation_date", dateYMD)
-      .eq("is_paid", true)
       .gte("paid_at", startIso)
       .lt("paid_at", endIso);
 
@@ -892,9 +887,13 @@ if (consignmentDue <= 0) {
       const cash = Math.max(0, toNumber(r.cash_amount));
       const gcash = Math.max(0, toNumber(r.gcash_amount));
 
-// Base sa paid_at day: kung kailan binayaran, doon lang papasok
+      if (availYMD === dateYMD) {
         todayCash += cash;
         todayGcash += gcash;
+      } else if (availYMD > dateYMD) {
+        advanceCash += cash;
+        advanceGcash += gcash;
+      }
     }
 
     setPromoTodayCash(round2(todayCash));
@@ -961,14 +960,14 @@ if (consignmentDue <= 0) {
       const nowIso = new Date().toISOString();
 
       const res = await supabase
-        .from("customer_sessions")
-        .select("reservation_date, time_started, time_ended, hour_avail, is_paid, promo_booking_id, discount_kind, discount_value")
-        .eq("reservation", "yes")
-        .is("promo_booking_id", null)
-        .eq("reservation_date", dateYMD)
-        .eq("is_paid", true)
-        .gte("paid_at", startIso)
-        .lt("paid_at", endIso);
+      .from("customer_sessions")
+      .select("reservation_date, time_started, time_ended, hour_avail, is_paid, promo_booking_id, discount_kind, discount_value")
+      .eq("reservation", "yes")
+      .is("promo_booking_id", null)
+      .eq("reservation_date", dateYMD)
+      .eq("is_paid", true)
+      .gte("paid_at", startIso)
+      .lt("paid_at", endIso);
 
     if (res.error) {
       console.error("reservation time query error:", res.error.message);
@@ -1018,7 +1017,6 @@ if (consignmentDue <= 0) {
     const res = await supabase
       .from("promo_bookings")
       .select("paid_at, is_paid, price, discount_kind, discount_value")
-      .not("paid_at", "is", null)
       .gte("paid_at", startIso)
       .lt("paid_at", endIso);
 
@@ -1305,7 +1303,7 @@ const addonsTotalWithCustomerOrders = hasAnyTransactionToday
   : 0;
 
 const totalTimeAmount = hasAnyTransactionToday
-  ? round2(walkinSystemPaid + reservationTimeBase + promoTodayCash + promoTodayGcash)
+  ? round2(walkinSystemPaid + reservationTimeBase)
   : 0;
 
 const discount = hasAnyTransactionToday

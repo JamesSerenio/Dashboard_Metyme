@@ -1171,18 +1171,7 @@ const getCommonAreaDurationLabel = (r: PromoBookingRow): string => {
       //   await syncPromoFinalPaid(r);
       // }
 
-      // ✅ OPTIONAL: only sync when needed (example: may unpaid/paid mismatch)
-      for (const r of normalized) {
-        const shouldSync = true; // pwede mo pa lagyan condition later
-
-        if (shouldSync) {
-          try {
-            await syncPromoFinalPaid(r);
-          } catch (e) {
-            console.warn("sync skipped:", e);
-          }
-        }
-      }
+      // ✅ OPTIONAL: only sync when needed (example: may unpaid/paid mismatch
 
       return normalized;
     };
@@ -1317,7 +1306,7 @@ const getCommonAreaDurationLabel = (r: PromoBookingRow): string => {
 
       const syncPromoFinalPaid = async (row: PromoBookingRow): Promise<void> => {
         const finalPaid = isFinalPaidRow(row);
-        const nextPaidAt = finalPaid ? new Date().toISOString() : null;
+        const nextPaidAt = finalPaid ? row.paid_at ?? new Date().toISOString() : null;
 
         const { error } = await supabase
           .from("promo_bookings")
@@ -1733,7 +1722,7 @@ const getCommonAreaDurationLabel = (r: PromoBookingRow): string => {
     const grandDue = round2(getSystemDue(booking) + getOrderDue(booking.promo_code));
     const grandPaid = round2(nextSystemPaidTotal + nextOrderPaidTotal);
     const nextPaid = grandDue <= 0 ? true : grandPaid >= grandDue;
-    const nextPaidAt = nextPaid ? new Date().toISOString() : null;
+    const nextPaidAt = nextPaid ? booking.paid_at ?? new Date().toISOString() : null;
 
     const { data, error } = await supabase
       .from("promo_bookings")
@@ -2079,9 +2068,8 @@ const getCommonAreaDurationLabel = (r: PromoBookingRow): string => {
               }
             : prev
         );
-
+        
         setDiscountTarget(null);
-        await syncPromoFinalPaid(discountTarget);
       } finally {
         setSavingDiscount(false);
       }

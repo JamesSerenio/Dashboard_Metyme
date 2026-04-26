@@ -514,7 +514,6 @@ const Customer_Lists: React.FC = () => {
       const loadedSessions = await fetchCustomerSessions();
       await fetchOrdersForSessions(loadedSessions);
       await fetchOrderPayments(loadedSessions);
-      await syncSessionPaidStates(loadedSessions);
     } finally {
       setLoading(false);
     }
@@ -837,7 +836,7 @@ const refreshAll = async (): Promise<void> => {
       fetchOrderPayments(loadedSessions),
       readActiveCustomerView(),
     ]);
-    await syncSessionPaidStates(loadedSessions);
+  
 
     // linisin lang yung local stopped ids kapag talagang closed na sa fetched rows
     setLocallyStoppedIds((prev) => {
@@ -1071,7 +1070,7 @@ const canShowStopTimeButton = (s: CustomerSession): boolean => {
       .from("customer_sessions")
       .update({
         is_paid: finalPaid,
-        paid_at: finalPaid ? new Date().toISOString() : null,
+        paid_at: finalPaid ? s.paid_at ?? new Date().toISOString() : null,
       })
       .eq("id", s.id)
       .select("*")
