@@ -151,7 +151,7 @@
   font-size: 14px;
   color: #654931;
   font-weight: 700;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.75);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
 }
 
 .ccc-legend-icon {
@@ -166,18 +166,21 @@
   border-radius: 28px;
   padding: 18px;
   border: 1px solid rgba(110, 84, 54, 0.08);
+  overflow: hidden;
 }
 
 .ccc-calendar-wrap .react-calendar {
   width: 100%;
+  max-width: 100%;
   border: none;
   background: transparent;
   font-family: inherit;
 }
 
+/* NAVIGATION */
 .ccc-calendar-wrap .react-calendar__navigation {
   display: grid;
-  grid-template-columns: 58px 58px 1fr 58px 58px;
+  grid-template-columns: 58px 58px minmax(0, 1fr) 58px 58px;
   gap: 10px;
   margin-bottom: 16px;
 }
@@ -208,7 +211,11 @@
   letter-spacing: 0.01em;
 }
 
+/* FIXED 7-COLUMN CALENDAR */
 .ccc-calendar-wrap .react-calendar__month-view__weekdays {
+  display: grid !important;
+  grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+  gap: 8px;
   margin-bottom: 8px;
   text-transform: uppercase;
 }
@@ -219,6 +226,7 @@
   font-size: 12px;
   font-weight: 900;
   color: #8a663d;
+  min-width: 0;
 }
 
 .ccc-calendar-wrap .react-calendar__month-view__weekdays__weekday abbr {
@@ -226,13 +234,18 @@
 }
 
 .ccc-calendar-wrap .react-calendar__month-view__days {
-  gap: 0;
+  display: flex !important;
+  flex-wrap: wrap !important;
 }
 
 .ccc-calendar-wrap .react-calendar__tile {
   position: relative;
+  width: 14.2857% !important;
+  max-width: 14.2857% !important;
+  flex: 0 0 14.2857% !important;
+  min-width: 0 !important;
   min-height: 122px;
-  margin: 5px;
+  margin: 0 !important;
   padding: 14px 12px 28px;
   border: none;
   border-radius: 22px;
@@ -267,7 +280,8 @@
 }
 
 .ccc-calendar-wrap .react-calendar__month-view__days__day--neighboringMonth {
-  visibility: hidden;
+  opacity: 0.35;
+  color: #8a6a4d !important;
 }
 
 .ccc-calendar-wrap .react-calendar__tile abbr {
@@ -347,7 +361,11 @@
   gap: 14px;
   padding: 18px 20px;
   border-bottom: 1px solid rgba(106, 80, 52, 0.1);
-  background: linear-gradient(180deg, rgba(247, 237, 221, 0.95), rgba(243, 232, 214, 0.95));
+  background: linear-gradient(
+    180deg,
+    rgba(247, 237, 221, 0.95),
+    rgba(243, 232, 214, 0.95)
+  );
 }
 
 .ccc-modal-head h3 {
@@ -428,11 +446,15 @@
 }
 
 .ccc-day-item {
-  background: linear-gradient(180deg, rgba(255,255,255,0.75) 0%, rgba(246,238,227,0.96) 100%);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.75) 0%,
+    rgba(246, 238, 227, 0.96) 100%
+  );
   border: 1px solid rgba(120, 90, 58, 0.1);
   border-radius: 18px;
   padding: 14px;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.8);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
 .ccc-day-item-name {
@@ -472,8 +494,12 @@
 }
 
 @keyframes cccFadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes cccModalPopCenter {
@@ -515,10 +541,15 @@
   .ccc-calendar-wrap {
     padding: 10px;
     border-radius: 22px;
+    overflow-x: auto;
+  }
+
+  .ccc-calendar-wrap .react-calendar {
+    min-width: 760px;
   }
 
   .ccc-calendar-wrap .react-calendar__navigation {
-    grid-template-columns: 48px 48px 1fr 48px 48px;
+    grid-template-columns: 48px 48px minmax(0, 1fr) 48px 48px;
     gap: 8px;
   }
 
@@ -528,11 +559,19 @@
     font-size: 16px;
   }
 
+  .ccc-calendar-wrap .react-calendar__month-view__weekdays {
+    gap: 4px;
+  }
+
+  .ccc-calendar-wrap .react-calendar__month-view__days {
+    gap: 4px;
+  }
+
   .ccc-calendar-wrap .react-calendar__tile {
     min-height: 92px;
     padding: 10px 8px 24px;
     border-radius: 16px;
-    margin: 3px;
+    margin: 0 !important;
   }
 
   .ccc-calendar-wrap .react-calendar__tile abbr {

@@ -480,9 +480,10 @@ const Customer_Calendar: React.FC = () => {
           <div className="ccc-calendar-wrap">
             <Calendar
               tileContent={tileContent}
-              showNeighboringMonth={false}
-              showFixedNumberOfWeeks={false}
+              showNeighboringMonth={true}
+              showFixedNumberOfWeeks={true}
               locale="en-US"
+              calendarType="gregory"
               onClickDay={(value: Date) => openDayModal(value)}
             />
           </div>
