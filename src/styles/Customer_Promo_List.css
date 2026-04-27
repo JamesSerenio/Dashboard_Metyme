@@ -242,10 +242,15 @@ body.cpl-modal-open {
 .cpl-table-scroll {
   width: 100%;
   overflow-x: auto;
-  overflow-y: visible;
+  overflow-y: auto; /* 🔥 enable vertical scroll */
+
+  max-height: 420px; /* 🔥 adjust height para ~4 rows lang */
+
   border-radius: 26px;
   background: linear-gradient(180deg, #ece1cd 0%, #f7f2ea 100%);
 }
+
+
 
 .cpl-table {
   width: 100%;
