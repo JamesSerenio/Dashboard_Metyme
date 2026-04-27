@@ -74,8 +74,11 @@ type AddOnPaymentRow = {
   booking_code: string | null;
   is_paid: boolean | number | string | null;
   paid_at: string | null;
-  gcash_amount: number | string | null;
   cash_amount: number | string | null;
+  price: number | string | null;
+  quantity: number | string | null;
+  subtotal: number | string | null;
+  total: number | string | null;
 };
 
 type CustomerOrderPaymentRow = {
@@ -657,30 +660,50 @@ const loadAddonsPaidBase = async (dateYMD: string): Promise<void> => {
 
   const res = await supabase
     .from("customer_session_add_ons")
-    .select("created_at, full_name, seat_number, booking_code, is_paid, paid_at, gcash_amount, cash_amount")
-    .not("paid_at", "is", null)
-    .gte("paid_at", startIso)
-    .lt("paid_at", endIso);
+    .select(`
+      created_at,
+      full_name,
+      seat_number,
+      booking_code,
+      is_paid,
+      paid_at,
+      gcash_amount,
+      cash_amount,
+      price,
+      quantity,
+      subtotal,
+      total
+    `)
+    .gte("created_at", startIso)
+    .lt("created_at", endIso);
 
   if (res.error) {
-    console.error("addonsPaid(payment) query error:", res.error.message);
+    console.error("addons ordered query error:", res.error.message);
     setAddonsPaidBase(0);
     return;
   }
 
   const rows = (res.data ?? []) as AddOnPaymentRow[];
-  const paidRows = rows.filter(
-    (r) =>
-      toBool(r.is_paid) &&
-      !!r.paid_at &&
-      String(r.booking_code ?? "").trim() === "" &&
-      (toNumber(r.gcash_amount) > 0 || toNumber(r.cash_amount) > 0)
+
+  const walkinAddons = rows.filter(
+    (r) => String(r.booking_code ?? "").trim() === ""
   );
 
-  setAddonsPaidBase(computeAddonsPaidFromPayments(paidRows));
+  const total = walkinAddons.reduce((sum, r) => {
+    const subtotal =
+      toNumber(r.subtotal) > 0
+        ? toNumber(r.subtotal)
+        : toNumber(r.total) > 0
+        ? toNumber(r.total)
+        : toNumber(r.price) * toNumber(r.quantity);
+
+    return sum + Math.max(0, subtotal);
+  }, 0);
+
+  setAddonsPaidBase(round2(total));
 };
 
-  const loadCustomerOrderPaid = async (dateYMD: string): Promise<void> => {
+const loadCustomerOrderPaid = async (dateYMD: string): Promise<void> => {
   if (!isYMD(dateYMD)) {
     setCustomerOrderPaid(0);
     return;
@@ -688,107 +711,32 @@ const loadAddonsPaidBase = async (dateYMD: string): Promise<void> => {
 
   const { startIso, endIso } = manilaDayRange(dateYMD);
 
-  const paymentRes = await supabase
-    .from("customer_order_payments")
-    .select("booking_code, paid_at, is_paid, gcash_amount, cash_amount")
-    .gte("paid_at", startIso)
-    .lt("paid_at", endIso);
-
-  if (paymentRes.error) {
-    console.error("customer_order_payments query error:", paymentRes.error.message);
-    setCustomerOrderPaid(0);
-    return;
-  }
-
-  const paymentRows = (paymentRes.data ?? []) as CustomerOrderPaymentRow[];
-  const paidRows = paymentRows.filter(
-    (r) => toBool(r.is_paid) && !!r.paid_at && String(r.booking_code ?? "").trim().length > 0
-  );
-
-  if (paidRows.length === 0) {
-    setCustomerOrderPaid(0);
-    return;
-  }
-
-  const bookingCodes = Array.from(
-    new Set(paidRows.map((r) => String(r.booking_code ?? "").trim()).filter(Boolean))
-  );
-
-  const [addonRes, consignmentRes] = await Promise.all([
-    supabase
-      .from("addon_orders")
-      .select("booking_code, total_amount")
-      .in("booking_code", bookingCodes),
-
-    supabase
-      .from("consignment_orders")
-      .select("booking_code, total_amount")
-      .in("booking_code", bookingCodes),
-  ]);
+  const addonRes = await supabase
+    .from("addon_orders")
+    .select("booking_code, total_amount, created_at")
+    .gte("created_at", startIso)
+    .lt("created_at", endIso);
 
   if (addonRes.error) {
-    console.error("addon_orders query error:", addonRes.error.message);
+    console.error("addon_orders ordered query error:", addonRes.error.message);
     setCustomerOrderPaid(0);
     return;
   }
 
-  if (consignmentRes.error) {
-    console.error("consignment_orders query error:", consignmentRes.error.message);
-    setCustomerOrderPaid(0);
-    return;
-  }
+  const rows = (addonRes.data ?? []) as Array<{
+    booking_code: string | null;
+    total_amount: number | string | null;
+    created_at: string | null;
+  }>;
 
-  const addonRows = (addonRes.data ?? []) as OrderParentAmountRow[];
-  const consignmentRows = (consignmentRes.data ?? []) as OrderParentAmountRow[];
+  const total = rows.reduce((sum, r) => {
+    const code = String(r.booking_code ?? "").trim();
+    if (!code) return sum;
 
-  const addonTotals: Record<string, number> = {};
-  const consignmentTotals: Record<string, number> = {};
+    return sum + Math.max(0, toNumber(r.total_amount));
+  }, 0);
 
-  for (const row of addonRows) {
-    const code = String(row.booking_code ?? "").trim();
-    if (!code) continue;
-    addonTotals[code] = round2((addonTotals[code] ?? 0) + Math.max(0, toNumber(row.total_amount)));
-  }
-
-  for (const row of consignmentRows) {
-    const code = String(row.booking_code ?? "").trim();
-    if (!code) continue;
-    consignmentTotals[code] = round2(
-      (consignmentTotals[code] ?? 0) + Math.max(0, toNumber(row.total_amount))
-    );
-  }
-
-  let addonOnlyTotal = 0;
-
-  for (const row of paidRows) {
-    const code = String(row.booking_code ?? "").trim();
-    if (!code) continue;
-
-    const paid = round2(
-      Math.max(0, toNumber(row.gcash_amount)) + Math.max(0, toNumber(row.cash_amount))
-    );
-
-    const addonDue = round2(addonTotals[code] ?? 0);
-    const consignmentDue = round2(consignmentTotals[code] ?? 0);
-    const combinedDue = round2(addonDue + consignmentDue);
-
-    if (combinedDue <= 0) continue;
-
-if (consignmentDue <= 0) {
-  addonOnlyTotal += round2(Math.min(paid, addonDue));
-  continue;
-}
-
-    if (addonDue <= 0) {
-      continue;
-    }
-
-    const cappedPaid = round2(Math.min(paid, combinedDue));
-    const addonShare = round2(cappedPaid * (addonDue / combinedDue));
-    addonOnlyTotal += addonShare;
-      }
-
-      setCustomerOrderPaid(round2(addonOnlyTotal));
+  setCustomerOrderPaid(round2(total));
 };
 
   const loadReservationPaymentPlacement = async (dateYMD: string): Promise<void> => {
@@ -1356,7 +1304,7 @@ const discount = hasAnyTransactionToday
   ];
 
   const otherTotals: Array<{ label: string; value: number }> = [
-    { label: "Add-ons (Paid)", value: addonsTotalWithCustomerOrders },
+    { label: "Add-ons Ordered", value: addonsTotalWithCustomerOrders },
     { label: "Discount (Amount)", value: discount },
     { label: "Total Time", value: totalTimeAmount },
   ];
