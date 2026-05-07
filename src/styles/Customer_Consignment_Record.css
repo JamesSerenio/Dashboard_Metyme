@@ -56,7 +56,7 @@ body,
 
 .ccr-shell {
   width: 100%;
-  max-width: 1280px;
+  max-width: 1680px;
   margin: 0 auto;
   display: grid;
   gap: 18px;
@@ -244,7 +244,7 @@ body,
 .ccr-table-wrap {
   width: 100%;
   max-width: 100%;
-  max-height: 570px;
+  max-height: 430px; 
   overflow-y: auto;
   overflow-x: auto;
   border-radius: 20px;
@@ -269,8 +269,8 @@ body,
 }
 
 .ccr-table {
-  width: max-content;
-  min-width: 1500px;
+  width: 100%;
+  min-width: 1450px; /* mas wide */
   border-collapse: separate;
   border-spacing: 0;
 }
@@ -281,20 +281,20 @@ body,
   z-index: 2;
   background: linear-gradient(180deg, #f7efe2 0%, #efe2cf 100%);
   color: #4a3828;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 1000;
   text-transform: uppercase;
   letter-spacing: .08em;
-  padding: 15px 12px;
+  padding: 10px 10px;
   text-align: center;
   white-space: nowrap;
   border-bottom: 1px solid rgba(110, 88, 57, 0.1);
 }
 
 .ccr-table td {
-  padding: 14px 12px;
+  padding: 9px 10px; /* paliit rows */
   text-align: center;
-  font-size: 14px;
+  font-size: 13px;
   color: var(--ccr-text);
   border-bottom: 1px solid rgba(110, 88, 57, 0.08);
   background: rgba(255,255,255,0.14);
