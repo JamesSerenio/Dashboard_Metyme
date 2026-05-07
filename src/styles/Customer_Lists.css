@@ -187,9 +187,11 @@
 .cll-table-scroll {
   width: 100%;
   overflow-x: auto;
-  overflow-y: visible;
+  overflow-y: auto;
+  max-height: 800px; /* 4-5 rows only */
   border-radius: 26px;
   background: linear-gradient(180deg, #ece1cd 0%, #f7f2ea 100%);
+  scrollbar-gutter: stable;
 }
 
 .cll-table {
