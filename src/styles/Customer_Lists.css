@@ -36,8 +36,9 @@
 
 .cll-shell {
   width: 100%;
-  max-width: 1280px;
+  max-width: 1680px;
   margin: 0 auto;
+  padding-inline: 10px;
 }
 
 .cll-hero {
@@ -76,8 +77,8 @@
 
 .cll-toolbar {
   display: grid;
-  grid-template-columns: 155px 156px 1fr auto;
-  gap: 14px;
+  grid-template-columns: 140px 140px minmax(220px, 1fr) auto;
+  gap: 10px;
   margin-top: 22px;
   align-items: end;
 }
@@ -193,7 +194,7 @@
 
 .cll-table {
   width: 100%;
-  min-width: 1420px;
+  min-width: 1180px;
   border-collapse: separate;
   border-spacing: 0;
   overflow: hidden;
@@ -1017,6 +1018,39 @@
     text-align: left;
   }
 }
+
+@media (min-width: 1400px) {
+  .cll-page {
+    padding: 14px;
+  }
+
+  .cll-shell {
+    max-width: 1760px;
+  }
+
+  .cll-table {
+    min-width: 1120px;
+  }
+
+  .cll-table thead th,
+  .cll-table tbody td {
+    padding: 14px 12px;
+  }
+
+  .cll-grand-amount {
+    font-size: 28px;
+  }
+
+  .cll-paid-pill {
+    min-width: 100px;
+    padding: 10px 14px;
+    font-size: 14px;
+  }
+
+  .cll-action-stack-premium {
+    min-width: 135px;
+  }
+}
 /* =========================
    PLAIN CUSTOMER RECEIPT
 ========================= */
@@ -1199,7 +1233,7 @@
 }
 
 .cll-stat-box span {
-  font-size: 13px;
+  font-size: 13px;  
   font-weight: 700;
   color: #8a6a4d;
 }

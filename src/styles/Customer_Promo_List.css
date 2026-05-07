@@ -46,8 +46,9 @@ body.cpl-modal-open {
 
 .cpl-shell {
   width: 100%;
-  max-width: 1380px;
+  max-width: 1760px;
   margin: 0 auto;
+  padding-inline: 10px;
 }
 
 .cpl-hero {
@@ -86,9 +87,14 @@ body.cpl-modal-open {
 
 .cpl-toolbar {
   display: grid;
-  grid-template-columns: repeat(4, minmax(170px, 1fr)) auto;
-  gap: 14px;
-  margin-top: 22px;
+  grid-template-columns:
+    140px
+    minmax(180px, 1fr)
+    160px
+    160px
+    auto;
+  gap: 10px;
+  margin-top: 18px;
   align-items: end;
 }
 
@@ -242,19 +248,64 @@ body.cpl-modal-open {
 .cpl-table-scroll {
   width: 100%;
   overflow-x: auto;
-  overflow-y: auto; /* 🔥 enable vertical scroll */
+  overflow-y: auto;
 
-  max-height: 420px; /* 🔥 adjust height para ~4 rows lang */
+  max-height: 520px;
 
   border-radius: 26px;
   background: linear-gradient(180deg, #ece1cd 0%, #f7f2ea 100%);
 }
 
+@media (min-width: 1400px) {
+  .cpl-page {
+    padding: 14px;
+  }
 
+  .cpl-shell {
+    max-width: 1820px;
+  }
+
+  .cpl-table {
+    min-width: 1280px;
+  }
+
+  .cpl-table thead th,
+  .cpl-table tbody td {
+    padding: 14px 12px;
+  }
+
+  .cpl-paid-pill {
+    min-width: 102px;
+    padding: 10px 14px;
+    font-size: 14px;
+  }
+
+  .cpl-action-stack {
+    min-width: 130px;
+  }
+
+  .cpl-stat-box {
+    min-height: 78px;
+    padding: 14px 18px;
+  }
+
+  .cpl-stat-box strong {
+    font-size: 20px;
+  }
+
+  .cpl-order-card {
+    padding: 12px;
+  }
+
+  .cpl-order-thumb {
+    width: 54px;
+    height: 54px;
+  }
+}
 
 .cpl-table {
   width: 100%;
-  min-width: 2200px;
+  min-width: 1380px;
   border-collapse: separate;
   border-spacing: 0;
   overflow: hidden;

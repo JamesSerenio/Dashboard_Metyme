@@ -36,8 +36,9 @@
 
 .crv-shell {
   width: 100%;
-  max-width: 1280px;
+  max-width: 1720px;
   margin: 0 auto;
+  padding-inline: 10px;
 }
 
 .crv-hero {
@@ -82,7 +83,54 @@
 }
 
 .crv-toolbar-resv {
-  grid-template-columns: 190px 180px 1fr auto;
+  grid-template-columns:
+    150px
+    150px
+    minmax(220px, 1fr)
+    auto;
+  gap: 10px;
+}
+
+@media (min-width: 1400px) {
+  .crv-page {
+    padding: 14px;
+  }
+
+  .crv-shell {
+    max-width: 1780px;
+  }
+
+  .crv-table {
+    min-width: 1120px;
+  }
+
+  .crv-table thead th,
+  .crv-table tbody td {
+    padding: 14px 12px;
+  }
+
+  .crv-grand-amount {
+    font-size: 28px;
+  }
+
+  .crv-paid-pill {
+    min-width: 102px;
+    padding: 10px 14px;
+    font-size: 14px;
+  }
+
+  .crv-action-stack-premium {
+    min-width: 138px;
+  }
+
+  .crv-item-card {
+    gap: 10px;
+  }
+
+  .crv-total-card,
+  .crv-payment-section {
+    padding: 13px;
+  }
 }
 
 .crv-control {
@@ -201,7 +249,7 @@
 
 .crv-table {
   width: 100%;
-  min-width: 1500px;
+  min-width: 1180px;
   border-collapse: separate;
   border-spacing: 0;
   overflow: hidden;
