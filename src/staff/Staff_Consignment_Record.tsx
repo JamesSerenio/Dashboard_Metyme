@@ -230,6 +230,7 @@ const Staff_Consignment_Record: React.FC = () => {
   const [gcashAmount, setGcashAmount] = useState<string>("");
   const [cashoutNote, setCashoutNote] = useState<string>("");
   const [savingCashout, setSavingCashout] = useState<boolean>(false);
+  const [cashoutApprovalOpen, setCashoutApprovalOpen] = useState<boolean>(false);
 
   const [historyTargetKey, setHistoryTargetKey] = useState<string | null>(null);
   const [historyTargetLabel, setHistoryTargetLabel] = useState<string>("");
@@ -592,6 +593,10 @@ const { data: sales, error: sErr } = await supabase
 
       setCashoutTargetKey(null);
       setCashoutTargetLabel("");
+      setCashAmount("");
+      setGcashAmount("");
+      setCashoutNote("");
+      setCashoutApprovalOpen(true);
       await fetchAll();
     } catch (e: unknown) {
       console.error(e);
@@ -1009,6 +1014,33 @@ const { data: sales, error: sErr } = await supabase
           </>
         )}
       </div>
+
+    <CenterModal
+      open={cashoutApprovalOpen}
+      title="CASH OUT REQUEST SENT"
+      subtitle="Waiting for admin approval"
+      onClose={() => setCashoutApprovalOpen(false)}
+    >
+      <div className="scr-receipt-list">
+        <div className="scr-receipt-row is-strong">
+          <span>Status</span>
+          <span>Pending Approval</span>
+        </div>
+        <div className="scr-footnote">
+          Your cash out request has been submitted successfully. Please wait for the admin to review and approve it before the cash out is recorded.
+        </div>
+      </div>
+
+      <div className="scr-modal-actions">
+        <button
+          className="scr-btn"
+          onClick={() => setCashoutApprovalOpen(false)}
+          type="button"
+        >
+          Okay
+        </button>
+      </div>
+    </CenterModal>
 
       <CenterModal
         open={!!historyTargetKey}
