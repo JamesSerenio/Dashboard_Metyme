@@ -442,7 +442,13 @@ const { data: sales, error: sErr } = await supabase
       a.cashout_total = round2(a.cashout_cash + a.cashout_gcash);
     }
 
-    for (const a of map.values()) a.remaining = round2(Math.max(0, a.net_total - a.cashout_total));
+   for (const a of map.values()) {
+      const trueRemaining =
+        Number(a.net_total || 0) - Number(a.cashout_total || 0);
+
+      a.remaining =
+        Math.floor(Math.max(0, trueRemaining) * 100) / 100;
+    }
 
     return Array.from(map.values()).sort((x, y) => norm(x.label).localeCompare(norm(y.label)));
   }, [salesRows, cashouts, groupBy]);
@@ -517,10 +523,20 @@ const { data: sales, error: sErr } = await supabase
     }
 
     const target = perKeyAggAll.find((p) => p.key === cashoutTargetKey);
-    const remaining = round2(target?.remaining ?? 0);
+
+    const rawRemaining =
+      Number(target?.net_total ?? 0) -
+      Number(target?.cashout_total ?? 0);
+
+    const remaining =
+      Math.floor(Math.max(0, rawRemaining) * 100) / 100;
 
     if (total > remaining) {
-      alert(`Insufficient remaining. Remaining: ${moneyText(remaining)}`);
+      alert(
+        `Cash out error: Requested cashout exceeds remaining balance.\nRemaining: ${moneyText(
+          remaining
+        )}`
+      );
       return;
     }
 
