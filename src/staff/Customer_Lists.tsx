@@ -468,6 +468,7 @@ const Customer_Lists: React.FC = () => {
 
   const [selectedDate, setSelectedDate] = useState<string>(yyyyMmDdLocal(new Date()));
   const [searchName, setSearchName] = useState<string>("");
+  const [paidFilter, setPaidFilter] = useState<"all" | "paid" | "unpaid">("all");
 
   const [discountTarget, setDiscountTarget] = useState<CustomerSession | null>(null);
   const [discountKind, setDiscountKind] = useState<DiscountKind>("none");
@@ -1049,9 +1050,20 @@ const canShowStopTimeButton = (s: CustomerSession): boolean => {
     return systemPaid && orderPaid;
   };
 
-  const totals = useMemo(() => {
-  const totalCustomer = filteredSessions.length;
-  const paid = filteredSessions.filter((session) => getFinalPaidStatus(session)).length;
+const visibleSessions = useMemo(() => {
+  return filteredSessions.filter((session) => {
+    const isPaid = getFinalPaidStatus(session);
+
+    if (paidFilter === "paid") return isPaid;
+    if (paidFilter === "unpaid") return !isPaid;
+
+    return true;
+  });
+}, [filteredSessions, paidFilter, sessionOrders, orderPayments]);
+
+const totals = useMemo(() => {
+  const totalCustomer = visibleSessions.length;
+  const paid = visibleSessions.filter((session) => getFinalPaidStatus(session)).length;
   const unpaid = totalCustomer - paid;
 
   return {
@@ -1059,7 +1071,7 @@ const canShowStopTimeButton = (s: CustomerSession): boolean => {
     paid,
     unpaid,
   };
-}, [filteredSessions]);
+}, [visibleSessions, sessionOrders, orderPayments]);
 
   const syncSingleSessionPaidState = async (s: CustomerSession): Promise<void> => {
     const finalPaid = getFinalPaidStatus(s);
@@ -2004,7 +2016,14 @@ const canShowStopTimeButton = (s: CustomerSession): boolean => {
 
             <div className="cll-control">
               <label>Status</label>
-              <input type="text" value="Walk-in" disabled />
+              <select
+                value={paidFilter}
+                onChange={(e) => setPaidFilter(e.target.value as "all" | "paid" | "unpaid")}
+              >
+                <option value="all">All</option>
+                <option value="paid">Paid</option>
+                <option value="unpaid">Unpaid</option>
+              </select>
             </div>
 
             <div className="cll-control cll-control-search">
@@ -2050,7 +2069,7 @@ const canShowStopTimeButton = (s: CustomerSession): boolean => {
         <section className="cll-table-wrap">
           {loading ? (
             <div className="cll-empty">Loading customer records...</div>
-          ) : filteredSessions.length === 0 ? (
+          ) : visibleSessions.length === 0 ? (
             <div className="cll-empty">No customer records found for this date.</div>
           ) : (
             <div className="cll-table-scroll">
@@ -2068,7 +2087,7 @@ const canShowStopTimeButton = (s: CustomerSession): boolean => {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredSessions.map((session) => {
+                  {visibleSessions.map((session) => {
                     const orderBundle = getOrderBundle(session);
                     const systemPay = getSystemPaymentInfo(session);
                     const orderPay = getOrderPaymentInfo(session);
@@ -2407,7 +2426,9 @@ const canShowStopTimeButton = (s: CustomerSession): boolean => {
               const totalPaid = wholePeso(systemPay.totalPaid + orderPay.totalPaid);
               const totalDue = getGrandDue(selectedSession);
               const totalChange = wholePeso(Math.max(0, totalPaid - totalDue));
-              const bottomInfo = getDisplayAmount(selectedSession);
+              const receiptPaid = getFinalPaidStatus(selectedSession);
+              const grandTotal = getGrandDue(selectedSession);
+              const remainingDue = getDisplayAmount(selectedSession).value;
 
               return (
                 <div className="cll-plain-receipt-wrap">
@@ -2513,6 +2534,11 @@ const canShowStopTimeButton = (s: CustomerSession): boolean => {
                       </div>
 
                       <div className="cll-plain-row">
+                        <span>Grand Total</span>
+                        <strong>₱{grandTotal}</strong>
+                      </div>
+
+                      <div className="cll-plain-row">
                         <span>Total Paid</span>
                         <strong>₱{totalPaid}</strong>
                       </div>
@@ -2537,8 +2563,8 @@ const canShowStopTimeButton = (s: CustomerSession): boolean => {
                     </div>
 
                     <div className="cll-plain-total-box">
-                      <span>{bottomInfo.label}</span>
-                      <strong>₱{bottomInfo.value}</strong>
+                      <span>{receiptPaid ? "Grand Total" : "Total Amount Due"}</span>
+                      <strong>₱{receiptPaid ? grandTotal : remainingDue}</strong>
                     </div>
 
                     <p className="cll-plain-thankyou">
