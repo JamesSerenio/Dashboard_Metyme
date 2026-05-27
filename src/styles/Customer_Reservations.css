@@ -77,18 +77,26 @@
 
 .crv-toolbar {
   display: grid;
+  grid-template-columns: 160px 170px 170px minmax(260px, 1fr) auto;
   gap: 14px;
   margin-top: 22px;
   align-items: end;
 }
 
 .crv-toolbar-resv {
-  grid-template-columns:
-    150px
-    150px
-    minmax(220px, 1fr)
-    auto;
-  gap: 10px;
+  display: grid;
+  grid-template-columns: 160px 170px 170px minmax(260px, 1fr) auto;
+  gap: 14px;
+  align-items: end;
+}
+
+.crv-toolbar-resv .crv-control {
+  min-width: 0;
+}
+
+.crv-toolbar-resv .crv-control select,
+.crv-toolbar-resv .crv-control input {
+  width: 100%;
 }
 
 @media (min-width: 1400px) {
@@ -185,10 +193,10 @@
 
 .crv-actions-top {
   display: flex;
-  gap: 12px;
-  align-items: center;
-  flex-wrap: wrap;
+  gap: 10px;
+  align-items: end;
   justify-content: flex-end;
+  flex-wrap: nowrap;
 }
 
 .crv-btn {

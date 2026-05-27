@@ -1113,8 +1113,10 @@ const totals = useMemo(() => {
       const now = new Date();
       const nowIso = now.toISOString();
 
-      const totalMinutes = diffMinutes(session.time_started, nowIso);
-      const totalCost = computeCostWithFreeMinutes(session.time_started, nowIso);
+      const totalMinutes = computeHours(session.time_started, nowIso);
+      const totalCost = wholePeso(
+      computeCostWithFreeMinutes(session.time_started, nowIso)
+    );
 
       // optimistic UI update para mawala agad button
       setLocallyStoppedIds((prev) => ({
@@ -1125,7 +1127,7 @@ const totals = useMemo(() => {
       const optimisticRow: CustomerSession = {
         ...session,
         time_ended: nowIso,
-        total_time: totalMinutes,
+        total_time: Number(totalMinutes.toFixed(2)),
         total_amount: totalCost,
         hour_avail: "CLOSED",
         expected_end_at: null,
@@ -1143,16 +1145,18 @@ const totals = useMemo(() => {
         prev?.id === session.id ? optimisticRow : prev
       );
 
-      const { error } = await supabase
+      const { data: updatedSession, error } = await supabase
         .from("customer_sessions")
         .update({
           time_ended: nowIso,
-          total_time: totalMinutes,
+          total_time: Number(totalMinutes.toFixed(2)),
           total_amount: totalCost,
           hour_avail: "CLOSED",
           expected_end_at: null,
         })
-        .eq("id", session.id);
+        .eq("id", session.id)
+          .select("*")
+          .single();
 
       if (error) {
         setLocallyStoppedIds((prev) => {
@@ -1206,7 +1210,16 @@ const totals = useMemo(() => {
         prev?.id === session.id ? updatedRow : prev
       );
 
-      await syncSingleSessionPaidState(updatedRow);
+      if (updatedSession) {
+        const finalRow = updatedSession as CustomerSession;
+
+        setSessions((prev) =>
+          prev.map((row) => (row.id === session.id ? finalRow : row))
+        );
+
+        await syncSingleSessionPaidState(finalRow);
+      }
+
       await refreshAll();
     } catch (e) {
       console.error(e);

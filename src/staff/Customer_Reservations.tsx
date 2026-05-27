@@ -737,24 +737,6 @@ const Customer_Reservations: React.FC = () => {
       });
   }, [sessions, filterDate, dateFilterMode, searchName]);
 
-  const visibleSessions = useMemo(() => {
-  return filteredSessions.filter((session) => {
-    const isPaid = getFinalPaidStatus(session);
-
-    if (paidFilter === "paid") return isPaid;
-    if (paidFilter === "unpaid") return !isPaid;
-
-    return true;
-  });
-}, [filteredSessions, paidFilter, sessionOrders, orderPayments]);
-
-const totals = useMemo(() => {
-  const totalCustomer = visibleSessions.length;
-  const paid = visibleSessions.filter((session) => getFinalPaidStatus(session)).length;
-  const unpaid = totalCustomer - paid;
-
-  return { totalCustomer, paid, unpaid };
-}, [visibleSessions, sessionOrders, orderPayments]);
 
   const fetchReservationSessions = async (): Promise<CustomerSession[]> => {
     const { data, error } = await supabase
@@ -1215,6 +1197,25 @@ const totals = useMemo(() => {
     const orderPaid = hasOrders(s) ? getOrderIsPaid(s) : true;
     return systemPaid && orderPaid;
   };
+
+    const visibleSessions = useMemo(() => {
+  return filteredSessions.filter((session) => {
+    const isPaid = getFinalPaidStatus(session);
+
+    if (paidFilter === "paid") return isPaid;
+    if (paidFilter === "unpaid") return !isPaid;
+
+    return true;
+  });
+}, [filteredSessions, paidFilter, sessionOrders, orderPayments]);
+
+const totals = useMemo(() => {
+  const totalCustomer = visibleSessions.length;
+  const paid = visibleSessions.filter((session) => getFinalPaidStatus(session)).length;
+  const unpaid = totalCustomer - paid;
+
+  return { totalCustomer, paid, unpaid };
+}, [visibleSessions, sessionOrders, orderPayments]);
 
   const syncSingleSessionPaidState = async (s: CustomerSession): Promise<void> => {
     const finalPaid = getFinalPaidStatus(s);
