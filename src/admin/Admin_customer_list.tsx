@@ -537,6 +537,7 @@ const Admin_customer_list: React.FC = () => {
   const activeRange = useMemo(() => rangeFromMode(filterMode, anchorDate), [filterMode, anchorDate]);
 
   const [searchName, setSearchName] = useState<string>("");
+  const [paidFilter, setPaidFilter] = useState<"all" | "paid" | "unpaid">("all");
 
   const [discountTarget, setDiscountTarget] = useState<CustomerSession | null>(null);
   const [discountKind, setDiscountKind] = useState<DiscountKind>("none");
@@ -665,6 +666,7 @@ const Admin_customer_list: React.FC = () => {
         return aTime - bTime;
       });
   }, [sessions, searchName]);
+
 
   const fetchCustomerSessionsByRange = async (
     startKey: string,
@@ -1106,29 +1108,27 @@ const Admin_customer_list: React.FC = () => {
       return systemPaid && orderPaid;
     };
 
+    const visibleSessions = useMemo(() => {
+      return filteredSessions.filter((session) => {
+        const isPaid = getFinalPaidStatus(session);
+
+        if (paidFilter === "paid") return isPaid;
+        if (paidFilter === "unpaid") return !isPaid;
+
+        return true;
+      });
+    }, [filteredSessions, paidFilter, sessionOrders, orderPayments]);
+
     const totals = useMemo(() => {
-      const totalCustomer = filteredSessions.length;
-      const paid = filteredSessions.filter((s) => getFinalPaidStatus(s)).length;
+      const totalCustomer = visibleSessions.length;
+      const paid = visibleSessions.filter((s) => getFinalPaidStatus(s)).length;
       const unpaid = totalCustomer - paid;
 
-      const systemTotal = filteredSessions.reduce(
-        (sum, s) => sum + getSessionSystemCost(s),
-        0
-      );
+      const systemTotal = visibleSessions.reduce((sum, s) => sum + getSessionSystemCost(s), 0);
+      const ordersTotal = visibleSessions.reduce((sum, s) => sum + getOrdersTotal(s), 0);
 
-      const ordersTotal = filteredSessions.reduce(
-        (sum, s) => sum + getOrdersTotal(s),
-        0
-      );
-
-      return {
-        totalCustomer,
-        paid,
-        unpaid,
-        systemTotal,
-        ordersTotal,
-      };
-    }, [filteredSessions]);
+      return { totalCustomer, paid, unpaid, systemTotal, ordersTotal };
+    }, [visibleSessions, sessionOrders, orderPayments]);
 
   const syncSingleSessionPaidState = async (s: CustomerSession): Promise<void> => {
     const finalPaid = getFinalPaidStatus(s);
@@ -1163,42 +1163,54 @@ const Admin_customer_list: React.FC = () => {
     }
   };
 
-  const stopOpenTime = async (session: CustomerSession): Promise<void> => {
-    try {
-      setStoppingId(session.id);
+    const stopOpenTime = async (session: CustomerSession): Promise<void> => {
+      try {
+        setStoppingId(session.id);
 
-      const nowIso = new Date().toISOString();
-      const totalHours = computeHours(session.time_started, nowIso);
-      const totalCost = computeCostWithFreeMinutes(session.time_started, nowIso);
+        const nowIso = new Date().toISOString();
+        const totalHours = computeHours(session.time_started, nowIso);
+        const totalCost = computeCostWithFreeMinutes(session.time_started, nowIso);
 
-      const { data: updated, error } = await supabase
-        .from("customer_sessions")
-        .update({
-          time_ended: nowIso,
-          total_time: totalHours,
-          total_amount: totalCost,
-          hour_avail: "CLOSED",
-        })
-        .eq("id", session.id)
-        .select("*")
-        .single();
+        const { data: updatedSession, error } = await supabase
+          .from("customer_sessions")
+          .update({
+            time_ended: nowIso,
+            total_time: Number(totalHours.toFixed(2)),
+            total_amount: totalCost,
+            hour_avail: "CLOSED",
+          })
+          .eq("id", session.id)
+          .select("*")
+          .single();
 
-      if (error || !updated) {
-        alert(`Stop Time error: ${error?.message ?? "Unknown error"}`);
-        return;
+        if (error || !updatedSession) {
+          alert(`Stop Time error: ${error?.message ?? "Unknown error"}`);
+          return;
+        }
+
+        const updatedRow = updatedSession as CustomerSession;
+
+        setSessions((prev) =>
+          prev.map((row) => (row.id === session.id ? updatedRow : row))
+        );
+
+        setSelectedSession((prev) =>
+          prev?.id === session.id ? updatedRow : prev
+        );
+
+        setSelectedOrderSession((prev) =>
+          prev?.id === session.id ? updatedRow : prev
+        );
+
+        await syncSingleSessionPaidState(updatedRow);
+        await refreshAll();
+      } catch (e) {
+        console.error(e);
+        alert("Stop Time failed.");
+      } finally {
+        setStoppingId(null);
       }
-
-      const updatedRow = updated as CustomerSession;
-      setSessions((prev) => prev.map((s) => (s.id === session.id ? updatedRow : s)));
-      setSelectedSession((prev) => (prev?.id === session.id ? updatedRow : prev));
-      await syncSingleSessionPaidState(updatedRow);
-    } catch (e) {
-      console.error(e);
-      alert("Stop Time failed.");
-    } finally {
-      setStoppingId(null);
-    }
-  };
+    };
 
   const renderTimeOut = (s: CustomerSession): string => {
     if (isOpenTimeSession(s)) return "OPEN";
@@ -1957,7 +1969,7 @@ const Admin_customer_list: React.FC = () => {
 
   const openDeleteByRangeModal = (): void => {
     if (loading || refreshing || exporting) return;
-    if (filteredSessions.length === 0) {
+    if (visibleSessions.length === 0) {
       alert("No records to delete in this range.");
       return;
     }
@@ -2063,7 +2075,7 @@ const Admin_customer_list: React.FC = () => {
   };
 
   const exportToExcel = async (): Promise<void> => {
-    if (filteredSessions.length === 0) {
+    if (visibleSessions.length === 0) {
       alert("No records for selected range.");
       return;
     }
@@ -2218,6 +2230,20 @@ const Admin_customer_list: React.FC = () => {
               />
             </div>
 
+            <div className="acl-filter-field">
+            <label>Payment Status</label>
+            <select
+              value={paidFilter}
+              onChange={(e) =>
+                setPaidFilter(e.target.value as "all" | "paid" | "unpaid")
+              }
+            >
+              <option value="all">All</option>
+              <option value="paid">Paid</option>
+              <option value="unpaid">Unpaid</option>
+            </select>
+          </div>
+
             <div className="acl-control acl-control-search">
               <label>Search</label>
               <input
@@ -2294,14 +2320,14 @@ const Admin_customer_list: React.FC = () => {
                       <div className="acl-empty">Loading records...</div>
                     </td>
                   </tr>
-                ) : filteredSessions.length === 0 ? (
+                ) : visibleSessions.length === 0 ? (
                   <tr>
                     <td colSpan={8}>
                       <div className="acl-empty">No records found.</div>
                     </td>
                   </tr>
                 ) : (
-                  filteredSessions.map((s) => {
+                  visibleSessions.map((s) => {
                     const bundle = getOrderBundle(s);
                     const ordersTotal = getOrdersTotal(s);
                     const grandTotal = getGrandDue(s);
@@ -2624,8 +2650,10 @@ const Admin_customer_list: React.FC = () => {
           const orders = getOrderBundle(selectedSession).items;
           const ordersTotal = getOrdersTotal(selectedSession);
           const totalPaid = systemPay.totalPaid + orderPay.totalPaid;
-          const totalDue = getGrandDue(selectedSession);
-          const totalChange = Math.max(0, totalPaid - totalDue);
+          const receiptPaid = getFinalPaidStatus(selectedSession);
+          const grandTotal = getGrandDue(selectedSession);
+          const remainingDue = getDisplayAmount(selectedSession).value;
+          const totalChange = Math.max(0, totalPaid - grandTotal);
           const paidAtText = selectedSession.paid_at
             ? new Date(selectedSession.paid_at).toLocaleString()
             : "—";
@@ -2723,6 +2751,11 @@ const Admin_customer_list: React.FC = () => {
                 </div>
 
                 <div className="acl-plain-row">
+                <span>Grand Total</span>
+                <strong>₱{grandTotal}</strong>
+              </div>
+
+                <div className="acl-plain-row">
                   <span>Total Paid</span>
                   <strong>₱{totalPaid}</strong>
                 </div>
@@ -2745,10 +2778,10 @@ const Admin_customer_list: React.FC = () => {
                 </div>
               </div>
 
-              <div className="acl-plain-total-box">
-                <span>TOTAL</span>
-                <strong>₱{totalDue}</strong>
-              </div>
+            <div className="acl-plain-total-box">
+              <span>{receiptPaid ? "Grand Total" : "Total Amount Due"}</span>
+              <strong>₱{receiptPaid ? grandTotal : remainingDue}</strong>
+            </div>
 
               <p className="acl-receipt-footer">
                 Thank you for choosing <br />
