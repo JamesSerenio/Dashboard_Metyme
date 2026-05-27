@@ -595,6 +595,7 @@ const Customer_Reservations: React.FC = () => {
   const [dateFilterMode, setDateFilterMode] = useState<DateFilterMode>("start_date");
   const [filterDate, setFilterDate] = useState<string>(yyyyMmDdLocal(new Date()));
   const [searchName, setSearchName] = useState<string>("");
+  const [paidFilter, setPaidFilter] = useState<"all" | "paid" | "unpaid">("all");
 
   const [discountTarget, setDiscountTarget] = useState<CustomerSession | null>(null);
   const [discountKind, setDiscountKind] = useState<DiscountKind>("none");
@@ -702,6 +703,8 @@ const Customer_Reservations: React.FC = () => {
     }
   };
 
+  
+
   const filteredSessions = useMemo(() => {
     const q = searchName.trim().toLowerCase();
 
@@ -733,6 +736,25 @@ const Customer_Reservations: React.FC = () => {
         return aTime - bTime;
       });
   }, [sessions, filterDate, dateFilterMode, searchName]);
+
+  const visibleSessions = useMemo(() => {
+  return filteredSessions.filter((session) => {
+    const isPaid = getFinalPaidStatus(session);
+
+    if (paidFilter === "paid") return isPaid;
+    if (paidFilter === "unpaid") return !isPaid;
+
+    return true;
+  });
+}, [filteredSessions, paidFilter, sessionOrders, orderPayments]);
+
+const totals = useMemo(() => {
+  const totalCustomer = visibleSessions.length;
+  const paid = visibleSessions.filter((session) => getFinalPaidStatus(session)).length;
+  const unpaid = totalCustomer - paid;
+
+  return { totalCustomer, paid, unpaid };
+}, [visibleSessions, sessionOrders, orderPayments]);
 
   const fetchReservationSessions = async (): Promise<CustomerSession[]> => {
     const { data, error } = await supabase
@@ -2088,6 +2110,18 @@ await supabase
               />
             </div>
 
+            <div className="crv-control">
+              <label>Payment Status</label>
+              <select
+                value={paidFilter}
+                onChange={(e) => setPaidFilter(e.target.value as "all" | "paid" | "unpaid")}
+              >
+                <option value="all">All</option>
+                <option value="paid">Paid</option>
+                <option value="unpaid">Unpaid</option>
+              </select>
+            </div>
+
             <div className="crv-control crv-control-search">
               <label>Search Full Name</label>
               <input
@@ -2105,6 +2139,7 @@ await supabase
                   setDateFilterMode("start_date");
                   setFilterDate(yyyyMmDdLocal(new Date()));
                   setSearchName("");
+                  setPaidFilter("all");
                 }}
                 type="button"
               >
@@ -2125,17 +2160,17 @@ await supabase
           <div className="crv-stats">
           <div className="crv-stat-box">
             <span>Total Customer</span>
-            <strong>{filteredSessions.length}</strong>
+            <strong>{totals.totalCustomer}</strong>
           </div>
 
           <div className="crv-stat-box">
             <span>Paid</span>
-            <strong>{filteredSessions.filter((s) => toBool(s.is_paid)).length}</strong>
+            <strong>{totals.paid}</strong>
           </div>
 
           <div className="crv-stat-box">
             <span>Unpaid</span>
-            <strong>{filteredSessions.filter((s) => !toBool(s.is_paid)).length}</strong>
+            <strong>{totals.unpaid}</strong>
           </div>
         </div>
 
@@ -2161,7 +2196,7 @@ await supabase
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredSessions.map((session) => {
+                  {visibleSessions.map((session) => {
                     const orderBundle = getOrderBundle(session);
                     const systemPay = getSystemPaymentInfo(session);
                     const orderPay = getOrderPaymentInfo(session);
@@ -2573,7 +2608,9 @@ await supabase
                 orderPay.cash
             );
             const totalChange = getSessionChangeAfterDP(selectedSession);
-            const bottomInfo = getDisplayAmount(selectedSession);
+            const receiptPaid = getFinalPaidStatus(selectedSession);
+            const grandTotal = getGrandDue(selectedSession);
+            const remainingDue = getDisplayAmount(selectedSession).value;
 
             return (
               <div className="crv-plain-receipt-wrap">
@@ -2703,8 +2740,8 @@ await supabase
                   </div>
 
                   <div className="crv-plain-total-box">
-                    <span>{bottomInfo.label}</span>
-                    <strong>₱{bottomInfo.value}</strong>
+                  <span>{receiptPaid ? "Grand Total" : "Total Amount Due"}</span>
+                  <strong>₱{receiptPaid ? grandTotal : remainingDue}</strong>
                   </div>
 
                   <p className="crv-plain-thankyou">
