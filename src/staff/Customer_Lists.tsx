@@ -3,6 +3,8 @@ import { createPortal } from "react-dom";
 import { supabase } from "../utils/supabaseClient";
 import logo from "../assets/study_hub.png";
 import "../styles/Customer_Lists.css";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 const HOURLY_RATE = 20;
 const FREE_MINUTES = 0;
@@ -447,6 +449,91 @@ const FixedCenterModal: React.FC<FixedCenterModalProps> = ({
 };
 
 const Customer_Lists: React.FC = () => {
+
+const exportCustomerRecordsPDF = () => {
+  let records = sessions;
+
+  records = records.filter((s) => {
+    const [y, m, d] = String(s.date).split("-");
+
+    if (exportYear !== "all" && y !== exportYear) return false;
+    if (exportMonth !== "all" && m !== exportMonth) return false;
+
+    if (exportMode === "day") {
+      return Number(d) === Number(exportDay);
+    }
+
+    if (exportMode === "range") {
+      return Number(d) >= Number(rangeStart) && Number(d) <= Number(rangeEnd);
+    }
+
+    return true;
+  });
+
+  if (records.length === 0) {
+    alert("No records found for selected filter.");
+    return;
+  }
+
+  const doc = new jsPDF("landscape", "mm", "a4");
+
+  doc.setFontSize(16);
+  doc.text("Customer Records Report", 14, 15);
+
+  doc.setFontSize(10);
+  doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 22);
+
+  autoTable(doc, {
+    startY: 30,
+    head: [[
+      "Date",
+      "Customer",
+      "Booking Code",
+      "Seat",
+      "Type",
+      "Time Total",
+      "Orders",
+      "Grand Total",
+      "Paid"
+    ]],
+    body: records.map((s) => [
+      formatDateText(s.date),
+      s.full_name || "N/A",
+      s.booking_code || "N/A",
+      s.seat_number || "N/A",
+      s.customer_type || "N/A",
+      `PHP ${getSystemDue(s)}`,
+      `PHP ${getOrderDue(s)}`,
+      `PHP ${getGrandDue(s)}`,
+      getFinalPaidStatus(s) ? "Paid" : "Unpaid",
+    ]),
+    styles: {
+      fontSize: 8,
+      cellPadding: 3,
+    },
+    headStyles: {
+      fillColor: [40, 40, 40],
+      textColor: 255,
+    },
+  });
+
+  doc.save("customer-records.pdf");
+  setExportModalOpen(false);
+};
+
+  const [exportModalOpen, setExportModalOpen] = useState(false);
+
+  const [exportYear, setExportYear] = useState("all");
+  const [exportMonth, setExportMonth] = useState("all");
+
+  const [exportMode, setExportMode] = useState<
+    "all" | "month" | "day" | "range"
+  >("all");
+
+  const [exportDay, setExportDay] = useState("");
+  const [rangeStart, setRangeStart] = useState("");
+  const [rangeEnd, setRangeEnd] = useState("");
+
   const [sessions, setSessions] = useState<CustomerSession[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
@@ -2013,9 +2100,17 @@ const totals = useMemo(() => {
         <section className="cll-hero">
           <div className="cll-eyebrow">CUSTOMER MANAGEMENT</div>
           <h1 className="cll-title">Customer Lists</h1>
-          <p className="cll-subtitle">
-            Plain and clean customer records with payment, receipt, and order tools.
-          </p>
+            <p className="cll-subtitle">
+              Plain and clean customer records{" "}
+              <span
+                className="cll-secret-export"
+                onClick={() => setExportModalOpen(true)}
+                title="Export Records"
+              >
+                with
+              </span>{" "}
+              payment, receipt, and order tools.
+            </p>
 
           <div className="cll-toolbar">
             <div className="cll-control">
@@ -2420,6 +2515,136 @@ const totals = useMemo(() => {
             </>
           )}
         </FixedCenterModal>
+
+    <FixedCenterModal
+      open={exportModalOpen}
+      title=""
+      size="md"
+      onClose={() => setExportModalOpen(false)}
+    >
+      <div className="export-premium-wrap">
+
+        <div className="export-premium-header">
+          <h2>Export Customer Records</h2>
+          <p>Select a filter before generating PDF.</p>
+        </div>
+
+        <div className="export-grid">
+
+          <div className="export-field">
+            <label>Year</label>
+            <select
+              value={exportYear}
+              onChange={(e) => setExportYear(e.target.value)}
+            >
+              <option value="all">All Year</option>
+              <option value="2026">2026</option>
+              <option value="2027">2027</option>
+            </select>
+          </div>
+
+          <div className="export-field">
+            <label>Month</label>
+            <select
+              value={exportMonth}
+              onChange={(e) => setExportMonth(e.target.value)}
+            >
+              <option value="all">All Month</option>
+              <option value="01">January</option>
+              <option value="02">February</option>
+              <option value="03">March</option>
+              <option value="04">April</option>
+              <option value="05">May</option>
+              <option value="06">June</option>
+              <option value="07">July</option>
+              <option value="08">August</option>
+              <option value="09">September</option>
+              <option value="10">October</option>
+              <option value="11">November</option>
+              <option value="12">December</option>
+            </select>
+          </div>
+
+          <div className="export-field">
+            <label>Filter Type</label>
+            <select
+              value={exportMode}
+              onChange={(e) =>
+                setExportMode(
+                  e.target.value as
+                    | "all"
+                    | "month"
+                    | "day"
+                    | "range"
+                )
+              }
+            >
+              <option value="all">All Records</option>
+              <option value="month">Specific Month</option>
+              <option value="day">Specific Day</option>
+              <option value="range">Day Range</option>
+            </select>
+          </div>
+
+          {exportMode === "day" && (
+            <div className="export-field">
+              <label>Day</label>
+              <input
+                type="number"
+                min="1"
+                max="31"
+                value={exportDay}
+                onChange={(e) => setExportDay(e.target.value)}
+              />
+            </div>
+          )}
+
+          {exportMode === "range" && (
+            <>
+              <div className="export-field">
+                <label>Start Day</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="31"
+                  value={rangeStart}
+                  onChange={(e) => setRangeStart(e.target.value)}
+                />
+              </div>
+
+              <div className="export-field">
+                <label>End Day</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="31"
+                  value={rangeEnd}
+                  onChange={(e) => setRangeEnd(e.target.value)}
+                />
+              </div>
+            </>
+          )}
+
+        </div>
+
+        <div className="export-actions">
+          <button
+            className="cll-btn cll-btn-light"
+            onClick={() => setExportModalOpen(false)}
+          >
+            Cancel
+          </button>
+
+          <button
+            className="cll-btn"
+            onClick={() => exportCustomerRecordsPDF()}
+          >
+            Export PDF
+          </button>
+        </div>
+
+      </div>
+    </FixedCenterModal>
 
        {/* RECEIPT MODAL */}
         <FixedCenterModal
