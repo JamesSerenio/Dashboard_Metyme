@@ -1136,3 +1136,29 @@
     grid-template-columns: 1fr;
   }
 }
+
+.crv-secret-export {
+  cursor: pointer;
+  color: inherit;
+  font-weight: inherit;
+  position: relative;
+}
+
+.crv-secret-export:hover {
+  opacity: .85;
+}
+
+.crv-secret-export::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  width: 0;
+  height: 1px;
+  background: rgba(255,255,255,.35);
+  transition: .25s;
+}
+
+.crv-secret-export:hover::after {
+  width: 100%;
+}

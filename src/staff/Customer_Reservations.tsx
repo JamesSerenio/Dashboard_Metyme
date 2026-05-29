@@ -3,6 +3,8 @@ import { createPortal } from "react-dom";
 import { supabase } from "../utils/supabaseClient";
 import logo from "../assets/study_hub.png";
 import "../styles/Customer_Reservations.css";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 const HOURLY_RATE = 20;
 const FREE_MINUTES = 0;
@@ -581,6 +583,95 @@ const FixedCenterModal: React.FC<FixedCenterModalProps> = ({
 };
 
 const Customer_Reservations: React.FC = () => {
+
+const [exportModalOpen, setExportModalOpen] = useState(false);
+const [exportYear, setExportYear] = useState("all");
+const [exportMonth, setExportMonth] = useState("all");
+const [exportMode, setExportMode] = useState<"all" | "month" | "day" | "range">("all");
+const [exportDay, setExportDay] = useState("");
+const [rangeStart, setRangeStart] = useState("");
+const [rangeEnd, setRangeEnd] = useState("");
+
+const exportReservationRecordsPDF = () => {
+  const monthNames: Record<string, string> = {
+    "01": "January", "02": "February", "03": "March", "04": "April",
+    "05": "May", "06": "June", "07": "July", "08": "August",
+    "09": "September", "10": "October", "11": "November", "12": "December",
+  };
+
+  let records = sessions.filter((s) => {
+    const dateValue = String(s.reservation_date || s.date || "");
+    const [y, m, d] = dateValue.split("-");
+
+    if (exportYear !== "all" && y !== exportYear) return false;
+    if (exportMonth !== "all" && m !== exportMonth) return false;
+    if (exportMode === "day") return Number(d) === Number(exportDay);
+    if (exportMode === "range") return Number(d) >= Number(rangeStart) && Number(d) <= Number(rangeEnd);
+
+    return true;
+  });
+
+  if (records.length === 0) {
+    alert("No reservation records found for selected filter.");
+    return;
+  }
+
+  const doc = new jsPDF("landscape", "mm", "a4");
+
+  doc.setFontSize(16);
+  doc.text("Reservation Records Report", 14, 15);
+
+  doc.setFontSize(10);
+  doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 22);
+
+  autoTable(doc, {
+    startY: 30,
+    head: [[
+      "Reservation",
+      "Customer",
+      "Booking Code",
+      "Seat",
+      "Type",
+      "Time Total",
+      "Orders",
+      "Grand Total",
+      "Paid"
+    ]],
+    body: records.map((s) => [
+      formatReservationRange(s),
+      s.full_name || "N/A",
+      s.booking_code || "N/A",
+      s.seat_number || "N/A",
+      s.customer_type || "N/A",
+      `PHP ${getSystemDue(s)}`,
+      `PHP ${getOrderDue(s)}`,
+      `PHP ${getGrandDue(s)}`,
+      getFinalPaidStatus(s) ? "Paid" : "Unpaid",
+    ]),
+    styles: { fontSize: 8, cellPadding: 3 },
+    headStyles: { fillColor: [40, 40, 40], textColor: 255 },
+  });
+
+  let fileName = "Reservation List.pdf";
+
+  if (exportYear === "all" && exportMonth === "all") {
+    fileName = "Reservation List - All Records.pdf";
+  } else if (exportYear !== "all" && exportMonth === "all") {
+    fileName = `Reservation List - All Year of ${exportYear}.pdf`;
+  } else if (exportYear === "all" && exportMonth !== "all") {
+    fileName = `Reservation List - All Records Month of ${monthNames[exportMonth]}.pdf`;
+  } else if (exportMode === "day") {
+    fileName = `Reservation List - ${monthNames[exportMonth]} ${String(exportDay).padStart(2, "0")} ${exportYear}.pdf`;
+  } else if (exportMode === "range") {
+    fileName = `Reservation List - ${monthNames[exportMonth]} ${String(rangeStart).padStart(2, "0")}-${String(rangeEnd).padStart(2, "0")} ${exportYear}.pdf`;
+  } else {
+    fileName = `Reservation List - ${monthNames[exportMonth]} ${exportYear}.pdf`;
+  }
+
+  doc.save(fileName);
+  setExportModalOpen(false);
+};
+
   const [sessions, setSessions] = useState<CustomerSession[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
@@ -2087,7 +2178,15 @@ await supabase
           <div className="crv-eyebrow">CUSTOMER MANAGEMENT</div>
           <h1 className="crv-title">Customer Reservations</h1>
           <p className="crv-subtitle">
-            Plain and clean reservation records with attendance, payment, receipt, and order tools.
+            Plain and clean reservation records{" "}
+            <span
+              className="crv-secret-export"
+              onClick={() => setExportModalOpen(true)}
+              title="Export Records"
+            >
+              with
+            </span>{" "}
+            payment, receipt, and order tools.
           </p>
 
           <div className="crv-toolbar crv-toolbar-resv">
@@ -2510,6 +2609,74 @@ await supabase
               </div>
             </>
           )}
+        </FixedCenterModal>
+
+        <FixedCenterModal
+          open={exportModalOpen}
+          title=""
+          size="md"
+          onClose={() => setExportModalOpen(false)}
+        >
+          <div className="export-premium-wrap">
+            <div className="export-premium-header">
+              <h2>Export Reservation Records</h2>
+              <p>Select filter before generating PDF.</p>
+            </div>
+
+            <div className="export-grid">
+
+              <div className="export-field">
+                <label>Year</label>
+                <select
+                  value={exportYear}
+                  onChange={(e) => setExportYear(e.target.value)}
+                >
+                  <option value="all">All Year</option>
+                  <option value="2026">2026</option>
+                  <option value="2027">2027</option>
+                </select>
+              </div>
+
+              <div className="export-field">
+                <label>Month</label>
+                <select
+                  value={exportMonth}
+                  onChange={(e) => setExportMonth(e.target.value)}
+                >
+                  <option value="all">All Month</option>
+                  <option value="01">January</option>
+                  <option value="02">February</option>
+                  <option value="03">March</option>
+                  <option value="04">April</option>
+                  <option value="05">May</option>
+                  <option value="06">June</option>
+                  <option value="07">July</option>
+                  <option value="08">August</option>
+                  <option value="09">September</option>
+                  <option value="10">October</option>
+                  <option value="11">November</option>
+                  <option value="12">December</option>
+                </select>
+              </div>
+
+            </div>
+
+            <div className="export-actions">
+              <button
+                className="crv-btn crv-btn-light"
+                onClick={() => setExportModalOpen(false)}
+              >
+                Cancel
+              </button>
+
+              <button
+                className="crv-btn"
+                onClick={exportReservationRecordsPDF}
+              >
+                Export PDF
+              </button>
+            </div>
+          </div>
         </FixedCenterModal>
 
         <FixedCenterModal
