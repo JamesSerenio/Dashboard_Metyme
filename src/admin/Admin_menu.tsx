@@ -48,16 +48,9 @@ type MenuKey =
   | "restock_records"
   | "staff_expenses"
   | "sales_report"
-  | "customer_add_ons"
-  | "customer_list"
-  | "customer_reservation"
   | "customer_cancelled"
-  | "staff_consignment_record"
-  | "customer_consignment_record"
-  | "consignment_approval"
-  | "seat_table"
+  | "consignment_approval" 
   | "packages"
-  | "discount_records";
 
 type MenuItem = {
   name: string;
@@ -123,42 +116,9 @@ const Admin_menu: React.FC = () => {
       },
       { name: "Sales Report", key: "sales_report", icon: salesIcon },
       {
-        name: "Customer Add-Ons",
-        key: "customer_add_ons",
-        icon: hamburgerIcon,
-      },
-      { name: "Customer List", key: "customer_list", icon: customerListIcon },
-      {
-        name: "Customer Reservations",
-        key: "customer_reservation",
-        icon: reservationIcon,
-      },
-      {
-        name: "Cancelled Records",
-        key: "customer_cancelled",
-        icon: cancelledIcon,
-      },
-      {
-        name: "Consignment Record",
-        key: "staff_consignment_record",
-        icon: staffConsignmentIcon,
-      },
-      {
-        name: "Customer Consignment Record",
-        key: "customer_consignment_record",
-        icon: customerConsignmentIcon,
-      },
-      {
         name: "Consignment Approval",
         key: "consignment_approval",
         icon: approvedIcon,
-      },
-      { name: "Seat Table", key: "seat_table", icon: seatIcon },
-      { name: "Promotions", key: "packages", icon: promotionIcon },
-      {
-        name: "Memberships",
-        key: "discount_records",
-        icon: discountIcon,
       },
     ],
     []
@@ -208,35 +168,15 @@ const Admin_menu: React.FC = () => {
       case "sales_report":
         return <Admin_Sales_Report />;
 
-      case "customer_add_ons":
-        return <Admin_Customer_Add_ons />;
-
-      case "customer_list":
-        return <Admin_customer_list />;
-
-      case "customer_reservation":
-        return <Admin_customer_reservation />;
-
       case "customer_cancelled":
         return <Admin_Customer_Cancelled />;
-
-      case "staff_consignment_record":
-        return <Staff_Consignment_Record />;
-
-      case "customer_consignment_record":
-        return <Customer_Consignment_Record />;
 
       case "consignment_approval":
         return <Admin_Consignment_Approval />;
 
-      case "seat_table":
-        return <Admin_Seat_Table />;
 
       case "packages":
         return <Admin_Packages />;
-
-      case "discount_records":
-        return <Admin_Customer_Discount_List />;
 
       default:
         return (
