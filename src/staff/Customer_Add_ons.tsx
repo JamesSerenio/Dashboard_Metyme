@@ -580,19 +580,109 @@ const usedBookingCodes = new Set<string>();
       .sort((a, b) => ms(b.created_at) - ms(a.created_at));
   }, [records, orderPayments, addonOrderLookup]);
 
-const groupedOrders = useMemo<OrderGroup[]>(() => {
-  const q = searchText.trim().toLowerCase();
-  if (!q) return groupedOrdersAll;
+  const groupedOrders = useMemo<OrderGroup[]>(() => {
+    const q = searchText.trim().toLowerCase();
 
-  return groupedOrdersAll.filter((o) => {
-    const name = String(o.full_name ?? "").toLowerCase();
-    const seat = String(o.seat_number ?? "").toLowerCase();
-    const items = o.items.some((it) =>
-      String(it.item_name ?? "").toLowerCase().includes(q)
-    );
-    return name.includes(q) || seat.includes(q) || items;
+    return groupedOrdersAll.filter((o) => {
+      const paid = toBool(o.is_paid);
+
+      if (paidFilter === "paid" && !paid) return false;
+      if (paidFilter === "unpaid" && paid) return false;
+
+      if (!q) return true;
+
+      const name = String(o.full_name ?? "").toLowerCase();
+      const seat = String(o.seat_number ?? "").toLowerCase();
+      const items = o.items.some((it) =>
+        String(it.item_name ?? "").toLowerCase().includes(q)
+      );
+
+      return name.includes(q) || seat.includes(q) || items;
+    });
+  }, [groupedOrdersAll, searchText, paidFilter]);
+
+  const exportAddOnsPDF = () => {
+  const monthNames: Record<string, string> = {
+    "01": "January", "02": "February", "03": "March", "04": "April",
+    "05": "May", "06": "June", "07": "July", "08": "August",
+    "09": "September", "10": "October", "11": "November", "12": "December",
+  };
+
+  const records = groupedOrdersAll.filter((o) => {
+    const d = new Date(o.created_at);
+    if (!Number.isFinite(d.getTime())) return false;
+
+    const y = String(d.getFullYear());
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+
+    if (exportYear !== "all" && y !== exportYear) return false;
+    if (exportMonth !== "all" && m !== exportMonth) return false;
+    if (exportMode === "day") return Number(day) === Number(exportDay);
+    if (exportMode === "range") return Number(day) >= Number(rangeStart) && Number(day) <= Number(rangeEnd);
+
+    return true;
   });
-}, [groupedOrdersAll, searchText]);
+
+  if (records.length === 0) {
+    alert("No add-ons records found for selected filter.");
+    return;
+  }
+
+  const doc = new jsPDF("landscape", "mm", "a4");
+
+  doc.setFontSize(16);
+  doc.text("Add-Ons Records Report", 14, 15);
+  doc.setFontSize(10);
+  doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 22);
+
+  autoTable(doc, {
+    startY: 30,
+    head: [[
+      "Date",
+      "Full Name",
+      "Seat",
+      "Items",
+      "Grand Total",
+      "GCash",
+      "Cash",
+      "Status",
+      "Paid At",
+    ]],
+    body: records.map((o) => [
+      formatDateTime(o.created_at),
+      o.full_name || "-",
+      o.seat_number || "-",
+      o.items.map((it) => `${it.item_name} x${it.quantity} - PHP ${it.total.toFixed(2)}`).join("\n"),
+      `PHP ${o.grand_total.toFixed(2)}`,
+      `PHP ${o.gcash_amount.toFixed(2)}`,
+      `PHP ${o.cash_amount.toFixed(2)}`,
+      toBool(o.is_paid) ? "PAID" : "UNPAID",
+      o.paid_at ? formatDateTime(o.paid_at) : "-",
+    ]),
+    styles: { fontSize: 8, cellPadding: 3 },
+    headStyles: { fillColor: [40, 40, 40], textColor: 255 },
+  });
+
+  let fileName = "Add-Ons List.pdf";
+
+  if (exportYear === "all" && exportMonth === "all") {
+    fileName = "Add-Ons List - All Records.pdf";
+  } else if (exportYear !== "all" && exportMonth === "all") {
+    fileName = `Add-Ons List - All Year of ${exportYear}.pdf`;
+  } else if (exportYear === "all" && exportMonth !== "all") {
+    fileName = `Add-Ons List - All Records Month of ${monthNames[exportMonth]}.pdf`;
+  } else if (exportMode === "day") {
+    fileName = `Add-Ons List - ${monthNames[exportMonth]} ${String(exportDay).padStart(2, "0")} ${exportYear}.pdf`;
+  } else if (exportMode === "range") {
+    fileName = `Add-Ons List - ${monthNames[exportMonth]} ${String(rangeStart).padStart(2, "0")}-${String(rangeEnd).padStart(2, "0")} ${exportYear}.pdf`;
+  } else {
+    fileName = `Add-Ons List - ${monthNames[exportMonth]} ${exportYear}.pdf`;
+  }
+
+  doc.save(fileName);
+  setExportModalOpen(false);
+};
 
 const totalOrders = groupedOrders.length;
 const totalPaidOrders = groupedOrders.filter((o) => toBool(o.is_paid)).length;
@@ -831,7 +921,17 @@ const togglePaid = async (o: OrderGroup): Promise<void> => {
           <div className="cao-topbar-left">
             <h2 className="cao-title">Customer Add-Ons Records</h2>
             <div className="cao-subtext">
-              Showing records for: <strong>{selectedDate}</strong> ({groupedOrders.length})
+              <span
+                  className="cao-secret-export"
+                  onClick={() => {
+                    setExportSecretCode("");
+                    setExportCodeError("");
+                    setExportCodeModalOpen(true);
+                  }}
+                >
+                  Showing
+                </span>{" "}
+                records for: <strong>{selectedDate}</strong> ({groupedOrders.length})
             </div>
           </div>
 
@@ -857,6 +957,20 @@ const togglePaid = async (o: OrderGroup): Promise<void> => {
                 )}
               </div>
             </div>
+
+            <label className="cao-pill">
+            <span className="cao-pill-label">Status</span>
+            <select
+              className="cao-pill-input"
+              value={paidFilter}
+              onChange={(e) => setPaidFilter(e.currentTarget.value as "all" | "paid" | "unpaid")}
+            >
+              <option value="all">All</option>
+              <option value="paid">Paid</option>
+              <option value="unpaid">Unpaid</option>
+            </select>
+            <span className="cao-pill-icon" aria-hidden="true">⌄</span>
+          </label>
 
             <label className="cao-pill">
               <span className="cao-pill-label">Date</span>
@@ -1029,6 +1143,152 @@ const togglePaid = async (o: OrderGroup): Promise<void> => {
             </table>
           </div>
         )}
+
+        <FixedCenterModal
+  open={exportCodeModalOpen}
+  title=""
+  size="sm"
+  onClose={() => {
+    setExportSecretCode("");
+    setExportCodeError("");
+    setExportCodeModalOpen(false);
+  }}
+>
+  <div className="export-code-wrap">
+    <div className="export-code-badge">Secure Export</div>
+    <h2>Enter Access Code</h2>
+    <p>Enter the export access code to continue.</p>
+
+    <input
+      className={`export-code-input ${exportCodeError ? "has-error" : ""}`}
+      type="text"
+      placeholder="Enter Code"
+      value={exportSecretCode}
+      onChange={(e) => {
+        setExportSecretCode(e.target.value);
+        setExportCodeError("");
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          if (exportSecretCode.trim() !== "omayghashMTL2023") {
+            setExportCodeError("Incorrect code. Please try again.");
+            return;
+          }
+          setExportCodeModalOpen(false);
+          setExportModalOpen(true);
+        }
+      }}
+      autoFocus
+    />
+
+    {exportCodeError && <div className="export-code-error">{exportCodeError}</div>}
+
+    <div className="export-code-actions">
+      <button className="cao-btn cao-btn-ghost" onClick={() => setExportCodeModalOpen(false)} type="button">
+        Cancel
+      </button>
+      <button
+        className="cao-btn cao-btn-primary"
+        type="button"
+        onClick={() => {
+          if (exportSecretCode.trim() !== "omayghashMTL2023") {
+            setExportCodeError("Incorrect code. Please try again.");
+            return;
+          }
+          setExportCodeModalOpen(false);
+          setExportModalOpen(true);
+        }}
+      >
+        Continue
+      </button>
+    </div>
+  </div>
+</FixedCenterModal>
+
+  <FixedCenterModal
+    open={exportModalOpen}
+    title=""
+    size="md"
+    onClose={() => setExportModalOpen(false)}
+  >
+    <div className="export-premium-wrap">
+      <div className="export-premium-header">
+        <h2>Export Add-Ons Records</h2>
+        <p>Select filter before generating PDF.</p>
+      </div>
+
+      <div className="export-grid">
+        <div className="export-field">
+          <label>Year</label>
+          <select value={exportYear} onChange={(e) => setExportYear(e.target.value)}>
+            <option value="all">All Year</option>
+            <option value="2026">2026</option>
+            <option value="2027">2027</option>
+          </select>
+        </div>
+
+        <div className="export-field">
+          <label>Month</label>
+          <select value={exportMonth} onChange={(e) => setExportMonth(e.target.value)}>
+            <option value="all">All Month</option>
+            <option value="01">January</option>
+            <option value="02">February</option>
+            <option value="03">March</option>
+            <option value="04">April</option>
+            <option value="05">May</option>
+            <option value="06">June</option>
+            <option value="07">July</option>
+            <option value="08">August</option>
+            <option value="09">September</option>
+            <option value="10">October</option>
+            <option value="11">November</option>
+            <option value="12">December</option>
+          </select>
+        </div>
+
+        <div className="export-field">
+          <label>Filter Type</label>
+          <select value={exportMode} onChange={(e) => setExportMode(e.target.value as "all" | "month" | "day" | "range")}>
+            <option value="all">All Records</option>
+            <option value="month">Specific Month</option>
+            <option value="day">Specific Day</option>
+            <option value="range">Day Range</option>
+          </select>
+        </div>
+
+        {exportMode === "day" && (
+          <div className="export-field">
+            <label>Day</label>
+            <input type="number" min="1" max="31" value={exportDay} onChange={(e) => setExportDay(e.target.value)} />
+          </div>
+        )}
+
+        {exportMode === "range" && (
+          <>
+            <div className="export-field">
+              <label>Start Day</label>
+              <input type="number" min="1" max="31" value={rangeStart} onChange={(e) => setRangeStart(e.target.value)} />
+            </div>
+
+            <div className="export-field">
+              <label>End Day</label>
+              <input type="number" min="1" max="31" value={rangeEnd} onChange={(e) => setRangeEnd(e.target.value)} />
+            </div>
+          </>
+        )}
+      </div>
+
+      <div className="export-actions">
+        <button className="cao-btn cao-btn-ghost" onClick={() => setExportModalOpen(false)} type="button">
+          Cancel
+        </button>
+
+        <button className="cao-btn cao-btn-primary" onClick={() => exportAddOnsPDF()} type="button">
+          Export PDF
+        </button>
+      </div>
+    </div>
+  </FixedCenterModal>
 
         <FixedCenterModal
           open={!!paymentTarget}
@@ -1260,7 +1520,7 @@ const togglePaid = async (o: OrderGroup): Promise<void> => {
                   <>
                     <div className="cao-receipt-meta">
                       <div className="cao-receipt-meta-row">
-                        <span>Total</span>
+                        <span>{paid ? "Grand Total" : "Total"}</span>
                         <strong>{moneyText(due)}</strong>
                       </div>
 
@@ -1300,7 +1560,7 @@ const togglePaid = async (o: OrderGroup): Promise<void> => {
                     </div>
 
                     <div className="cao-receipt-total">
-                      <span>TOTAL</span>
+                      <span>{paid ? "GRAND TOTAL" : "TOTAL"}</span>
                       <span>{moneyText(due)}</span>
                     </div>
                   </>
