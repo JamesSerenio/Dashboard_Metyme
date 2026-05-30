@@ -77,7 +77,7 @@
 
 .cll-toolbar {
   display: grid;
-  grid-template-columns: 140px 140px minmax(220px, 1fr) auto;
+  grid-template-columns: 160px 140px minmax(220px, 1fr) auto;
   gap: 10px;
   margin-top: 22px;
   align-items: end;

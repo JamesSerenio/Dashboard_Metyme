@@ -3,6 +3,8 @@ import { createPortal } from "react-dom";
 import { supabase } from "../utils/supabaseClient";
 import logo from "../assets/study_hub.png";
 import "../styles/Customer_Add_ons.css";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 type NumericLike = number | string;
 
@@ -211,6 +213,18 @@ const Customer_Add_ons: React.FC = () => {
 
   const [selectedDate, setSelectedDate] = useState<string>(yyyyMmDdLocal(new Date()));
   const [searchText, setSearchText] = useState<string>("");
+  const [paidFilter, setPaidFilter] = useState<"all" | "paid" | "unpaid">("all");
+
+  const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [exportCodeModalOpen, setExportCodeModalOpen] = useState(false);
+  const [exportSecretCode, setExportSecretCode] = useState("");
+  const [exportCodeError, setExportCodeError] = useState("");
+  const [exportYear, setExportYear] = useState("all");
+  const [exportMonth, setExportMonth] = useState("all");
+  const [exportMode, setExportMode] = useState<"all" | "month" | "day" | "range">("all");
+  const [exportDay, setExportDay] = useState("");
+  const [rangeStart, setRangeStart] = useState("");
+  const [rangeEnd, setRangeEnd] = useState("");
 
   const [selectedOrder, setSelectedOrder] = useState<OrderGroup | null>(null);
 
