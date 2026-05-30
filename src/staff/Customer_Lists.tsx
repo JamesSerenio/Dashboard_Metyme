@@ -558,6 +558,9 @@ setExportModalOpen(false);
 };
 
   const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [exportCodeModalOpen, setExportCodeModalOpen] = useState(false);
+  const [exportSecretCode, setExportSecretCode] = useState("");
+  const [exportCodeError, setExportCodeError] = useState("");
 
   const [exportYear, setExportYear] = useState("all");
   const [exportMonth, setExportMonth] = useState("all");
@@ -2140,7 +2143,12 @@ const totals = useMemo(() => {
               Plain and clean customer records{" "}
               <span
                 className="cll-secret-export"
-                onClick={() => setExportModalOpen(true)}
+                  onClick={() => {
+                    setSearchName("");
+                    setExportSecretCode("");
+                    setExportCodeError("");
+                    setExportCodeModalOpen(true);
+                  }}
                 title="Export Records"
               >
                 with
@@ -2550,6 +2558,78 @@ const totals = useMemo(() => {
               </div>
             </>
           )}
+        </FixedCenterModal>
+
+        <FixedCenterModal
+          open={exportCodeModalOpen}
+          title=""
+          size="sm"
+          onClose={() => setExportCodeModalOpen(false)}
+        >
+          <div className="export-code-wrap">
+            <div className="export-code-badge">Secure Export</div>
+
+            <h2>Enter Access Code</h2>
+            <p>Please enter the export access code to continue.</p>
+
+            <input
+              className={`export-code-input ${exportCodeError ? "has-error" : ""}`}
+              type="text"
+              placeholder="Enter Code"
+              value={exportSecretCode}
+              onChange={(e) => {
+                setExportSecretCode(e.target.value);
+                setExportCodeError("");
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  if (exportSecretCode.trim() !== "omayghashMTL2023") {
+                    setExportCodeError("Incorrect code. Please try again.");
+                    return;
+                  }
+
+                  setExportCodeModalOpen(false);
+                  setExportModalOpen(true);
+                }
+              }}
+              autoFocus
+              onFocus={(e) => e.currentTarget.select()} 
+            />
+
+            {exportCodeError && (
+              <div className="export-code-error">{exportCodeError}</div>
+            )}
+
+            <div className="export-code-actions">
+              <button
+                className="cll-btn cll-btn-light"
+                type="button"
+                onClick={() => {
+                setExportSecretCode("");
+                setExportCodeError("");
+                setExportCodeModalOpen(false);
+              }}
+              >
+                Cancel
+              </button>
+
+              <button
+                className="cll-btn"
+                type="button"
+                onClick={() => {
+                  if (exportSecretCode.trim() !== "omayghashMTL2023") {
+                    setExportCodeError("Incorrect code. Please try again.");
+                    return;
+                  }
+
+                  setExportCodeModalOpen(false);
+                  setExportModalOpen(true);
+                }}
+              >
+                Continue
+              </button>
+            </div>
+          </div>
         </FixedCenterModal>
 
     <FixedCenterModal
