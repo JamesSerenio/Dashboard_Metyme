@@ -585,6 +585,9 @@ const FixedCenterModal: React.FC<FixedCenterModalProps> = ({
 const Customer_Reservations: React.FC = () => {
 
 const [exportModalOpen, setExportModalOpen] = useState(false);
+const [exportCodeModalOpen, setExportCodeModalOpen] = useState(false);
+const [exportSecretCode, setExportSecretCode] = useState("");
+const [exportCodeError, setExportCodeError] = useState("");
 const [exportYear, setExportYear] = useState("all");
 const [exportMonth, setExportMonth] = useState("all");
 const [exportMode, setExportMode] = useState<"all" | "month" | "day" | "range">("all");
@@ -2181,7 +2184,12 @@ await supabase
             Plain and clean reservation records{" "}
             <span
               className="crv-secret-export"
-              onClick={() => setExportModalOpen(true)}
+              onClick={() => {
+              setSearchName("");
+              setExportSecretCode("");
+              setExportCodeError("");
+              setExportCodeModalOpen(true);
+            }}
               title="Export Records"
             >
               with
@@ -2554,6 +2562,82 @@ await supabase
           )}
         </section>
 
+        <FixedCenterModal
+          open={exportCodeModalOpen}
+          title=""
+          size="sm"
+          onClose={() => {
+            setExportSecretCode("");
+            setExportCodeError("");
+            setExportCodeModalOpen(false);
+          }}
+        >
+          <div className="export-code-wrap">
+            <div className="export-code-badge">Secure Export</div>
+
+            <h2>Enter Access Code</h2>
+            <p>Enter the export access code to continue.</p>
+
+            <input
+              className={`export-code-input ${exportCodeError ? "has-error" : ""}`}
+              type="text"
+              placeholder="Enter Code"
+              value={exportSecretCode}
+              onChange={(e) => {
+                setExportSecretCode(e.target.value);
+                setExportCodeError("");
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  if (exportSecretCode.trim() !== "omayghashMTL2023") {
+                    setExportCodeError("Incorrect code. Please try again.");
+                    return;
+                  }
+
+                  setExportCodeModalOpen(false);
+                  setExportModalOpen(true);
+                }
+              }}
+              autoFocus
+              onFocus={(e) => e.currentTarget.select()}
+            />
+
+            {exportCodeError && (
+              <div className="export-code-error">{exportCodeError}</div>
+            )}
+
+            <div className="export-code-actions">
+              <button
+                className="crv-btn crv-btn-light"
+                type="button"
+                onClick={() => {
+                  setExportSecretCode("");
+                  setExportCodeError("");
+                  setExportCodeModalOpen(false);
+                }}
+              >
+                Cancel
+              </button>
+
+              <button
+                className="crv-btn"
+                type="button"
+                onClick={() => {
+                  if (exportSecretCode.trim() !== "omayghashMTL2023") {
+                    setExportCodeError("Incorrect code. Please try again.");
+                    return;
+                  }
+
+                  setExportCodeModalOpen(false);
+                  setExportModalOpen(true);
+                }}
+              >
+                Continue
+              </button>
+            </div>
+          </div>
+        </FixedCenterModal>
+
           <FixedCenterModal
             open={!!selectedAttendanceSession}
             title="Attendance"
@@ -2624,13 +2708,9 @@ await supabase
             </div>
 
             <div className="export-grid">
-
               <div className="export-field">
                 <label>Year</label>
-                <select
-                  value={exportYear}
-                  onChange={(e) => setExportYear(e.target.value)}
-                >
+                <select value={exportYear} onChange={(e) => setExportYear(e.target.value)}>
                   <option value="all">All Year</option>
                   <option value="2026">2026</option>
                   <option value="2027">2027</option>
@@ -2639,10 +2719,7 @@ await supabase
 
               <div className="export-field">
                 <label>Month</label>
-                <select
-                  value={exportMonth}
-                  onChange={(e) => setExportMonth(e.target.value)}
-                >
+                <select value={exportMonth} onChange={(e) => setExportMonth(e.target.value)}>
                   <option value="all">All Month</option>
                   <option value="01">January</option>
                   <option value="02">February</option>
@@ -2659,6 +2736,62 @@ await supabase
                 </select>
               </div>
 
+              <div className="export-field">
+                <label>Filter Type</label>
+                <select
+                  value={exportMode}
+                  onChange={(e) =>
+                    setExportMode(e.target.value as "all" | "month" | "day" | "range")
+                  }
+                >
+                  <option value="all">All Records</option>
+                  <option value="month">Specific Month</option>
+                  <option value="day">Specific Day</option>
+                  <option value="range">Day Range</option>
+                </select>
+              </div>
+
+              {exportMode === "day" && (
+                <div className="export-field">
+                  <label>Day</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="31"
+                    placeholder="Enter day"
+                    value={exportDay}
+                    onChange={(e) => setExportDay(e.target.value)}
+                  />
+                </div>
+              )}
+
+              {exportMode === "range" && (
+                <>
+                  <div className="export-field">
+                    <label>Start Day</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="31"
+                      placeholder="Start day"
+                      value={rangeStart}
+                      onChange={(e) => setRangeStart(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="export-field">
+                    <label>End Day</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="31"
+                      placeholder="End day"
+                      value={rangeEnd}
+                      onChange={(e) => setRangeEnd(e.target.value)}
+                    />
+                  </div>
+                </>
+              )}
             </div>
 
             <div className="export-actions">
