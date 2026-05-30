@@ -2283,7 +2283,16 @@ const getCommonAreaDurationLabel = (r: PromoBookingRow): string => {
             "Status",
           ]],
           body: records.map((r) => {
-            const orderToday = getOrderDueToday(r.promo_code);
+            const recordDate = yyyyMmDdLocal(new Date(r.created_at));
+
+            const orderToday = round2(
+              getOrderItems(r.promo_code)
+                .filter((item) => {
+                  if (!item.created_at) return false;
+                  return yyyyMmDdLocal(new Date(item.created_at)) === recordDate;
+                })
+                .reduce((sum, item) => sum + round2(item.subtotal), 0)
+            );
 
             return [
               new Date(r.created_at).toLocaleString(),
@@ -2294,13 +2303,64 @@ const getCommonAreaDurationLabel = (r: PromoBookingRow): string => {
               r.packages?.title || "-",
               `PHP ${getSystemDue(r).toFixed(2)}`,
               `PHP ${orderToday.toFixed(2)}`,
-              `PHP ${(getSystemDue(r) + orderToday).toFixed(2)}`,
+              `PHP ${round2(getSystemDue(r) + orderToday).toFixed(2)}`,
               isFinalPaidRow(r) ? "PAID" : "UNPAID",
             ];
           }),
           styles: { fontSize: 8, cellPadding: 3 },
           headStyles: { fillColor: [40, 40, 40], textColor: 255 },
         });
+
+        const totalOrdersSummary = records.reduce((sum, r) => {
+  const recordDate = yyyyMmDdLocal(new Date(r.created_at));
+
+  const orderToday = round2(
+    getOrderItems(r.promo_code)
+      .filter((item) => {
+        if (!item.created_at) return false;
+        return yyyyMmDdLocal(new Date(item.created_at)) === recordDate;
+      })
+      .reduce((s, item) => s + round2(item.subtotal), 0)
+  );
+
+  return sum + orderToday;
+}, 0);
+
+const grandTotalSummary = records.reduce((sum, r) => {
+  const recordDate = yyyyMmDdLocal(new Date(r.created_at));
+
+  const orderToday = round2(
+    getOrderItems(r.promo_code)
+      .filter((item) => {
+        if (!item.created_at) return false;
+        return yyyyMmDdLocal(new Date(item.created_at)) === recordDate;
+      })
+      .reduce((s, item) => s + round2(item.subtotal), 0)
+  );
+
+    return sum + round2(getSystemDue(r) + orderToday);
+    }, 0);
+
+    const finalY = (doc as any).lastAutoTable?.finalY || 40;
+
+    autoTable(doc, {
+      startY: finalY + 10,
+      theme: "grid",
+      head: [["Summary", "Amount"]],
+      body: [
+        ["Total Orders", `PHP ${totalOrdersSummary.toFixed(2)}`],
+        ["Grand Total", `PHP ${grandTotalSummary.toFixed(2)}`],
+      ],
+      styles: {
+        fontSize: 10,
+        cellPadding: 4,
+        fontStyle: "bold",
+      },
+      headStyles: {
+        fillColor: [40, 40, 40],
+        textColor: 255,
+      },
+    });
 
       const monthNames: Record<string, string> = {
         "01": "January",

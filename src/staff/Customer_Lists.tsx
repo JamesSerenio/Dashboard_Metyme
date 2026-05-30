@@ -483,6 +483,21 @@ const exportCustomerRecordsPDF = () => {
   doc.setFontSize(10);
   doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 22);
 
+const timeTotal = records.reduce(
+  (sum, s) => sum + getSystemDue(s),
+  0
+);
+
+const totalOrders = records.reduce(
+  (sum, s) => sum + getOrderDue(s),
+  0
+);
+
+const grandTotal = records.reduce(
+  (sum, s) => sum + getGrandDue(s),
+  0
+);
+
   autoTable(doc, {
     startY: 30,
     head: [[
@@ -516,6 +531,29 @@ const exportCustomerRecordsPDF = () => {
       textColor: 255,
     },
   });
+
+  const finalY = (doc as any).lastAutoTable?.finalY || 40;
+const summaryY = finalY + 10;
+
+autoTable(doc, {
+  startY: summaryY,
+  theme: "grid",
+  head: [["Summary", "Amount"]],
+  body: [
+    ["Time Total", `PHP ${timeTotal.toFixed(2)}`],
+    ["Total Orders", `PHP ${totalOrders.toFixed(2)}`],
+    ["Grand Total", `PHP ${grandTotal.toFixed(2)}`],
+  ],
+  styles: {
+    fontSize: 10,
+    cellPadding: 4,
+    fontStyle: "bold",
+  },
+  headStyles: {
+    fillColor: [40, 40, 40],
+    textColor: 255,
+  },
+});
 
 const monthNames: Record<string, string> = {
   "01": "January",

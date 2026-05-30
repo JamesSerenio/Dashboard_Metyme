@@ -250,12 +250,33 @@ const Customer_Add_ons: React.FC = () => {
   >([]);
 
   useEffect(() => {
-    void fetchAddOns(selectedDate);
+    void loadLatestAddOnsDate();
   }, []);
 
   useEffect(() => {
     void fetchAddOns(selectedDate);
   }, [selectedDate]);
+
+  const loadLatestAddOnsDate = async (): Promise<void> => {
+  setLoading(true);
+
+  const { data, error } = await supabase
+    .from("customer_session_add_ons")
+    .select("created_at")
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  if (error || !data || data.length === 0) {
+    setLoading(false);
+    await fetchAddOns(selectedDate);
+    return;
+  }
+
+  const latestDate = yyyyMmDdLocal(new Date(data[0].created_at));
+
+  setSelectedDate(latestDate);
+  await fetchAddOns(latestDate);
+};
 
   const fetchAddOns = async (dateStr: string): Promise<void> => {
     setLoading(true);
@@ -608,21 +629,24 @@ const usedBookingCodes = new Set<string>();
     "09": "September", "10": "October", "11": "November", "12": "December",
   };
 
-  const records = groupedOrdersAll.filter((o) => {
-    const d = new Date(o.created_at);
-    if (!Number.isFinite(d.getTime())) return false;
+const records = groupedOrdersAll.filter((o) => {
+  const localDate = yyyyMmDdLocal(new Date(o.created_at));
+  const [y, m, d] = localDate.split("-");
 
-    const y = String(d.getFullYear());
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
+  if (exportYear !== "all" && y !== exportYear) return false;
+  if (exportMonth !== "all" && m !== exportMonth) return false;
 
-    if (exportYear !== "all" && y !== exportYear) return false;
-    if (exportMonth !== "all" && m !== exportMonth) return false;
-    if (exportMode === "day") return Number(day) === Number(exportDay);
-    if (exportMode === "range") return Number(day) >= Number(rangeStart) && Number(day) <= Number(rangeEnd);
+  if (exportMode === "day") {
+    const selectedY = exportYear === "all" ? y : exportYear;
+    return localDate === `${selectedY}-${exportMonth}-${String(exportDay).padStart(2, "0")}`;
+  }
 
-    return true;
-  });
+  if (exportMode === "range") {
+    return Number(d) >= Number(rangeStart) && Number(d) <= Number(rangeEnd);
+  }
+
+  return true;
+});
 
   if (records.length === 0) {
     alert("No add-ons records found for selected filter.");
@@ -663,6 +687,42 @@ const usedBookingCodes = new Set<string>();
     styles: { fontSize: 8, cellPadding: 3 },
     headStyles: { fillColor: [40, 40, 40], textColor: 255 },
   });
+
+  const totalCashSummary = records.reduce(
+  (sum, o) => sum + Number(o.cash_amount || 0),
+  0
+);
+
+const totalGcashSummary = records.reduce(
+  (sum, o) => sum + Number(o.gcash_amount || 0),
+  0
+);
+
+const grandTotalSummary = round2(
+  totalCashSummary + totalGcashSummary
+);
+
+const finalY = (doc as any).lastAutoTable?.finalY || 40;
+
+autoTable(doc, {
+  startY: finalY + 10,
+  theme: "grid",
+  head: [["Summary", "Amount"]],
+  body: [
+    ["Total Cash", `PHP ${totalCashSummary.toFixed(2)}`],
+    ["Total GCash", `PHP ${totalGcashSummary.toFixed(2)}`],
+    ["Grand Total", `PHP ${grandTotalSummary.toFixed(2)}`],
+  ],
+  styles: {
+    fontSize: 10,
+    cellPadding: 4,
+    fontStyle: "bold",
+  },
+  headStyles: {
+    fillColor: [40, 40, 40],
+    textColor: 255,
+  },
+});
 
   let fileName = "Add-Ons List.pdf";
 
@@ -985,16 +1045,14 @@ const togglePaid = async (o: OrderGroup): Promise<void> => {
               </span>
             </label>
 
-            <div className="cao-tools-row">
-              <button
-                className="cao-btn cao-btn-primary"
-                onClick={() => void fetchAddOns(selectedDate)}
-                disabled={loading}
-                type="button"
-              >
-                Refresh
-              </button>
-            </div>
+            <button
+              className="cao-btn cao-btn-primary cao-refresh-inline"
+              onClick={() => void fetchAddOns(selectedDate)}
+              disabled={loading}
+              type="button"
+            >
+              Refresh
+            </button>
           </div>
           
         </section>

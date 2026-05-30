@@ -1082,28 +1082,11 @@ body.cao-modal-open {
   cursor: pointer;
   color: inherit;
   font-weight: inherit;
-  position: relative;
 }
 
 .cao-secret-export:hover {
   opacity: .85;
 }
-
-.cao-secret-export::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  bottom: -1px;
-  width: 0;
-  height: 1px;
-  background: rgba(148,107,56,.45);
-  transition: .25s;
-}
-
-.cao-secret-export:hover::after {
-  width: 100%;
-}
-
 .export-code-wrap,
 .export-premium-wrap {
   padding: 8px 4px;
@@ -1192,4 +1175,41 @@ body.cao-modal-open {
 .export-field label {
   font-weight: 900;
   color: #6b5137;
+}
+.cao-topbar-right {
+  display: grid !important;
+  grid-template-columns: minmax(320px, 1fr) 160px 190px 120px;
+  align-items: center;
+  gap: 16px;
+}
+
+.cao-pill {
+  min-width: 0 !important;
+}
+
+.cao-pill-input {
+  width: 100% !important;
+}
+
+.cao-searchbar-inline,
+.cao-pill,
+.cao-refresh-inline {
+  height: 56px;
+}
+
+.cao-refresh-inline {
+  align-self: center;
+  margin-top: 0 !important;
+}
+
+@media (max-width: 1180px) {
+  .cao-topbar-right {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .cao-topbar-right {
+    grid-template-columns: 1fr;
+  }
 }
