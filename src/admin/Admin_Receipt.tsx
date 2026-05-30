@@ -378,10 +378,13 @@ const Admin_Receipt: React.FC = () => {
                   className={`ar-name-card ${selected?.id === r.id ? "active" : ""}`}
                   onClick={() => setSelected(r)}
                 >
-                  <div>
+                    <div>
                     <strong>{r.full_name}</strong>
-                    <span>{r.booking_code}</span>
-                  </div>
+
+                    {(type === "customer_list" || type === "membership") && (
+                        <span>{r.booking_code}</span>
+                    )}
+                    </div>
 
                   <b>{money(r.grand_total)}</b>
                 </button>
