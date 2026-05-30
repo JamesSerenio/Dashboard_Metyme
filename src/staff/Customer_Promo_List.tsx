@@ -2302,8 +2302,37 @@ const getCommonAreaDurationLabel = (r: PromoBookingRow): string => {
           headStyles: { fillColor: [40, 40, 40], textColor: 255 },
         });
 
-        doc.save("Promo List.pdf");
-        setExportModalOpen(false);
+      const monthNames: Record<string, string> = {
+        "01": "January",
+        "02": "February",
+        "03": "March",
+        "04": "April",
+        "05": "May",
+        "06": "June",
+        "07": "July",
+        "08": "August",
+        "09": "September",
+        "10": "October",
+        "11": "November",
+        "12": "December",
+      };
+
+      let fileName = "Promo List - All Records.pdf";
+
+      if (exportYear !== "all" && exportMonth === "all") {
+        fileName = `Promo List - All Year of ${exportYear}.pdf`;
+      } else if (exportYear === "all" && exportMonth !== "all") {
+        fileName = `Promo List - All Records Month of ${monthNames[exportMonth]}.pdf`;
+      } else if (exportMode === "day") {
+        fileName = `Promo List - ${monthNames[exportMonth]} ${String(exportDay).padStart(2, "0")} ${exportYear}.pdf`;
+      } else if (exportMode === "range") {
+        fileName = `Promo List - ${monthNames[exportMonth]} ${String(rangeStart).padStart(2, "0")}-${String(rangeEnd).padStart(2, "0")} ${exportYear}.pdf`;
+      } else if (exportYear !== "all" && exportMonth !== "all") {
+        fileName = `Promo List - ${monthNames[exportMonth]} ${exportYear}.pdf`;
+      }
+
+      doc.save(fileName);
+      setExportModalOpen(false);
       };
 
     const totalRows = filteredRows.length;
