@@ -620,6 +620,7 @@ const getCommonAreaDurationLabel = (r: PromoBookingRow): string => {
 
     const [selectedDate, setSelectedDate] = useState<string>(yyyyMmDdLocal(new Date()));
     const [searchName, setSearchName] = useState<string>("");
+    const [paidFilter, setPaidFilter] = useState<"all" | "paid" | "unpaid">("all");
 
     const [areaFilter, setAreaFilter] = useState<AreaFilter>("all");
     const [attendanceFilter, setAttendanceFilter] = useState<AttendanceFilter>("all");
@@ -2119,6 +2120,9 @@ const getCommonAreaDurationLabel = (r: PromoBookingRow): string => {
 
       return rows
         .filter((r) => {
+          const rowPaid = isFinalPaidRow(r);
+          if (paidFilter === "paid" && !rowPaid) return false;
+          if (paidFilter === "unpaid" && rowPaid) return false;
           const hasDayAttendance = hasInAndOutOnSelectedDay(r.id, selectedDate);
           const coversSelectedDate = bookingCoversLocalDate(r.start_at, r.end_at, selectedDate);
           const keepBecauseUnpaidOrder = hasUnpaidOrderCarryOver(r);
@@ -2194,6 +2198,7 @@ const getCommonAreaDurationLabel = (r: PromoBookingRow): string => {
       rows,
       selectedDate,
       searchName,
+      paidFilter,
       areaFilter,
       attendanceFilter,
       commonDurationFilter,
@@ -2250,6 +2255,18 @@ const getCommonAreaDurationLabel = (r: PromoBookingRow): string => {
                   onChange={(e) => setSearchName(e.target.value)}
                 />
               </div>
+
+              <div className="cpl-control">
+              <label>Status</label>
+              <select
+                value={paidFilter}
+                onChange={(e) => setPaidFilter(e.target.value as "all" | "paid" | "unpaid")}
+              >
+                <option value="all">All</option>
+                <option value="paid">Paid</option>
+                <option value="unpaid">Unpaid</option>
+              </select>
+            </div>
 
             <div className="cpl-control">
               <label>Area</label>
