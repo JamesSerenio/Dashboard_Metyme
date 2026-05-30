@@ -170,25 +170,24 @@ const Admin_Receipt: React.FC = () => {
 
   const loadAddOnsReceipts = async () => {
     const { data, error } = await supabase
-      .from("customer_session_add_ons")
-      .select(`
+    .from("customer_session_add_ons")
+    .select(`
         id,
         created_at,
         full_name,
         seat_number,
         quantity,
         price,
-        subtotal,
         gcash_amount,
         cash_amount,
         is_paid,
         paid_at,
         add_ons (
-          name,
-          category
+        name,
+        category
         )
-      `)
-      .order("created_at", { ascending: false });
+    `)
+    .order("created_at", { ascending: false });
 
     if (error) {
       alert(`Error loading add-ons receipts: ${error.message}`);
@@ -206,7 +205,7 @@ const Admin_Receipt: React.FC = () => {
 
       const qty = Math.max(0, Math.floor(toNumber(r.quantity)));
       const price = toNumber(r.price);
-      const subtotal = toNumber(r.subtotal || qty * price);
+      const subtotal = qty * price;
 
       if (!grouped.has(key)) {
         grouped.set(key, {
