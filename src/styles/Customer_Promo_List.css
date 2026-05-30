@@ -934,3 +934,89 @@ body.cpl-modal-open {
     justify-content: flex-start;
   }
 }
+
+.cpl-secret-export {
+  cursor: pointer;
+  color: inherit;
+  font-weight: inherit;
+  position: relative;
+}
+
+.cpl-secret-export:hover {
+  opacity: .85;
+}
+
+.cpl-secret-export {
+  cursor: pointer;
+  color: inherit;
+  font-weight: inherit;
+  text-decoration: none;
+}
+
+.cpl-secret-export:hover {
+  opacity: .85;
+}
+
+.cpl-export-code-wrap {
+  padding: 10px 6px;
+}
+
+.cpl-export-badge {
+  display: inline-flex;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: rgba(183,135,53,.14);
+  color: #8a6428;
+  font-size: 12px;
+  font-weight: 900;
+  margin-bottom: 14px;
+}
+
+.cpl-export-code-wrap h2 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 1000;
+}
+
+.cpl-export-code-wrap p {
+  margin: 8px 0 18px;
+  color: rgba(48,37,27,.65);
+  font-weight: 700;
+}
+
+.cpl-export-code-input {
+  width: 100%;
+  height: 50px;
+  border-radius: 15px;
+  border: 1px solid rgba(32,25,19,.12);
+  background: rgba(255,255,255,.8);
+  padding: 0 15px;
+  outline: none;
+  font-weight: 800;
+}
+
+.cpl-export-code-input:focus {
+  border-color: rgba(183,135,53,.55);
+  box-shadow: 0 0 0 4px rgba(183,135,53,.12);
+}
+
+.cpl-export-code-input.has-error {
+  border-color: rgba(220,53,69,.65);
+}
+
+.cpl-export-error {
+  margin-top: 10px;
+  color: #b42318;
+  background: rgba(255,235,235,.9);
+  padding: 9px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.cpl-export-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 22px;
+}
