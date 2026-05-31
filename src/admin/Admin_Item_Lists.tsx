@@ -828,7 +828,7 @@ const Admin_Item_Lists: React.FC = () => {
         </section>
 
         <section className="admin-items-toolbar">
-          <div className="admin-toolbar-top">
+          <div className="admin-toolbar-mainline">
             <div className="admin-toolbar-stats">
               <div className="admin-summary-card">
                 <span className="admin-summary-label">Sorted By</span>
@@ -851,7 +851,7 @@ const Admin_Item_Lists: React.FC = () => {
               </div>
             </div>
 
-            <div className="admin-toolbar-search">
+            <div className="admin-toolbar-controls">
               <div className="admin-search-box">
                 <span className="admin-search-icon">🔎</span>
                 <input
@@ -871,15 +871,9 @@ const Admin_Item_Lists: React.FC = () => {
                   </button>
                 )}
               </div>
-            </div>
-          </div>
 
-          <div className="admin-toolbar-bottom">
-            <div className="admin-filter-actions">
               <button
-                className={`admin-chip-btn ${
-                  sortKey === "category" ? "is-active" : ""
-                }`}
+                className={`admin-chip-btn ${sortKey === "category" ? "is-active" : ""}`}
                 type="button"
                 onClick={() => setSortKey("category")}
               >
@@ -887,9 +881,7 @@ const Admin_Item_Lists: React.FC = () => {
               </button>
 
               <button
-                className={`admin-chip-btn ${
-                  sortKey === "stocks" ? "is-active" : ""
-                }`}
+                className={`admin-chip-btn ${sortKey === "stocks" ? "is-active" : ""}`}
                 type="button"
                 onClick={() => setSortKey("stocks")}
               >

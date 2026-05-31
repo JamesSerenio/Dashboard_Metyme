@@ -981,52 +981,41 @@ const Customer_Cancelled: React.FC = () => {
             Showing cancelled records for <strong>{selectedDate}</strong> ({countText}). Read-only only.
           </p>
 
-          <div className="cnc-toolbar">
-            <div className="cnc-control">
-              <label>Type</label>
-              <select
-                value={tab}
-                onChange={(e) => setTab(e.currentTarget.value as CancelTab)}
-              >
-                <option value="addons">{TAB_LABEL.addons}</option>
-                <option value="walkin">{TAB_LABEL.walkin}</option>
-                <option value="reservation">{TAB_LABEL.reservation}</option>
-                <option value="promo">{TAB_LABEL.promo}</option>
-                <option value="consignment">{TAB_LABEL.consignment}</option>
-              </select>
-            </div>
+      <div className="cnc-toolbar cnc-toolbar-straight">
+        <div className="cnc-control">
+          <label>Type</label>
+          <select
+            value={tab}
+            onChange={(e) => setTab(e.currentTarget.value as CancelTab)}
+          >
+            <option value="addons">{TAB_LABEL.addons}</option>
+            <option value="walkin">{TAB_LABEL.walkin}</option>
+            <option value="reservation">{TAB_LABEL.reservation}</option>
+            <option value="promo">{TAB_LABEL.promo}</option>
+            <option value="consignment">{TAB_LABEL.consignment}</option>
+          </select>
+        </div>
 
-            <div className="cnc-control">
-              <label>Date</label>
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.currentTarget.value)}
-              />
-            </div>
+        <div className="cnc-control">
+          <label>Date</label>
+          <input
+            type="date"
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.currentTarget.value)}
+          />
+        </div>
 
-            <div className="cnc-actions-top">
-              <button className="cnc-btn cnc-btn-light" onClick={() => setSelectedDate(yyyyMmDdLocal(new Date()))} type="button">
-                Today
-              </button>
-              <button className="cnc-btn cnc-btn-dark" onClick={() => void refresh()} type="button">
-                Refresh
-              </button>
-            </div>
-          </div>
+        <button className="cnc-btn cnc-btn-light cnc-inline-btn" onClick={() => setSelectedDate(yyyyMmDdLocal(new Date()))} type="button">
+          Today
+        </button>
 
-          <div className="cnc-tab-row">
-            {(Object.keys(TAB_LABEL) as CancelTab[]).map((key) => (
-              <button
-                key={key}
-                className={`cnc-tab ${tab === key ? "is-active" : ""}`}
-                onClick={() => setTab(key)}
-                type="button"
-              >
-                {TAB_LABEL[key]}
-              </button>
-            ))}
-          </div>
+        <button className="cnc-btn cnc-btn-dark cnc-inline-btn" onClick={() => void refresh()} type="button">
+          Refresh
+        </button>
+
+        {/* Tabs removed: Type dropdown controls what records are shown */}
+        
+      </div>
         </section>
 
         <section className="cnc-table-wrap">

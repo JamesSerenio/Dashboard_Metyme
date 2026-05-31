@@ -938,8 +938,7 @@ const Admin_Restock_Record: React.FC = () => {
                 </span>
               </div>
             </div>
-
-            <div className="restock-toolbar">
+            <div className="restock-toolbar restock-toolbar-straight">
               <div className="restock-search-box">
                 <span className="restock-search-icon">🔎</span>
                 <input
@@ -989,19 +988,9 @@ const Admin_Restock_Record: React.FC = () => {
                 </select>
               </div>
 
-              <button className="restock-btn restock-btn-dark" onClick={() => void exportExcel()}>
-                ⬇ Export Excel
-              </button>
-            </div>
-
-            <div className="restock-toolbar restock-toolbar-lower">
               <div className="restock-date-card">
                 <span className="restock-control-label">
-                  {filterMode === "day"
-                    ? "Date"
-                    : filterMode === "week"
-                    ? "Week"
-                    : "Month"}
+                  {filterMode === "day" ? "Date" : filterMode === "week" ? "Week" : "Month"}
                 </span>
 
                 <button
@@ -1035,12 +1024,15 @@ const Admin_Restock_Record: React.FC = () => {
                 ⟳ Refresh
               </button>
 
+              <button className="restock-btn restock-btn-dark" onClick={() => void exportExcel()}>
+                ⬇ Export Excel
+              </button>
+
               <button
                 className="restock-btn restock-btn-danger"
                 onClick={() => setShowDeleteFilterAlert(true)}
               >
-                🗑 Delete By{" "}
-                {filterMode === "day" ? "Date" : filterMode === "week" ? "Week" : "Month"}
+                🗑 Delete
               </button>
             </div>
           </div>

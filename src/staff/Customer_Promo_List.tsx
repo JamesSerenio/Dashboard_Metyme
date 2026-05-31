@@ -3,6 +3,8 @@
   import { supabase } from "../utils/supabaseClient";
   import logo from "../assets/study_hub.png";
   import "../styles/Customer_Promo_List.css";
+  import jsPDF from "jspdf";
+  import autoTable from "jspdf-autotable";
 
   type PackageArea = "common_area" | "conference_room";
   type DurationUnit = "hour" | "day" | "month" | "year";
@@ -620,6 +622,18 @@ const getCommonAreaDurationLabel = (r: PromoBookingRow): string => {
 
     const [selectedDate, setSelectedDate] = useState<string>(yyyyMmDdLocal(new Date()));
     const [searchName, setSearchName] = useState<string>("");
+    const [paidFilter, setPaidFilter] = useState<"all" | "paid" | "unpaid">("all");
+    const [exportModalOpen, setExportModalOpen] = useState(false);
+    const [exportCodeModalOpen, setExportCodeModalOpen] = useState(false);
+    const [exportSecretCode, setExportSecretCode] = useState("");
+    const [exportCodeError, setExportCodeError] = useState("");
+
+    const [exportYear, setExportYear] = useState("all");
+    const [exportMonth, setExportMonth] = useState("all");
+    const [exportMode, setExportMode] = useState<"all" | "month" | "day" | "range">("all");
+    const [exportDay, setExportDay] = useState("");
+    const [rangeStart, setRangeStart] = useState("");
+    const [rangeEnd, setRangeEnd] = useState("");
 
     const [areaFilter, setAreaFilter] = useState<AreaFilter>("all");
     const [attendanceFilter, setAttendanceFilter] = useState<AttendanceFilter>("all");
@@ -1204,6 +1218,19 @@ const getCommonAreaDurationLabel = (r: PromoBookingRow): string => {
     const getOrderItems = (code: string | null): PromoOrderItemRow[] =>
       code ? ordersMap[code] ?? [] : [];
 
+    const isSameSelectedDay = (iso: string | null): boolean => {
+      if (!iso) return false;
+      const d = new Date(iso);
+      if (!Number.isFinite(d.getTime())) return false;
+      return yyyyMmDdLocal(d) === selectedDate;
+    };
+
+    const getOrderItemsToday = (code: string | null): PromoOrderItemRow[] =>
+      getOrderItems(code).filter((item) => isSameSelectedDay(item.created_at));
+
+    const getOrderDueToday = (code: string | null): number =>
+      round2(getOrderItemsToday(code).reduce((sum, item) => sum + round2(item.subtotal), 0));
+
     const getOrderParents = (code: string | null): PromoOrderParentRow[] =>
       code ? orderParentsMap[code] ?? [] : [];
 
@@ -1291,10 +1318,11 @@ const getCommonAreaDurationLabel = (r: PromoBookingRow): string => {
     ): { label: string; value: number } => {
       const systemRemaining = getSystemRemainingInfo(r).remaining;
       const orderRemaining = getOrderRemainingInfo(r.promo_code).remaining;
+      const finalPaid = isFinalPaidRow(r);
 
       return {
-        label: "Total Amount Due",
-        value: round2(systemRemaining + orderRemaining),
+        label: finalPaid ? "Grand Total" : "Total Amount Due",
+        value: finalPaid ? getGrandDue(r) : round2(systemRemaining + orderRemaining),
       };
     };
 
@@ -2119,6 +2147,9 @@ const getCommonAreaDurationLabel = (r: PromoBookingRow): string => {
 
       return rows
         .filter((r) => {
+          const rowPaid = isFinalPaidRow(r);
+          if (paidFilter === "paid" && !rowPaid) return false;
+          if (paidFilter === "unpaid" && rowPaid) return false;
           const hasDayAttendance = hasInAndOutOnSelectedDay(r.id, selectedDate);
           const coversSelectedDate = bookingCoversLocalDate(r.start_at, r.end_at, selectedDate);
           const keepBecauseUnpaidOrder = hasUnpaidOrderCarryOver(r);
@@ -2190,20 +2221,179 @@ const getCommonAreaDurationLabel = (r: PromoBookingRow): string => {
 
           return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
         });
-    }, [
-      rows,
-      selectedDate,
-      searchName,
-      areaFilter,
-      attendanceFilter,
-      commonDurationFilter,
-      conferenceDurationFilter,
-      tick,
-      attMap,
-      orderPaymentMap,
-      ordersMap,
-      orderParentsMap,
-    ]);
+          }, [
+            rows,
+            selectedDate,
+            searchName,
+            paidFilter,
+            areaFilter,
+            attendanceFilter,
+            commonDurationFilter,
+            conferenceDurationFilter,
+            tick,
+            attMap,
+            orderPaymentMap,
+            ordersMap,
+            orderParentsMap,
+          ]);
+
+          const exportPromoRecordsPDF = () => {
+        let records = rows.filter((r) => {
+          const d = new Date(r.created_at);
+          if (!Number.isFinite(d.getTime())) return false;
+
+          const y = String(d.getFullYear());
+          const m = String(d.getMonth() + 1).padStart(2, "0");
+          const day = String(d.getDate()).padStart(2, "0");
+
+          if (exportYear !== "all" && y !== exportYear) return false;
+          if (exportMonth !== "all" && m !== exportMonth) return false;
+          if (exportMode === "day") return Number(day) === Number(exportDay);
+          if (exportMode === "range") {
+            return Number(day) >= Number(rangeStart) && Number(day) <= Number(rangeEnd);
+          }
+
+          return true;
+        });
+
+        if (records.length === 0) {
+          alert("No promo records found for selected filter.");
+          return;
+        }
+
+        const doc = new jsPDF("landscape", "mm", "a4");
+
+        doc.setFontSize(16);
+        doc.text("Promo Records Report", 14, 15);
+        doc.setFontSize(10);
+        doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 22);
+
+        autoTable(doc, {
+          startY: 30,
+          head: [[
+            "Created",
+            "Customer",
+            "Promo Code",
+            "Area",
+            "Seat",
+            "Package",
+            "Time Cost",
+            "Order Today",
+            "Grand Total",
+            "Status",
+          ]],
+          body: records.map((r) => {
+            const recordDate = yyyyMmDdLocal(new Date(r.created_at));
+
+            const orderToday = round2(
+              getOrderItems(r.promo_code)
+                .filter((item) => {
+                  if (!item.created_at) return false;
+                  return yyyyMmDdLocal(new Date(item.created_at)) === recordDate;
+                })
+                .reduce((sum, item) => sum + round2(item.subtotal), 0)
+            );
+
+            return [
+              new Date(r.created_at).toLocaleString(),
+              r.full_name,
+              r.promo_code || "-",
+              prettyArea(r.area),
+              seatLabel(r),
+              r.packages?.title || "-",
+              `PHP ${getSystemDue(r).toFixed(2)}`,
+              `PHP ${orderToday.toFixed(2)}`,
+              `PHP ${round2(getSystemDue(r) + orderToday).toFixed(2)}`,
+              isFinalPaidRow(r) ? "PAID" : "UNPAID",
+            ];
+          }),
+          styles: { fontSize: 8, cellPadding: 3 },
+          headStyles: { fillColor: [40, 40, 40], textColor: 255 },
+        });
+
+        const totalOrdersSummary = records.reduce((sum, r) => {
+  const recordDate = yyyyMmDdLocal(new Date(r.created_at));
+
+  const orderToday = round2(
+    getOrderItems(r.promo_code)
+      .filter((item) => {
+        if (!item.created_at) return false;
+        return yyyyMmDdLocal(new Date(item.created_at)) === recordDate;
+      })
+      .reduce((s, item) => s + round2(item.subtotal), 0)
+  );
+
+  return sum + orderToday;
+}, 0);
+
+const grandTotalSummary = records.reduce((sum, r) => {
+  const recordDate = yyyyMmDdLocal(new Date(r.created_at));
+
+  const orderToday = round2(
+    getOrderItems(r.promo_code)
+      .filter((item) => {
+        if (!item.created_at) return false;
+        return yyyyMmDdLocal(new Date(item.created_at)) === recordDate;
+      })
+      .reduce((s, item) => s + round2(item.subtotal), 0)
+  );
+
+    return sum + round2(getSystemDue(r) + orderToday);
+    }, 0);
+
+    const finalY = (doc as any).lastAutoTable?.finalY || 40;
+
+    autoTable(doc, {
+      startY: finalY + 10,
+      theme: "grid",
+      head: [["Summary", "Amount"]],
+      body: [
+        ["Total Orders", `PHP ${totalOrdersSummary.toFixed(2)}`],
+        ["Grand Total", `PHP ${grandTotalSummary.toFixed(2)}`],
+      ],
+      styles: {
+        fontSize: 10,
+        cellPadding: 4,
+        fontStyle: "bold",
+      },
+      headStyles: {
+        fillColor: [40, 40, 40],
+        textColor: 255,
+      },
+    });
+
+      const monthNames: Record<string, string> = {
+        "01": "January",
+        "02": "February",
+        "03": "March",
+        "04": "April",
+        "05": "May",
+        "06": "June",
+        "07": "July",
+        "08": "August",
+        "09": "September",
+        "10": "October",
+        "11": "November",
+        "12": "December",
+      };
+
+      let fileName = "Promo List - All Records.pdf";
+
+      if (exportYear !== "all" && exportMonth === "all") {
+        fileName = `Promo List - All Year of ${exportYear}.pdf`;
+      } else if (exportYear === "all" && exportMonth !== "all") {
+        fileName = `Promo List - All Records Month of ${monthNames[exportMonth]}.pdf`;
+      } else if (exportMode === "day") {
+        fileName = `Promo List - ${monthNames[exportMonth]} ${String(exportDay).padStart(2, "0")} ${exportYear}.pdf`;
+      } else if (exportMode === "range") {
+        fileName = `Promo List - ${monthNames[exportMonth]} ${String(rangeStart).padStart(2, "0")}-${String(rangeEnd).padStart(2, "0")} ${exportYear}.pdf`;
+      } else if (exportYear !== "all" && exportMonth !== "all") {
+        fileName = `Promo List - ${monthNames[exportMonth]} ${exportYear}.pdf`;
+      }
+
+      doc.save(fileName);
+      setExportModalOpen(false);
+      };
 
     const totalRows = filteredRows.length;
     const paidRows = filteredRows.filter((r) => r.is_paid).length;
@@ -2232,7 +2422,18 @@ const getCommonAreaDurationLabel = (r: PromoBookingRow): string => {
             <div className="cpl-eyebrow">PROMO MANAGEMENT</div>
             <h1 className="cpl-title">Customer Promo List</h1>
             <p className="cpl-subtitle">
-              Plain and clean promo booking records with attendance, payment, receipt, order tools, and customer view.
+              Plain and clean promo booking records{" "}
+            <span
+              className="cpl-secret-export"
+              onClick={() => {
+                setExportSecretCode("");
+                setExportCodeError("");
+                setExportCodeModalOpen(true);
+              }}
+            >
+              with
+            </span>{" "}
+            attendance, payment, receipt, order tools, and customer view.
             </p>
 
             <div className="cpl-toolbar">
@@ -2250,6 +2451,18 @@ const getCommonAreaDurationLabel = (r: PromoBookingRow): string => {
                   onChange={(e) => setSearchName(e.target.value)}
                 />
               </div>
+
+              <div className="cpl-control">
+              <label>Status</label>
+              <select
+                value={paidFilter}
+                onChange={(e) => setPaidFilter(e.target.value as "all" | "paid" | "unpaid")}
+              >
+                <option value="all">All</option>
+                <option value="paid">Paid</option>
+                <option value="unpaid">Unpaid</option>
+              </select>
+            </div>
 
             <div className="cpl-control">
               <label>Area</label>
@@ -2576,6 +2789,142 @@ const getCommonAreaDurationLabel = (r: PromoBookingRow): string => {
             )}
           </section>
         </div>
+
+        <FixedCenterModal
+        open={exportModalOpen}
+        title=""
+        size="md"
+        onClose={() => setExportModalOpen(false)}
+      >
+        <div className="export-premium-wrap">
+          <div className="export-premium-header">
+            <h2>Export Promo Records</h2>
+            <p>Select filter before generating PDF.</p>
+          </div>
+
+        <div className="export-grid">
+          <div className="export-field">
+            <label>Year</label>
+            <select value={exportYear} onChange={(e) => setExportYear(e.target.value)}>
+              <option value="all">All Year</option>
+              <option value="2026">2026</option>
+              <option value="2027">2027</option>
+            </select>
+          </div>
+
+          <div className="export-field">
+            <label>Month</label>
+            <select value={exportMonth} onChange={(e) => setExportMonth(e.target.value)}>
+              <option value="all">All Month</option>
+              <option value="01">January</option>
+              <option value="02">February</option>
+              <option value="03">March</option>
+              <option value="04">April</option>
+              <option value="05">May</option>
+              <option value="06">June</option>
+              <option value="07">July</option>
+              <option value="08">August</option>
+              <option value="09">September</option>
+              <option value="10">October</option>
+              <option value="11">November</option>
+              <option value="12">December</option>
+            </select>
+          </div>
+
+          <div className="export-field">
+            <label>Filter Type</label>
+            <select value={exportMode} onChange={(e) => setExportMode(e.target.value as "all" | "month" | "day" | "range")}>
+              <option value="all">All Records</option>
+              <option value="month">Specific Month</option>
+              <option value="day">Specific Day</option>
+              <option value="range">Day Range</option>
+            </select>
+          </div>
+
+          {exportMode === "day" && (
+            <div className="export-field">
+              <label>Day</label>
+              <input type="number" min="1" max="31" value={exportDay} onChange={(e) => setExportDay(e.target.value)} />
+            </div>
+          )}
+
+          {exportMode === "range" && (
+            <>
+              <div className="export-field">
+                <label>Start Day</label>
+                <input type="number" min="1" max="31" value={rangeStart} onChange={(e) => setRangeStart(e.target.value)} />
+              </div>
+              <div className="export-field">
+                <label>End Day</label>
+                <input type="number" min="1" max="31" value={rangeEnd} onChange={(e) => setRangeEnd(e.target.value)} />
+              </div>
+            </>
+          )}
+        </div>
+
+          <div className="export-actions">
+            <button className="cpl-btn cpl-btn-light" onClick={() => setExportModalOpen(false)} type="button">
+              Cancel
+            </button>
+
+          <button className="cpl-btn cpl-btn-dark" onClick={() => exportPromoRecordsPDF()} type="button">
+            Export PDF
+          </button>
+          </div>
+        </div>
+      </FixedCenterModal>
+
+        <FixedCenterModal
+        open={exportCodeModalOpen}
+        title=""
+        size="sm"
+        onClose={() => {
+          setExportSecretCode("");
+          setExportCodeError("");
+          setExportCodeModalOpen(false);
+        }}
+      >
+        <div className="cpl-export-code-wrap">
+          <div className="cpl-export-badge">Secure Export</div>
+          <h2>Enter Access Code</h2>
+          <p>Enter the export access code to continue.</p>
+
+          <input
+            className={`cpl-export-code-input ${exportCodeError ? "has-error" : ""}`}
+            type="text"
+            placeholder="Enter Code"
+            value={exportSecretCode}
+            onChange={(e) => {
+              setExportSecretCode(e.target.value);
+              setExportCodeError("");
+            }}
+          />
+
+          {exportCodeError && <div className="cpl-export-error">{exportCodeError}</div>}
+
+          <div className="cpl-export-actions">
+            <button className="cpl-btn cpl-btn-light" type="button" onClick={() => setExportCodeModalOpen(false)}>
+              Cancel
+            </button>
+
+            <button
+              className="cpl-btn cpl-btn-dark"
+              type="button"
+              onClick={() => {
+                if (exportSecretCode.trim() !== "omayghashMTL2023") {
+                  setExportCodeError("Incorrect code. Please try again.");
+                  return;
+                }
+
+                setExportCodeModalOpen(false);
+                setExportModalOpen(true);
+              }}
+            >
+              Continue
+            </button>
+          </div>
+        </div>
+      </FixedCenterModal>
 
         <FixedCenterModal
           open={!!attModalTarget}
@@ -2986,10 +3335,10 @@ const getCommonAreaDurationLabel = (r: PromoBookingRow): string => {
               {(() => {
                 const di = applyDiscount(selected.price, selected.discount_kind, selected.discount_value);
                 const systemDue = getSystemDue(selected);
-                const orderDue = getOrderDue(selected.promo_code);
+                const orderDue = getOrderDueToday(selected.promo_code);
                 const systemPay = getSystemPaidInfo(selected);
                 const orderPay = getOrderPaidInfo(selected.promo_code);
-                const orderItems = getOrderItems(selected.promo_code);
+                const orderItems = getOrderItemsToday(selected.promo_code);
 
                 return (
                   <>
@@ -3049,41 +3398,24 @@ const getCommonAreaDurationLabel = (r: PromoBookingRow): string => {
                       </div>
                     </div>
 
-                  <div className="cpl-receipt-total">
-                    <span>Total Amount Due</span>
-                    <strong>
-                      ₱{(
-                        getGrandPaid(selected) + getGrandDisplay(selected).value
-                      ).toFixed(2)}
-                    </strong>
-                  </div>
-
-                    <div className="cpl-receipt-total">
-                      <span>Total Order</span>
-                      <strong>₱{orderDue.toFixed(2)}</strong>
-                    </div>
-
                     <div className="cpl-receipt-block">
                       <div className="cpl-receipt-row">
                         <span>Overall Paid</span>
-                        <strong>₱{getGrandPaid(selected).toFixed(2)}</strong>
-                      </div>
-                      <div className="cpl-receipt-row">
-                      <span>{getGrandDisplay(selected).label}</span>
-                      <strong>₱{getGrandDisplay(selected).value.toFixed(2)}</strong>
+                        <strong>
+                          ₱{(getSystemPaidInfo(selected).totalPaid + getOrderPaidInfo(selected.promo_code).totalPaid).toFixed(2)}
+                        </strong>
                       </div>
                     </div>
 
                     <div className="cpl-receipt-total">
-                    <span>Total Amount Due</span>
-                    <strong>
-                      ₱{
-                        (
-                          getSystemRemainingInfo(selected).remaining +
-                          getOrderRemainingInfo(selected.promo_code).remaining
-                        ).toFixed(2)
-                      }
-                    </strong>
+                      <span>{isFinalPaidRow(selected) ? "Grand Total" : "Total Amount Due"}</span>
+                      <strong>
+                        ₱{(
+                          isFinalPaidRow(selected)
+                            ? getSystemDue(selected) + orderDue
+                            : getSystemRemainingInfo(selected).remaining + orderDue
+                        ).toFixed(2)}
+                      </strong>
                     </div>
                   </>
                 );

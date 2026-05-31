@@ -3,6 +3,8 @@ import { createPortal } from "react-dom";
 import { supabase } from "../utils/supabaseClient";
 import logo from "../assets/study_hub.png";
 import "../styles/Customer_Reservations.css";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 const HOURLY_RATE = 20;
 const FREE_MINUTES = 0;
@@ -581,6 +583,98 @@ const FixedCenterModal: React.FC<FixedCenterModalProps> = ({
 };
 
 const Customer_Reservations: React.FC = () => {
+
+const [exportModalOpen, setExportModalOpen] = useState(false);
+const [exportCodeModalOpen, setExportCodeModalOpen] = useState(false);
+const [exportSecretCode, setExportSecretCode] = useState("");
+const [exportCodeError, setExportCodeError] = useState("");
+const [exportYear, setExportYear] = useState("all");
+const [exportMonth, setExportMonth] = useState("all");
+const [exportMode, setExportMode] = useState<"all" | "month" | "day" | "range">("all");
+const [exportDay, setExportDay] = useState("");
+const [rangeStart, setRangeStart] = useState("");
+const [rangeEnd, setRangeEnd] = useState("");
+
+const exportReservationRecordsPDF = () => {
+  const monthNames: Record<string, string> = {
+    "01": "January", "02": "February", "03": "March", "04": "April",
+    "05": "May", "06": "June", "07": "July", "08": "August",
+    "09": "September", "10": "October", "11": "November", "12": "December",
+  };
+
+  let records = sessions.filter((s) => {
+    const dateValue = String(s.reservation_date || s.date || "");
+    const [y, m, d] = dateValue.split("-");
+
+    if (exportYear !== "all" && y !== exportYear) return false;
+    if (exportMonth !== "all" && m !== exportMonth) return false;
+    if (exportMode === "day") return Number(d) === Number(exportDay);
+    if (exportMode === "range") return Number(d) >= Number(rangeStart) && Number(d) <= Number(rangeEnd);
+
+    return true;
+  });
+
+  if (records.length === 0) {
+    alert("No reservation records found for selected filter.");
+    return;
+  }
+
+  const doc = new jsPDF("landscape", "mm", "a4");
+
+  doc.setFontSize(16);
+  doc.text("Reservation Records Report", 14, 15);
+
+  doc.setFontSize(10);
+  doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 22);
+
+  autoTable(doc, {
+    startY: 30,
+    head: [[
+      "Reservation",
+      "Customer",
+      "Booking Code",
+      "Seat",
+      "Type",
+      "Time Total",
+      "Orders",
+      "Grand Total",
+      "Paid"
+    ]],
+    body: records.map((s) => [
+      formatReservationRange(s),
+      s.full_name || "N/A",
+      s.booking_code || "N/A",
+      s.seat_number || "N/A",
+      s.customer_type || "N/A",
+      `PHP ${getSystemDue(s)}`,
+      `PHP ${getOrderDue(s)}`,
+      `PHP ${getGrandDue(s)}`,
+      getFinalPaidStatus(s) ? "Paid" : "Unpaid",
+    ]),
+    styles: { fontSize: 8, cellPadding: 3 },
+    headStyles: { fillColor: [40, 40, 40], textColor: 255 },
+  });
+
+  let fileName = "Reservation List.pdf";
+
+  if (exportYear === "all" && exportMonth === "all") {
+    fileName = "Reservation List - All Records.pdf";
+  } else if (exportYear !== "all" && exportMonth === "all") {
+    fileName = `Reservation List - All Year of ${exportYear}.pdf`;
+  } else if (exportYear === "all" && exportMonth !== "all") {
+    fileName = `Reservation List - All Records Month of ${monthNames[exportMonth]}.pdf`;
+  } else if (exportMode === "day") {
+    fileName = `Reservation List - ${monthNames[exportMonth]} ${String(exportDay).padStart(2, "0")} ${exportYear}.pdf`;
+  } else if (exportMode === "range") {
+    fileName = `Reservation List - ${monthNames[exportMonth]} ${String(rangeStart).padStart(2, "0")}-${String(rangeEnd).padStart(2, "0")} ${exportYear}.pdf`;
+  } else {
+    fileName = `Reservation List - ${monthNames[exportMonth]} ${exportYear}.pdf`;
+  }
+
+  doc.save(fileName);
+  setExportModalOpen(false);
+};
+
   const [sessions, setSessions] = useState<CustomerSession[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
@@ -595,6 +689,7 @@ const Customer_Reservations: React.FC = () => {
   const [dateFilterMode, setDateFilterMode] = useState<DateFilterMode>("start_date");
   const [filterDate, setFilterDate] = useState<string>(yyyyMmDdLocal(new Date()));
   const [searchName, setSearchName] = useState<string>("");
+  const [paidFilter, setPaidFilter] = useState<"all" | "paid" | "unpaid">("all");
 
   const [discountTarget, setDiscountTarget] = useState<CustomerSession | null>(null);
   const [discountKind, setDiscountKind] = useState<DiscountKind>("none");
@@ -702,6 +797,8 @@ const Customer_Reservations: React.FC = () => {
     }
   };
 
+  
+
   const filteredSessions = useMemo(() => {
     const q = searchName.trim().toLowerCase();
 
@@ -733,6 +830,7 @@ const Customer_Reservations: React.FC = () => {
         return aTime - bTime;
       });
   }, [sessions, filterDate, dateFilterMode, searchName]);
+
 
   const fetchReservationSessions = async (): Promise<CustomerSession[]> => {
     const { data, error } = await supabase
@@ -1193,6 +1291,25 @@ const Customer_Reservations: React.FC = () => {
     const orderPaid = hasOrders(s) ? getOrderIsPaid(s) : true;
     return systemPaid && orderPaid;
   };
+
+    const visibleSessions = useMemo(() => {
+  return filteredSessions.filter((session) => {
+    const isPaid = getFinalPaidStatus(session);
+
+    if (paidFilter === "paid") return isPaid;
+    if (paidFilter === "unpaid") return !isPaid;
+
+    return true;
+  });
+}, [filteredSessions, paidFilter, sessionOrders, orderPayments]);
+
+const totals = useMemo(() => {
+  const totalCustomer = visibleSessions.length;
+  const paid = visibleSessions.filter((session) => getFinalPaidStatus(session)).length;
+  const unpaid = totalCustomer - paid;
+
+  return { totalCustomer, paid, unpaid };
+}, [visibleSessions, sessionOrders, orderPayments]);
 
   const syncSingleSessionPaidState = async (s: CustomerSession): Promise<void> => {
     const finalPaid = getFinalPaidStatus(s);
@@ -2064,7 +2181,20 @@ await supabase
           <div className="crv-eyebrow">CUSTOMER MANAGEMENT</div>
           <h1 className="crv-title">Customer Reservations</h1>
           <p className="crv-subtitle">
-            Plain and clean reservation records with attendance, payment, receipt, and order tools.
+            Plain and clean reservation records{" "}
+            <span
+              className="crv-secret-export"
+              onClick={() => {
+              setSearchName("");
+              setExportSecretCode("");
+              setExportCodeError("");
+              setExportCodeModalOpen(true);
+            }}
+              title="Export Records"
+            >
+              with
+            </span>{" "}
+            payment, receipt, and order tools.
           </p>
 
           <div className="crv-toolbar crv-toolbar-resv">
@@ -2088,6 +2218,18 @@ await supabase
               />
             </div>
 
+            <div className="crv-control">
+              <label>Payment Status</label>
+              <select
+                value={paidFilter}
+                onChange={(e) => setPaidFilter(e.target.value as "all" | "paid" | "unpaid")}
+              >
+                <option value="all">All</option>
+                <option value="paid">Paid</option>
+                <option value="unpaid">Unpaid</option>
+              </select>
+            </div>
+
             <div className="crv-control crv-control-search">
               <label>Search Full Name</label>
               <input
@@ -2105,6 +2247,7 @@ await supabase
                   setDateFilterMode("start_date");
                   setFilterDate(yyyyMmDdLocal(new Date()));
                   setSearchName("");
+                  setPaidFilter("all");
                 }}
                 type="button"
               >
@@ -2125,17 +2268,17 @@ await supabase
           <div className="crv-stats">
           <div className="crv-stat-box">
             <span>Total Customer</span>
-            <strong>{filteredSessions.length}</strong>
+            <strong>{totals.totalCustomer}</strong>
           </div>
 
           <div className="crv-stat-box">
             <span>Paid</span>
-            <strong>{filteredSessions.filter((s) => toBool(s.is_paid)).length}</strong>
+            <strong>{totals.paid}</strong>
           </div>
 
           <div className="crv-stat-box">
             <span>Unpaid</span>
-            <strong>{filteredSessions.filter((s) => !toBool(s.is_paid)).length}</strong>
+            <strong>{totals.unpaid}</strong>
           </div>
         </div>
 
@@ -2161,7 +2304,7 @@ await supabase
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredSessions.map((session) => {
+                  {visibleSessions.map((session) => {
                     const orderBundle = getOrderBundle(session);
                     const systemPay = getSystemPaymentInfo(session);
                     const orderPay = getOrderPaymentInfo(session);
@@ -2419,6 +2562,82 @@ await supabase
           )}
         </section>
 
+        <FixedCenterModal
+          open={exportCodeModalOpen}
+          title=""
+          size="sm"
+          onClose={() => {
+            setExportSecretCode("");
+            setExportCodeError("");
+            setExportCodeModalOpen(false);
+          }}
+        >
+          <div className="export-code-wrap">
+            <div className="export-code-badge">Secure Export</div>
+
+            <h2>Enter Access Code</h2>
+            <p>Enter the export access code to continue.</p>
+
+            <input
+              className={`export-code-input ${exportCodeError ? "has-error" : ""}`}
+              type="text"
+              placeholder="Enter Code"
+              value={exportSecretCode}
+              onChange={(e) => {
+                setExportSecretCode(e.target.value);
+                setExportCodeError("");
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  if (exportSecretCode.trim() !== "omayghashMTL2023") {
+                    setExportCodeError("Incorrect code. Please try again.");
+                    return;
+                  }
+
+                  setExportCodeModalOpen(false);
+                  setExportModalOpen(true);
+                }
+              }}
+              autoFocus
+              onFocus={(e) => e.currentTarget.select()}
+            />
+
+            {exportCodeError && (
+              <div className="export-code-error">{exportCodeError}</div>
+            )}
+
+            <div className="export-code-actions">
+              <button
+                className="crv-btn crv-btn-light"
+                type="button"
+                onClick={() => {
+                  setExportSecretCode("");
+                  setExportCodeError("");
+                  setExportCodeModalOpen(false);
+                }}
+              >
+                Cancel
+              </button>
+
+              <button
+                className="crv-btn"
+                type="button"
+                onClick={() => {
+                  if (exportSecretCode.trim() !== "omayghashMTL2023") {
+                    setExportCodeError("Incorrect code. Please try again.");
+                    return;
+                  }
+
+                  setExportCodeModalOpen(false);
+                  setExportModalOpen(true);
+                }}
+              >
+                Continue
+              </button>
+            </div>
+          </div>
+        </FixedCenterModal>
+
           <FixedCenterModal
             open={!!selectedAttendanceSession}
             title="Attendance"
@@ -2474,6 +2693,123 @@ await supabase
               </div>
             </>
           )}
+        </FixedCenterModal>
+
+        <FixedCenterModal
+          open={exportModalOpen}
+          title=""
+          size="md"
+          onClose={() => setExportModalOpen(false)}
+        >
+          <div className="export-premium-wrap">
+            <div className="export-premium-header">
+              <h2>Export Reservation Records</h2>
+              <p>Select filter before generating PDF.</p>
+            </div>
+
+            <div className="export-grid">
+              <div className="export-field">
+                <label>Year</label>
+                <select value={exportYear} onChange={(e) => setExportYear(e.target.value)}>
+                  <option value="all">All Year</option>
+                  <option value="2026">2026</option>
+                  <option value="2027">2027</option>
+                </select>
+              </div>
+
+              <div className="export-field">
+                <label>Month</label>
+                <select value={exportMonth} onChange={(e) => setExportMonth(e.target.value)}>
+                  <option value="all">All Month</option>
+                  <option value="01">January</option>
+                  <option value="02">February</option>
+                  <option value="03">March</option>
+                  <option value="04">April</option>
+                  <option value="05">May</option>
+                  <option value="06">June</option>
+                  <option value="07">July</option>
+                  <option value="08">August</option>
+                  <option value="09">September</option>
+                  <option value="10">October</option>
+                  <option value="11">November</option>
+                  <option value="12">December</option>
+                </select>
+              </div>
+
+              <div className="export-field">
+                <label>Filter Type</label>
+                <select
+                  value={exportMode}
+                  onChange={(e) =>
+                    setExportMode(e.target.value as "all" | "month" | "day" | "range")
+                  }
+                >
+                  <option value="all">All Records</option>
+                  <option value="month">Specific Month</option>
+                  <option value="day">Specific Day</option>
+                  <option value="range">Day Range</option>
+                </select>
+              </div>
+
+              {exportMode === "day" && (
+                <div className="export-field">
+                  <label>Day</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="31"
+                    placeholder="Enter day"
+                    value={exportDay}
+                    onChange={(e) => setExportDay(e.target.value)}
+                  />
+                </div>
+              )}
+
+              {exportMode === "range" && (
+                <>
+                  <div className="export-field">
+                    <label>Start Day</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="31"
+                      placeholder="Start day"
+                      value={rangeStart}
+                      onChange={(e) => setRangeStart(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="export-field">
+                    <label>End Day</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="31"
+                      placeholder="End day"
+                      value={rangeEnd}
+                      onChange={(e) => setRangeEnd(e.target.value)}
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="export-actions">
+              <button
+                className="crv-btn crv-btn-light"
+                onClick={() => setExportModalOpen(false)}
+              >
+                Cancel
+              </button>
+
+              <button
+                className="crv-btn"
+                onClick={exportReservationRecordsPDF}
+              >
+                Export PDF
+              </button>
+            </div>
+          </div>
         </FixedCenterModal>
 
         <FixedCenterModal
@@ -2573,7 +2909,9 @@ await supabase
                 orderPay.cash
             );
             const totalChange = getSessionChangeAfterDP(selectedSession);
-            const bottomInfo = getDisplayAmount(selectedSession);
+            const receiptPaid = getFinalPaidStatus(selectedSession);
+            const grandTotal = getGrandDue(selectedSession);
+            const remainingDue = getDisplayAmount(selectedSession).value;
 
             return (
               <div className="crv-plain-receipt-wrap">
@@ -2703,8 +3041,8 @@ await supabase
                   </div>
 
                   <div className="crv-plain-total-box">
-                    <span>{bottomInfo.label}</span>
-                    <strong>₱{bottomInfo.value}</strong>
+                  <span>{receiptPaid ? "Grand Total" : "Total Amount Due"}</span>
+                  <strong>₱{receiptPaid ? grandTotal : remainingDue}</strong>
                   </div>
 
                   <p className="crv-plain-thankyou">

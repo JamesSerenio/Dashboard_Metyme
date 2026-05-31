@@ -148,18 +148,55 @@ body.staff-exp-modal-open {
 }
 
 .staff-exp-toolbar {
-  display: flex;
+  display: grid;
+  grid-template-columns:
+    230px   /* Show */
+    220px   /* Mode */
+    170px   /* Export */
+    180px   /* Delete */
+    260px   /* Anchor Date */
+    160px;  /* Refresh */
+
   align-items: center;
-  gap: 14px;
-  flex-wrap: wrap;
+  gap: 12px;
+  width: 100%;
 }
 
+.staff-exp-toolbar .staff-exp-control,
+.staff-exp-toolbar .staff-exp-btn {
+  min-height: 56px;
+  width: 100%;
+}
+
+.staff-exp-toolbar .staff-exp-select,
+.staff-exp-toolbar .staff-exp-date {
+  width: 100%;
+  min-width: 0;
+}
+
+.staff-exp-toolbar .staff-exp-btn {
+  padding: 0 14px;
+  white-space: nowrap;
+}
+
+@media (max-width: 1280px) {
+  .staff-exp-toolbar {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .staff-exp-toolbar {
+    grid-template-columns: 1fr;
+  }
+}
 .staff-exp-control {
   min-height: 58px;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 0 14px;
+  padding: 0 16px;
+  overflow: hidden;
   border-radius: 20px;
   background: rgba(248, 242, 232, 0.98);
   border: 1px solid rgba(90, 65, 37, 0.08);
@@ -177,6 +214,8 @@ body.staff-exp-modal-open {
 .staff-exp-select,
 .staff-exp-date {
   min-height: 40px;
+  flex: 1;
+  width: 100%;
   border: none;
   outline: none;
   padding: 0 14px;
@@ -186,6 +225,11 @@ body.staff-exp-modal-open {
   font-size: 15px;
   font-weight: 900;
   box-shadow: inset 0 0 0 1px rgba(90, 65, 37, 0.10);
+}
+
+.staff-exp-control.anchor-date {
+  min-width: 260px;
+  border-radius: 18px;
 }
 
 .staff-exp-select {

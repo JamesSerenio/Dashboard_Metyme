@@ -828,3 +828,82 @@
     transform: rotate(360deg);
   }
 }
+.restock-toolbar-straight {
+  display: grid !important;
+  grid-template-columns: minmax(220px, 1fr) 205px 135px 300px 110px 135px 105px;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.restock-panel {
+  overflow: visible !important;
+  width: 100%;
+}
+
+.restock-panel-header {
+  width: 100%;
+}
+
+.restock-toolbar-straight .restock-date-card {
+  min-width: 300px;
+  padding: 0 12px;
+  display: grid;
+  grid-template-columns: auto 1fr 38px 38px;
+  align-items: center;
+  gap: 8px;
+}
+
+.restock-toolbar-straight .restock-date-display {
+  width: 100%;
+}
+
+.restock-toolbar-straight .restock-mini-icon-btn {
+  width: 38px;
+  min-width: 38px;
+}
+
+.restock-toolbar-straight .restock-date-display {
+  white-space: nowrap;
+  min-width: 110px;
+  text-align: center;
+}
+
+.restock-toolbar-straight .restock-mini-icon-btn {
+  flex: 0 0 38px;
+}
+
+.restock-toolbar-straight .restock-btn {
+  font-size: 14px;
+  padding: 0 12px;
+}
+
+.restock-toolbar-straight .restock-search-box,
+.restock-toolbar-straight .restock-select-card,
+.restock-toolbar-straight .restock-date-card,
+.restock-toolbar-straight .restock-btn {
+  min-height: 56px;
+}
+
+.restock-toolbar-straight .restock-select {
+  min-width: 0;
+  width: 100%;
+}
+
+.restock-toolbar-straight .restock-btn {
+  width: 100%;
+  padding: 0 14px;
+  white-space: nowrap;
+}
+
+@media (max-width: 1350px) {
+  .restock-toolbar-straight {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .restock-toolbar-straight {
+    grid-template-columns: 1fr;
+  }
+}

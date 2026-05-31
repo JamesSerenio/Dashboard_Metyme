@@ -584,3 +584,63 @@
     width: 100%;
   }
 }
+
+.cnc-toolbar-straight {
+  display: grid !important;
+  grid-template-columns: 220px 190px 100px 120px;
+  align-items: end;
+  justify-content: start;
+  gap: 12px;
+}
+
+.cnc-toolbar {
+  justify-content: flex-start !important;
+}
+
+.cnc-hero {
+  max-width: 980px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.cnc-toolbar-straight .cnc-control {
+  min-width: 0;
+}
+
+.cnc-toolbar-straight .cnc-control input,
+.cnc-toolbar-straight .cnc-control select,
+.cnc-inline-btn,
+.cnc-tab-row-inline .cnc-tab {
+  height: 50px;
+}
+
+.cnc-inline-btn {
+  padding: 0 18px;
+  min-height: 50px;
+}
+
+
+
+@media (max-width: 1200px) {
+  .cnc-toolbar-straight {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .cnc-tab-row-inline {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 720px) {
+  .cnc-toolbar-straight {
+    grid-template-columns: 1fr;
+  }
+
+  .cnc-inline-btn {
+    width: 100%;
+  }
+
+  .cnc-tab-row-inline {
+    flex-wrap: wrap;
+  }
+}
