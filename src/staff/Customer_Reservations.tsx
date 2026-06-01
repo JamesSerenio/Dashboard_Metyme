@@ -1588,7 +1588,7 @@ const totals = useMemo(() => {
     setGcashInput(String(pi.gcash));
     setCashInput(String(pi.cash));
   };
-
+ 
   const savePayment = async (): Promise<void> => {
     if (!paymentTarget) return;
 
