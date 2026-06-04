@@ -2311,35 +2311,44 @@ const getCommonAreaDurationLabel = (r: PromoBookingRow): string => {
           headStyles: { fillColor: [40, 40, 40], textColor: 255 },
         });
 
-        const totalOrdersSummary = records.reduce((sum, r) => {
+        const totalTimeSummary = records.reduce(
+  (sum, r) => sum + getSystemDue(r),
+  0
+);
+
+const totalOrdersSummary = records.reduce((sum, r) => {
   const recordDate = yyyyMmDdLocal(new Date(r.created_at));
 
-  const orderToday = round2(
+  const addonTotal = round2(
     getOrderItems(r.promo_code)
-      .filter((item) => {
-        if (!item.created_at) return false;
-        return yyyyMmDdLocal(new Date(item.created_at)) === recordDate;
-      })
+      .filter(
+        (item) =>
+          item.kind === "add_on" &&
+          item.created_at &&
+          yyyyMmDdLocal(new Date(item.created_at)) === recordDate
+      )
       .reduce((s, item) => s + round2(item.subtotal), 0)
   );
 
-  return sum + orderToday;
+  return sum + addonTotal;
 }, 0);
 
-const grandTotalSummary = records.reduce((sum, r) => {
+const totalConsignmentSummary = records.reduce((sum, r) => {
   const recordDate = yyyyMmDdLocal(new Date(r.created_at));
 
-  const orderToday = round2(
+  const consignmentTotal = round2(
     getOrderItems(r.promo_code)
-      .filter((item) => {
-        if (!item.created_at) return false;
-        return yyyyMmDdLocal(new Date(item.created_at)) === recordDate;
-      })
+      .filter(
+        (item) =>
+          item.kind === "consignment" &&
+          item.created_at &&
+          yyyyMmDdLocal(new Date(item.created_at)) === recordDate
+      )
       .reduce((s, item) => s + round2(item.subtotal), 0)
   );
 
-    return sum + round2(getSystemDue(r) + orderToday);
-    }, 0);
+  return sum + consignmentTotal;
+}, 0);
 
     const finalY = (doc as any).lastAutoTable?.finalY || 40;
 
@@ -2348,8 +2357,9 @@ const grandTotalSummary = records.reduce((sum, r) => {
       theme: "grid",
       head: [["Summary", "Amount"]],
       body: [
-        ["Total Orders", `PHP ${totalOrdersSummary.toFixed(2)}`],
-        ["Grand Total", `PHP ${grandTotalSummary.toFixed(2)}`],
+        ["Total Time", `PHP ${totalTimeSummary.toFixed(2)}`],
+        ["Orders", `PHP ${totalOrdersSummary.toFixed(2)}`],
+        ["Consignment", `PHP ${totalConsignmentSummary.toFixed(2)}`],
       ],
       styles: {
         fontSize: 10,

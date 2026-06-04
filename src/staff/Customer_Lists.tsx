@@ -488,10 +488,23 @@ const timeTotal = records.reduce(
   0
 );
 
-const totalOrders = records.reduce(
-  (sum, s) => sum + getOrderDue(s),
-  0
-);
+const totalOrders = records.reduce((sum, s) => {
+  const bundle = getOrderBundle(s);
+  const addonTotal = bundle.addonOrders.reduce(
+    (aSum, o) => aSum + wholePeso(toMoney(o.total_amount)),
+    0
+  );
+  return sum + addonTotal;
+}, 0);
+
+const totalConsignment = records.reduce((sum, s) => {
+  const bundle = getOrderBundle(s);
+  const consignmentTotal = bundle.consignmentOrders.reduce(
+    (cSum, o) => cSum + wholePeso(toMoney(o.total_amount)),
+    0
+  );
+  return sum + consignmentTotal;
+}, 0);
 
 const grandTotal = records.reduce(
   (sum, s) => sum + getGrandDue(s),
@@ -540,9 +553,9 @@ autoTable(doc, {
   theme: "grid",
   head: [["Summary", "Amount"]],
   body: [
-    ["Time Total", `PHP ${timeTotal.toFixed(2)}`],
-    ["Total Orders", `PHP ${totalOrders.toFixed(2)}`],
-    ["Grand Total", `PHP ${grandTotal.toFixed(2)}`],
+    ["Total Time", `PHP ${timeTotal.toFixed(2)}`],
+    ["Orders", `PHP ${totalOrders.toFixed(2)}`],
+    ["Consignment", `PHP ${totalConsignment.toFixed(2)}`],
   ],
   styles: {
     fontSize: 10,
