@@ -1099,7 +1099,29 @@ const canShowStopTimeButton = (s: CustomerSession): boolean => {
   };
 
   const getBaseSystemCost = (s: CustomerSession): number => {
-    return isOpenTimeSession(s) ? getLiveTotalCost(s) : wholePeso(toMoney(s.total_amount));
+    if (isOpenTimeSession(s)) {
+      return getLiveTotalCost(s);
+    }
+
+    const storedAmount = wholePeso(toMoney(s.total_amount));
+    if (storedAmount > 0) {
+      return storedAmount;
+    }
+
+    const started = String(s.time_started ?? "").trim();
+    const ended = String(s.time_ended ?? "").trim();
+
+    if (started && ended) {
+      const computed = computeCostWithFreeMinutes(started, ended);
+      if (computed > 0) return computed;
+    }
+
+    const totalMinutes = wholePeso(toMoney(s.total_time));
+    if (totalMinutes > 0) {
+      return wholePeso((totalMinutes / 60) * HOURLY_RATE);
+    }
+
+    return 0;
   };
 
   const getDiscountInfo = (
