@@ -64,12 +64,31 @@ const diffMinutes = (startIso: string, endIso: string): number => {
   return Math.floor((end - start) / (1000 * 60));
 };
 
-const computeSystemCost = (r: any): number => {
-  const stored = wholePeso(toNumber(r.total_amount));
-  if (stored > 0) return stored;
+const isOpenSession = (r: any): boolean => {
+  const hourAvail = String(r.hour_avail ?? "").trim().toUpperCase();
+  const endRaw = String(r.time_ended ?? "").trim();
 
+  if (hourAvail === "CLOSED") return false;
+  if (hourAvail === "OPEN") return true;
+  if (!endRaw) return true;
+
+  const end = new Date(endRaw);
+  if (!Number.isFinite(end.getTime())) return true;
+
+  return end.getFullYear() >= 2999;
+};
+
+const computeSystemCost = (r: any): number => {
   const started = String(r.time_started ?? "").trim();
   const ended = String(r.time_ended ?? "").trim();
+
+  if (isOpenSession(r) && started) {
+    const minutes = diffMinutes(started, new Date().toISOString());
+    return wholePeso((minutes / 60) * HOURLY_RATE);
+  }
+
+  const stored = wholePeso(toNumber(r.total_amount));
+  if (stored > 0) return stored;
 
   if (started && ended) {
     const minutes = diffMinutes(started, ended);
@@ -143,6 +162,16 @@ const Admin_Receipt: React.FC = () => {
   useEffect(() => {
     setSelected(null);
   }, [selectedDate]);
+
+  useEffect(() => {
+  const timer = window.setInterval(() => {
+    if (type === "customer_list") {
+      void loadCustomerListReceipts();
+    }
+  }, 30000);
+
+  return () => window.clearInterval(timer);
+}, [type]);
 
   const loadRecords = async () => {
     setLoading(true);
