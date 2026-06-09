@@ -46,6 +46,65 @@ const toBool = (v: unknown): boolean => {
 
 const money = (n: number): string => `₱${toNumber(n).toFixed(2)}`;
 
+const HOURLY_RATE = 20;
+
+const wholePeso = (n: number): number => {
+  const value = Number.isFinite(n) ? n : 0;
+  return Math.ceil(Math.max(0, value));
+};
+
+const diffMinutes = (startIso: string, endIso: string): number => {
+  const start = new Date(startIso).getTime();
+  const end = new Date(endIso).getTime();
+
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+    return 0;
+  }
+
+  return Math.floor((end - start) / (1000 * 60));
+};
+
+const isOpenSession = (r: any): boolean => {
+  const hourAvail = String(r.hour_avail ?? "").trim().toUpperCase();
+  const endRaw = String(r.time_ended ?? "").trim();
+
+  if (hourAvail === "CLOSED") return false;
+  if (hourAvail === "OPEN") return true;
+  if (!endRaw) return true;
+
+  const end = new Date(endRaw);
+  if (!Number.isFinite(end.getTime())) return true;
+
+  return end.getFullYear() >= 2999;
+};
+
+const computeSystemCost = (r: any): number => {
+  const started = String(r.time_started ?? "").trim();
+  const ended = String(r.time_ended ?? "").trim();
+
+  if (isOpenSession(r) && started) {
+    const minutes = diffMinutes(started, new Date().toISOString());
+    return wholePeso((minutes / 60) * HOURLY_RATE);
+  }
+
+  const stored = wholePeso(toNumber(r.total_amount));
+  if (stored > 0) return stored;
+
+  if (started && ended) {
+    const minutes = diffMinutes(started, ended);
+    if (minutes > 0) {
+      return wholePeso((minutes / 60) * HOURLY_RATE);
+    }
+  }
+
+  const totalMinutes = wholePeso(toNumber(r.total_time));
+  if (totalMinutes > 0) {
+    return wholePeso((totalMinutes / 60) * HOURLY_RATE);
+  }
+
+  return 0;
+};
+
 const formatDateTime = (iso: string | null | undefined): string => {
   if (!iso) return "-";
   const d = new Date(iso);
@@ -104,6 +163,16 @@ const Admin_Receipt: React.FC = () => {
     setSelected(null);
   }, [selectedDate]);
 
+  useEffect(() => {
+  const timer = window.setInterval(() => {
+    if (type === "customer_list") {
+      void loadCustomerListReceipts();
+    }
+  }, 30000);
+
+  return () => window.clearInterval(timer);
+}, [type]);
+
   const loadRecords = async () => {
     setLoading(true);
 
@@ -137,8 +206,8 @@ const Admin_Receipt: React.FC = () => {
     }
 
     const mapped: ReceiptRecord[] = (data ?? []).map((r: any) => {
-      const timeTotal = toNumber(r.total_amount);
-      const grandTotal = timeTotal;
+    const timeTotal = computeSystemCost(r);
+    const grandTotal = timeTotal;
 
       return {
         id: String(r.id),
