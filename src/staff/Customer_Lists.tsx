@@ -1099,29 +1099,25 @@ const canShowStopTimeButton = (s: CustomerSession): boolean => {
   };
 
   const getBaseSystemCost = (s: CustomerSession): number => {
+    const started = String(s.time_started ?? "").trim();
+    const ended = String(s.time_ended ?? "").trim();
+
     if (isOpenTimeSession(s)) {
       return getLiveTotalCost(s);
     }
 
     const storedAmount = wholePeso(toMoney(s.total_amount));
-    if (storedAmount > 0) {
-      return storedAmount;
-    }
 
-    const started = String(s.time_started ?? "").trim();
-    const ended = String(s.time_ended ?? "").trim();
-
+    let computedAmount = 0;
     if (started && ended) {
-      const computed = computeCostWithFreeMinutes(started, ended);
-      if (computed > 0) return computed;
+      computedAmount = computeCostWithFreeMinutes(started, ended);
     }
 
     const totalMinutes = wholePeso(toMoney(s.total_time));
-    if (totalMinutes > 0) {
-      return wholePeso((totalMinutes / 60) * HOURLY_RATE);
-    }
+    const totalTimeAmount =
+      totalMinutes > 0 ? wholePeso((totalMinutes / 60) * HOURLY_RATE) : 0;
 
-    return 0;
+    return Math.max(storedAmount, computedAmount, totalTimeAmount);
   };
 
   const getDiscountInfo = (
@@ -1312,10 +1308,8 @@ const totals = useMemo(() => {
       const now = new Date();
       const nowIso = now.toISOString();
 
-      const totalMinutes = computeHours(session.time_started, nowIso);
-      const totalCost = wholePeso(
-      computeCostWithFreeMinutes(session.time_started, nowIso)
-    );
+      const totalMinutes = diffMinutes(session.time_started, nowIso);
+      const totalCost = computeCostWithFreeMinutes(session.time_started, nowIso);
 
       // optimistic UI update para mawala agad button
       setLocallyStoppedIds((prev) => ({
@@ -1326,7 +1320,7 @@ const totals = useMemo(() => {
       const optimisticRow: CustomerSession = {
         ...session,
         time_ended: nowIso,
-        total_time: Number(totalMinutes.toFixed(2)),
+        total_time: totalMinutes,
         total_amount: totalCost,
         hour_avail: "CLOSED",
         expected_end_at: null,
@@ -1348,7 +1342,7 @@ const totals = useMemo(() => {
         .from("customer_sessions")
         .update({
           time_ended: nowIso,
-          total_time: Number(totalMinutes.toFixed(2)),
+          total_time: totalMinutes,
           total_amount: totalCost,
           hour_avail: "CLOSED",
           expected_end_at: null,
