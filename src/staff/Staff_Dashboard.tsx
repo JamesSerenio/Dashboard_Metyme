@@ -793,57 +793,76 @@ const Staff_Dashboard: React.FC = () => {
     return null;
   };
 
-  const clearToAvailableNow = async (pinId: string, kind: PinKind): Promise<void> => {
-    const nowMs = Date.now();
-    const nowMinusIso = new Date(nowMs - 120_000).toISOString();
-    const nowPlusIso = new Date(nowMs + 120_000).toISOString();
+const clearToAvailableNow = async (
+  pinId: string,
+  kind: PinKind
+): Promise<void> => {
+  if (!pinId || saving) return;
 
-    const seatKey = kind === "room" ? CONFERENCE_ID : pinId;
-    const area = getAreaForSelection(kind);
+  const seatKey = kind === "room" ? CONFERENCE_ID : normalizeSeatId(pinId);
+  const area = getAreaForSelection(kind);
 
-    setSaving(true);
+  setSaving(true);
 
-    {
-      const { error: delBlkErr } = await supabase
-        .from("seat_blocked_times")
-        .delete()
-        .eq("seat_number", seatKey)
-        .lt("start_at", nowPlusIso)
-        .gt("end_at", nowMinusIso);
+  try {
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
 
-      if (delBlkErr) {
-        setSaving(false);
-        alert(`Delete blocked error: ${delBlkErr.message}`);
-        return;
-      }
+    if (authError || !user) {
+      throw new Error(
+        "Walang active staff login. Mag-login ulit bago mag-clear."
+      );
     }
 
-    {
-      const base = supabase
-        .from("promo_bookings")
-        .delete()
-        .eq("area", area)
-        .eq("status", "active")
-        .lt("start_at", nowPlusIso)
-        .gt("end_at", nowMinusIso);
+    const { data, error } = await supabase.rpc("clear_seat_now", {
+      p_seat_number: seatKey,
+      p_area: area,
+      p_is_conference: kind === "room",
+    });
 
-      const { error: delPromoErr } =
-        kind === "room"
-          ? await base.is("seat_number", null)
-          : await base.eq("seat_number", seatKey);
-
-      if (delPromoErr) {
-        setSaving(false);
-        alert(`Delete promo error: ${delPromoErr.message}`);
-        return;
-      }
+    if (error) {
+      throw new Error(error.message);
     }
 
-    setSaving(false);
+    console.log("Clear seat result:", data);
+
+    const result = data as {
+      success?: boolean;
+      deleted_blocks?: number;
+      deleted_promos?: number;
+    } | null;
+
+    if (!result?.success) {
+      throw new Error("Hindi nakumpleto ang pag-clear ng seat.");
+    }
+
+    setStatusBySeat((previous) => ({
+      ...previous,
+      [seatKey]: "temp_available",
+    }));
+
     setIsModalOpen(false);
     setSelectedSeat("");
+
     await loadSeatStatuses();
-  };
+
+    console.log(
+      `Cleared blocks: ${result.deleted_blocks ?? 0}, promos: ${
+        result.deleted_promos ?? 0
+      }`
+    );
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Failed to clear the seat.";
+
+    console.error("Clear seat error:", error);
+    alert(`Clear failed: ${message}`);
+  } finally {
+    setSaving(false);
+  }
+};
 
   const setBlocked = async (choice: "occupied" | "reserved"): Promise<void> => {
     if (!selectedSeat) return;
