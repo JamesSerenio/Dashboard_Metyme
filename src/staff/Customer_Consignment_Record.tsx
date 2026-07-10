@@ -29,6 +29,8 @@ type CustomerConsignmentRow = {
   gcash_amount: NumericLike;
   cash_amount: NumericLike;
   is_paid: boolean | number | string | null;
+  is_served: boolean | number | string | null;
+  served_at: string | null;
 
   voided: boolean | number | string | null;
   voided_at: string | null;
@@ -63,6 +65,8 @@ type ReceiptGroup = {
 
   is_paid: boolean;
   paid_at: string | null;
+  is_served: boolean;
+  served_at: string | null;
 
   is_voided: boolean;
   voided_at: string | null;
@@ -196,6 +200,7 @@ const Customer_Consignment_Record: React.FC = () => {
   const [savingPayment, setSavingPayment] = useState<boolean>(false);
 
   const [togglingPaidId, setTogglingPaidId] = useState<string | null>(null);
+  const [togglingServedId, setTogglingServedId] = useState<string | null>(null);
 
   const [voidTarget, setVoidTarget] = useState<CustomerConsignmentRow | null>(null);
   const [voidReason, setVoidReason] = useState<string>("");
@@ -239,6 +244,8 @@ const fetchByDate = async (dateKey: string): Promise<void> => {
       gcash_amount,
       cash_amount,
       is_paid,
+      is_served,
+      served_at,
       voided,
       voided_at,
       void_note,
@@ -446,6 +453,8 @@ function makeReceiptGroup(r: CustomerConsignmentRow): ReceiptGroup {
     cash_amount: cash,
     is_paid: paid,
     paid_at: payment ? payment.paid_at ?? null : r.paid_at ?? null,
+    is_served: toBool(r.is_served),
+    served_at: r.served_at ?? null,
     is_voided: isVoided,
     voided_at: r.voided_at ?? null,
     void_note: r.void_note ?? null,
@@ -565,6 +574,67 @@ const stats = useMemo(() => {
       alert("Toggle paid failed.");
     } finally {
       setTogglingPaidId(null);
+    }
+  };
+
+    const toggleServed = async (r: CustomerConsignmentRow): Promise<void> => {
+    if (toBool(r.voided)) {
+      alert("Cannot change served status for VOIDED record.");
+      return;
+    }
+
+    const view = makeReceiptGroup(r);
+    const nextServed = !toBool(r.is_served);
+    const servedAt = nextServed ? new Date().toISOString() : null;
+
+    try {
+      setTogglingServedId(r.id);
+
+      // instant UI update
+      setRows((prev) =>
+        prev.map((row) =>
+          row.id === r.id
+            ? {
+                ...row,
+                is_served: nextServed,
+                served_at: servedAt,
+              }
+            : row
+        )
+      );
+
+      const { data, error } = await supabase.rpc(
+        "set_consignment_served_status",
+        {
+          p_row_id: r.id,
+          p_is_served: nextServed,
+          p_booking_code: view.booking_code ?? null,
+        }
+      );
+
+      if (error) {
+        alert(`Update served status error: ${error.message}`);
+        await fetchByDate(selectedDate);
+        return;
+      }
+
+      const affected = Number(data ?? 0);
+
+      if (affected <= 0) {
+        alert(
+          "No rows were updated. The item ID was not found in customer_session_consignment."
+        );
+        await fetchByDate(selectedDate);
+        return;
+      }
+
+      await fetchByDate(selectedDate);
+    } catch (e: unknown) {
+      console.error(e);
+      alert("Update served status failed.");
+      await fetchByDate(selectedDate);
+    } finally {
+      setTogglingServedId(null);
     }
   };
 
@@ -744,6 +814,7 @@ const stats = useMemo(() => {
                     <th>Total</th>
                     <th>Payment</th>
                     <th>Paid?</th>
+                    <th>Served?</th>
                     <th>Action</th>
                   </tr>
                 </thead>
@@ -765,7 +836,9 @@ const stats = useMemo(() => {
 
             const isVoided = view.is_voided;
             const isPaid = view.is_paid;
+            const isServed = toBool(r.is_served);
             const busyPaid = togglingPaidId === r.id;
+            const busyServed = togglingServedId === r.id;
 
                     return (
                       <tr key={r.id} className={isVoided ? "is-voided" : ""}>
@@ -806,17 +879,32 @@ const stats = useMemo(() => {
                           </div>
                         </td>
 
-                        <td>
-                          <button
-                            className={`ccr-btn ccr-pay-badge ${isPaid ? "ccr-pay-badge--paid" : "ccr-pay-badge--unpaid"}`}
-                            onClick={() => void togglePaid(r)}
-                            disabled={busyPaid || isVoided}
-                            title={isVoided ? "Voided" : isPaid ? "Tap to set UNPAID" : "Tap to set PAID"}
-                            type="button"
-                          >
-                            {busyPaid ? "Updating..." : isPaid ? "PAID" : "UNPAID"}
-                          </button>
-                        </td>
+                <td>
+                  <button
+                    className={`ccr-btn ccr-pay-badge ${isPaid ? "ccr-pay-badge--paid" : "ccr-pay-badge--unpaid"}`}
+                    onClick={() => void togglePaid(r)}
+                    disabled={busyPaid || isVoided}
+                    title={isVoided ? "Voided" : isPaid ? "Tap to set UNPAID" : "Tap to set PAID"}
+                    type="button"
+                  >
+                    {busyPaid ? "Updating..." : isPaid ? "PAID" : "UNPAID"}
+                  </button>
+                </td>
+
+                <td>
+                  <label className={`ccr-served-box ${isServed ? "is-served" : ""}`}>
+                    <input
+                      type="checkbox"
+                      className="ccr-served-check"
+                      checked={isServed}
+                      disabled={busyServed || isVoided}
+                      onChange={() => void toggleServed(r)}
+                    />
+                    <span className="ccr-served-text">
+                      {busyServed ? "Saving..." : isServed ? "SERVED" : "PENDING"}
+                    </span>
+                  </label>
+                </td>
 
                         <td>
                           <div className="ccr-action-stack">
