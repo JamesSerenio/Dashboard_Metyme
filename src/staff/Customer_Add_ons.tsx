@@ -518,22 +518,20 @@ lastRow = row;
       return bestCode;
     };
 
-const usedBookingCodes = new Set<string>();
-
     return groups
       .map((g) => {
         const bookingCode = findBookingCodeForGroupLocal(g);
 
         let payment: CustomerOrderPayment | null = null;
 
+        // ✅ Apply same shared payment status to ALL groups with same booking code.
+        // Before: only first row/group became PAID because of usedBookingCodes.
         if (
           useSharedOrderPayments &&
           bookingCode &&
-          orderPayments[bookingCode] &&
-          !usedBookingCodes.has(bookingCode)
+          orderPayments[bookingCode]
         ) {
           payment = orderPayments[bookingCode];
-          usedBookingCodes.add(bookingCode); // ✅ mark as used
         }
 
       const paymentGcash = payment ? round2(Math.max(0, toNumber(payment.gcash_amount))) : 0;
