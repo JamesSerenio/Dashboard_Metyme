@@ -27,6 +27,8 @@ interface CustomerSessionAddOnRow {
   cash_amount: NumericLike;
   is_paid: boolean | number | string | null;
   paid_at: string | null;
+  is_served: boolean | number | string | null;
+  served_at: string | null;
   add_ons: AddOnInfo | null;
 }
 
@@ -46,6 +48,8 @@ interface CustomerAddOnMerged {
   cash_amount: number;
   is_paid: boolean;
   paid_at: string | null;
+  is_served: boolean;
+  served_at: string | null;
 }
 
 type OrderItem = {
@@ -82,6 +86,8 @@ type OrderGroup = {
   cash_amount: number;
   is_paid: boolean;
   paid_at: string | null;
+  is_served: boolean;
+  served_at: string | null;
 };
 
 /* ---------------- helpers ---------------- */
@@ -222,6 +228,7 @@ const Customer_Add_ons: React.FC = () => {
   const [savingPayment, setSavingPayment] = useState<boolean>(false);
 
   const [togglingPaidKey, setTogglingPaidKey] = useState<string | null>(null);
+  const [togglingServedKey, setTogglingServedKey] = useState<string | null>(null);
 
   const [cancelTarget, setCancelTarget] = useState<OrderGroup | null>(null);
   const [cancelDesc, setCancelDesc] = useState<string>("");
@@ -271,30 +278,32 @@ const Customer_Add_ons: React.FC = () => {
 
     const { startIso, endIso } = manilaDayRange(dateStr);
 
-    const q = supabase
-      .from("customer_session_add_ons")
-      .select(
-        `
-        id,
-        created_at,
-        add_on_id,
-        quantity,
-        price,
-        total,
-        full_name,
-        seat_number,
-        gcash_amount,
-        cash_amount,
-        is_paid,
-        paid_at,
-        add_ons (
-          id,
-          name,
-          category,
-          size
-        )
-      `
-      )
+const q = supabase
+  .from("customer_session_add_ons")
+  .select(
+    `
+    id,
+    created_at,
+    add_on_id,
+    quantity,
+    price,
+    total,
+    full_name,
+    seat_number,
+    gcash_amount,
+    cash_amount,
+    is_paid,
+    paid_at,
+    is_served,
+    served_at,
+    add_ons (
+      id,
+      name,
+      category,
+      size
+    )
+  `
+  )
       .gte("created_at", startIso)
       .lt("created_at", endIso)
       .order("created_at", { ascending: true });
@@ -326,6 +335,8 @@ const Customer_Add_ons: React.FC = () => {
         cash_amount: round2(Math.max(0, toNumber(r.cash_amount))),
         is_paid: toBool(r.is_paid),
         paid_at: r.paid_at ?? null,
+        is_served: toBool(r.is_served),
+        served_at: r.served_at ?? null,
       };
     });
 
@@ -433,6 +444,8 @@ const Customer_Add_ons: React.FC = () => {
           cash_amount: 0,
           is_paid: false,
           paid_at: null,
+          is_served: toBool(row.is_served),
+          served_at: row.served_at ?? null,
         };
 
         groups.push(current);
@@ -481,6 +494,10 @@ current.cash_amount = round2(
 current.is_paid = current.is_paid || row.is_paid;
 current.paid_at = current.paid_at ?? row.paid_at;
 
+// Served is checked only if all rows inside this order group are served.
+current.is_served = current.is_served && toBool(row.is_served);
+current.served_at = current.is_served ? current.served_at ?? row.served_at : null;
+
 lastRow = row;
 
 /*
@@ -518,22 +535,20 @@ lastRow = row;
       return bestCode;
     };
 
-const usedBookingCodes = new Set<string>();
-
     return groups
       .map((g) => {
         const bookingCode = findBookingCodeForGroupLocal(g);
 
         let payment: CustomerOrderPayment | null = null;
 
+        // ✅ Apply same shared payment status to ALL groups with same booking code.
+        // Before: only first row/group became PAID because of usedBookingCodes.
         if (
           useSharedOrderPayments &&
           bookingCode &&
-          orderPayments[bookingCode] &&
-          !usedBookingCodes.has(bookingCode)
+          orderPayments[bookingCode]
         ) {
           payment = orderPayments[bookingCode];
-          usedBookingCodes.add(bookingCode); // ✅ mark as used
         }
 
       const paymentGcash = payment ? round2(Math.max(0, toNumber(payment.gcash_amount))) : 0;
@@ -584,6 +599,8 @@ const usedBookingCodes = new Set<string>();
           cash_amount: nextCash,
           is_paid: nextIsPaid,
           paid_at: nextPaidAt,
+          is_served: g.is_served,
+          served_at: g.served_at,
         };
       })
       .sort((a, b) => ms(b.created_at) - ms(a.created_at));
@@ -840,6 +857,67 @@ const togglePaid = async (o: OrderGroup): Promise<void> => {
       }
     };
 
+const toggleServed = async (o: OrderGroup): Promise<void> => {
+  const itemIds = Array.from(
+    new Set(o.items.flatMap((x) => x.row_ids ?? [x.id]).filter(Boolean))
+  );
+
+  if (itemIds.length === 0) {
+    alert("No item rows found to update.");
+    return;
+  }
+
+  const nextServed = !toBool(o.is_served);
+  const servedAt = nextServed ? new Date().toISOString() : null;
+
+  try {
+    setTogglingServedKey(o.key);
+
+    // instant UI update
+    setRecords((prev) =>
+      prev.map((row) =>
+        itemIds.includes(row.id)
+          ? {
+              ...row,
+              is_served: nextServed,
+              served_at: servedAt,
+            }
+          : row
+      )
+    );
+
+    const { data, error } = await supabase.rpc("set_addon_served_status", {
+      p_item_ids: itemIds,
+      p_is_served: nextServed,
+      p_booking_code: o.booking_code ?? null,
+    });
+
+    if (error) {
+      alert(`Update served status error: ${error.message}`);
+      await fetchAddOns(selectedDate);
+      return;
+    }
+
+    const affected = Number(data ?? 0);
+
+    if (affected <= 0) {
+      alert(
+        "No rows were updated. The item IDs were not found in customer_session_add_ons."
+      );
+      await fetchAddOns(selectedDate);
+      return;
+    }
+
+    await fetchAddOns(selectedDate);
+  } catch (e) {
+    console.error(e);
+    alert("Update served status failed.");
+    await fetchAddOns(selectedDate);
+  } finally {
+    setTogglingServedKey(null);
+  }
+};
+
   return (
     <div className="cao-page">
       <div className="cao-shell">
@@ -950,6 +1028,7 @@ const togglePaid = async (o: OrderGroup): Promise<void> => {
                   <th>Grand Total</th>
                   <th>Payment</th>
                   <th>Paid?</th>
+                  <th>Served?</th>
                   <th>Action</th>
                 </tr>
               </thead>
@@ -960,7 +1039,9 @@ const togglePaid = async (o: OrderGroup): Promise<void> => {
                   const totalPaid = round2(o.gcash_amount + o.cash_amount);
                   const diff = round2(totalPaid - due);
                   const paid = toBool(o.is_paid);
+                  const served = toBool(o.is_served);
                   const busyCancel = cancellingKey === o.key;
+                  const busyServed = togglingServedKey === o.key;
 
                   return (
                     <tr key={o.key}>
@@ -1028,6 +1109,21 @@ const togglePaid = async (o: OrderGroup): Promise<void> => {
                         >
                           {togglingPaidKey === o.key ? "Updating..." : paid ? "PAID" : "UNPAID"}
                         </button>
+                      </td>
+
+                      <td>
+                        <label className={`cao-served-box ${served ? "is-served" : ""}`}>
+                          <input
+                            type="checkbox"
+                            className="cao-served-check"
+                            checked={served}
+                            disabled={busyServed}
+                            onChange={() => void toggleServed(o)}
+                          />
+                          <span className="cao-served-text">
+                            {busyServed ? "Saving..." : served ? "SERVED" : "PENDING"}
+                          </span>
+                        </label>
                       </td>
 
                       <td>
