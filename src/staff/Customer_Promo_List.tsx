@@ -123,6 +123,7 @@
     quantity: number;
     price: number;
     subtotal: number;
+    is_paid: boolean;
   }
 
   interface PromoOrderParentRow {
@@ -1076,6 +1077,7 @@ const getCommonAreaDurationLabel = (r: PromoBookingRow): string => {
           quantity: Math.max(0, Math.floor(toNumber(r.quantity))),
           price: round2(toNumber(r.price)),
           subtotal: round2(toNumber(r.subtotal == null ? toNumber(r.price) * toNumber(r.quantity) : r.subtotal)),
+          is_paid: false,
         });
       });
 
@@ -1100,8 +1102,52 @@ const getCommonAreaDurationLabel = (r: PromoBookingRow): string => {
           quantity: Math.max(0, Math.floor(toNumber(r.quantity))),
           price: round2(toNumber(r.price)),
           subtotal: round2(toNumber(r.subtotal == null ? toNumber(r.price) * toNumber(r.quantity) : r.subtotal)),
+          is_paid: false,
         });
       });
+
+        // Payment is stored per legacy session row. Match it back to the
+        // normalized order item using the shared catalog id + creation time.
+        const allItems = Object.values(itemMap).flat();
+        const addonIds = Array.from(new Set(
+          allItems.filter((item) => item.kind === "add_on").map((item) => item.source_item_id).filter(Boolean)
+        ));
+        const consignmentIds = Array.from(new Set(
+          allItems.filter((item) => item.kind === "consignment").map((item) => item.source_item_id).filter(Boolean)
+        ));
+
+        const [legacyAddonRes, legacyConsignmentRes] = await Promise.all([
+          addonIds.length
+            ? supabase
+                .from("customer_session_add_ons")
+                .select("add_on_id, created_at, is_paid")
+                .in("add_on_id", addonIds)
+            : Promise.resolve({ data: [], error: null }),
+          consignmentIds.length
+            ? supabase
+                .from("customer_session_consignment")
+                .select("consignment_id, created_at, is_paid")
+                .in("consignment_id", consignmentIds)
+            : Promise.resolve({ data: [], error: null }),
+        ]);
+
+        const paidItemKeys = new Set<string>();
+        for (const row of legacyAddonRes.data ?? []) {
+          if (toBool(row.is_paid)) {
+            paidItemKeys.add(`add_on|${String(row.add_on_id)}|${String(row.created_at)}`);
+          }
+        }
+        for (const row of legacyConsignmentRes.data ?? []) {
+          if (toBool(row.is_paid)) {
+            paidItemKeys.add(`consignment|${String(row.consignment_id)}|${String(row.created_at)}`);
+          }
+        }
+
+        for (const item of allItems) {
+          item.is_paid = paidItemKeys.has(
+            `${item.kind}|${item.source_item_id}|${String(item.created_at)}`
+          );
+        }
 
         Object.keys(itemMap).forEach((code) => {
           itemMap[code] = itemMap[code].sort((a, b) => a.name.localeCompare(b.name));
@@ -3035,12 +3081,12 @@ const totalConsignmentSummary = records.reduce((sum, r) => {
 
                             <span
                               className={`cpl-order-paid-badge ${
-                                getOrderRemainingInfo(selectedOrderBooking.promo_code).remaining <= 0
+                                item.is_paid || toBool(selectedOrderBooking.is_paid)
                                   ? "paid"
                                   : "unpaid"
                               }`}
                             >
-                              {getOrderRemainingInfo(selectedOrderBooking.promo_code).remaining <= 0
+                              {item.is_paid || toBool(selectedOrderBooking.is_paid)
                                 ? "PAID"
                                 : "UNPAID"}
                             </span>
