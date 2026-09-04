@@ -1193,6 +1193,25 @@ const getCommonAreaDurationLabel = (r: PromoBookingRow): string => {
           };
         });
 
+        // A promo code can contain many orders from different dates. Allocate
+        // the saved payment to the newest items first so paying ₱38 marks the
+        // newest ₱38 item paid instead of requiring every historical order to
+        // be paid before any badge changes.
+        for (const [code, items] of Object.entries(itemMap)) {
+          const payment = paymentMap[code.trim().toUpperCase()];
+          let remainingPaid = round2((payment?.gcash ?? 0) + (payment?.cash ?? 0));
+          const newestFirst = [...items].sort((a, b) =>
+            String(b.created_at ?? "").localeCompare(String(a.created_at ?? ""))
+          );
+
+          for (const item of newestFirst) {
+            if (remainingPaid + 0.001 >= item.subtotal) {
+              item.is_paid = true;
+              remainingPaid = round2(remainingPaid - item.subtotal);
+            }
+          }
+        }
+
         setOrdersMap(itemMap);
         setOrderParentsMap(parentMap);
         setOrderPaymentMap(paymentMap);
@@ -1731,35 +1750,46 @@ const getCommonAreaDurationLabel = (r: PromoBookingRow): string => {
     booking: PromoBookingRow,
     orderPaid: { gcash: number; cash: number; totalPaid: number }
   ): Promise<void> => {
-    const orderDue = getOrderDue(booking.promo_code);
-    const orderIsPaid = orderDue <= 0 ? true : orderPaid.totalPaid >= orderDue;
-    const paidAt = orderIsPaid ? new Date().toISOString() : null;
-
     const addOnItems = getOrderItems(booking.promo_code).filter((x) => x.kind === "add_on");
     const consignmentItems = getOrderItems(booking.promo_code).filter((x) => x.kind === "consignment");
+    const newestFirst = [...addOnItems, ...consignmentItems].sort((a, b) =>
+      String(b.created_at ?? "").localeCompare(String(a.created_at ?? ""))
+    );
+    const paidKeys = new Set<string>();
+    let remainingPaid = round2(orderPaid.totalPaid);
+
+    for (const item of newestFirst) {
+      if (remainingPaid + 0.001 >= item.subtotal) {
+        paidKeys.add(`${item.kind}|${item.id}`);
+        remainingPaid = round2(remainingPaid - item.subtotal);
+      }
+    }
 
     for (const item of addOnItems) {
-      const { data: matchedRows, error: findErr } = await supabase
+      let matchQuery = supabase
         .from("customer_session_add_ons")
         .select("id, created_at")
         .eq("add_on_id", item.source_item_id)
         .eq("full_name", booking.full_name)
-        .eq("seat_number", seatLabel(booking))
         .eq("quantity", item.quantity)
-        .eq("price", item.price)
-        .order("created_at", { ascending: false })
-        .limit(1);
+        .eq("price", item.price);
+
+      if (item.created_at) matchQuery = matchQuery.eq("created_at", item.created_at);
+
+      const { data: matchedRows, error: findErr } = await matchQuery.limit(1);
 
       if (findErr) throw findErr;
 
       const targetId = matchedRows?.[0]?.id ?? null;
       if (!targetId) continue;
 
+      const itemIsPaid = paidKeys.has(`${item.kind}|${item.id}`);
+
       const { error } = await supabase
         .from("customer_session_add_ons")
         .update({
-          is_paid: orderIsPaid,
-          paid_at: paidAt,
+          is_paid: itemIsPaid,
+          paid_at: itemIsPaid ? new Date().toISOString() : null,
         })
         .eq("id", targetId);
 
@@ -1767,28 +1797,31 @@ const getCommonAreaDurationLabel = (r: PromoBookingRow): string => {
     }
 
     for (const item of consignmentItems) {
-      const { data: matchedRows, error: findErr } = await supabase
+      let matchQuery = supabase
         .from("customer_session_consignment")
         .select("id, created_at")
         .eq("consignment_id", item.source_item_id)
         .eq("full_name", booking.full_name)
-        .eq("seat_number", seatLabel(booking))
         .eq("quantity", item.quantity)
         .eq("price", item.price)
-        .eq("voided", false)
-        .order("created_at", { ascending: false })
-        .limit(1);
+        .eq("voided", false);
+
+      if (item.created_at) matchQuery = matchQuery.eq("created_at", item.created_at);
+
+      const { data: matchedRows, error: findErr } = await matchQuery.limit(1);
 
       if (findErr) throw findErr;
 
       const targetId = matchedRows?.[0]?.id ?? null;
       if (!targetId) continue;
 
+      const itemIsPaid = paidKeys.has(`${item.kind}|${item.id}`);
+
       const { error } = await supabase
         .from("customer_session_consignment")
         .update({
-          is_paid: orderIsPaid,
-          paid_at: paidAt,
+          is_paid: itemIsPaid,
+          paid_at: itemIsPaid ? new Date().toISOString() : null,
         })
         .eq("id", targetId);
 
@@ -2050,12 +2083,6 @@ const getCommonAreaDurationLabel = (r: PromoBookingRow): string => {
 
       if (paymentSaveErr) throw paymentSaveErr;
 
-      await syncDetailRowsPaidStateByBooking(orderPaymentTarget, {
-        gcash: nextTotalGcash,
-        cash: nextTotalCash,
-        totalPaid: round2(nextTotalGcash + nextTotalCash),
-      });
-
       const orderPaidInfo = {
         gcash: nextTotalGcash,
         cash: nextTotalCash,
@@ -2094,6 +2121,14 @@ const getCommonAreaDurationLabel = (r: PromoBookingRow): string => {
 
       await fetchOrdersForPromoCodes([code]);
       setOrderPaymentTarget(null);
+
+      if (!isPaid) {
+        alert(
+          `Partial payment saved. Remaining order balance: ₱${round2(
+            computedOrderTotal - totalPaid
+          ).toFixed(2)}`
+        );
+      }
     } catch (error: any) {
       console.error(error);
       alert(`Order payment failed: ${error?.message ?? "Unknown error"}`);
