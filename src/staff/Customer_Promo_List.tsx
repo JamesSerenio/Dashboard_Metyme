@@ -1135,7 +1135,7 @@ const getCommonAreaDurationLabel = (r: PromoBookingRow): string => {
           is_paid: boolean | number | string | null;
           paid_at: string | null;
         }>).forEach((r) => {
-          const key = String(r.booking_code ?? "").trim();
+          const key = String(r.booking_code ?? "").trim().toUpperCase();
           if (!key) return;
 
           paymentMap[key] = {
@@ -1249,8 +1249,8 @@ const getCommonAreaDurationLabel = (r: PromoBookingRow): string => {
 
     const getOrderPaidInfo = (
       code: string | null
-    ): { gcash: number; cash: number; totalPaid: number } => {
-      const key = String(code ?? "").trim();
+    ): { gcash: number; cash: number; totalPaid: number; isPaid: boolean } => {
+      const key = String(code ?? "").trim().toUpperCase();
       const row = key ? orderPaymentMap[key] : null;
 
       const gcash = round2(Math.max(0, toNumber(row?.gcash)));
@@ -1260,6 +1260,7 @@ const getCommonAreaDurationLabel = (r: PromoBookingRow): string => {
         gcash,
         cash,
         totalPaid: round2(gcash + cash),
+        isPaid: toBool(row?.is_paid),
       };
     };
 
@@ -1289,7 +1290,19 @@ const getCommonAreaDurationLabel = (r: PromoBookingRow): string => {
       code: string | null
     ): { remaining: number; change: number; label: "Remaining" | "Change" } => {
       const due = getOrderDue(code);
-      const paid = getOrderPaidInfo(code).totalPaid;
+      const payment = getOrderPaidInfo(code);
+      const paid = payment.totalPaid;
+
+      // Supabase's persisted payment status is authoritative. Some older paid
+      // rows do not have their cash/GCash split populated, so deriving the
+      // badge only from those amounts incorrectly displays UNPAID.
+      if (payment.isPaid) {
+        return {
+          remaining: 0,
+          change: round2(Math.max(0, paid - due)),
+          label: "Change",
+        };
+      }
       const diff = round2(due - paid);
 
       if (diff > 0) return { remaining: diff, change: 0, label: "Remaining" };
