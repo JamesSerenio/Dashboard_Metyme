@@ -1,9 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import "../styles/staff_dashboard.css";
-import seatsImage from "../assets/seats.png";
-import bearImage from "../assets/bear.png";
-import grassImage from "../assets/grass.png";
+import seatsImage from "../assets/Set layout/Layout.jpg";
 import { supabase } from "../utils/supabaseClient";
 
 type SeatStatus = "temp_available" | "occupied_temp" | "occupied" | "reserved";
@@ -43,17 +41,12 @@ type PromoBookingRow = {
 type PackageRow = { id: string; area?: string };
 type PackageOptionRow = { id: string };
 
-const STORAGE_KEY = "seatmap_pin_positions_v1";
+const STORAGE_KEY = "seatmap_layout_pin_positions_v3";
 const CONFERENCE_ID = "CONFERENCE_ROOM";
-
-const SWATCH_GREEN_ID = "__SWATCH_GREEN__";
-const SWATCH_YELLOW_ID = "__SWATCH_YELLOW__";
-const SWATCH_RED_ID = "__SWATCH_RED__";
-const SWATCH_PURPLE_ID = "__SWATCH_PURPLE__";
 
 const STATUS_COLOR: Record<SeatStatus, string> = {
   temp_available: "seat-green",
-  occupied_temp: "seat-yellow",
+  occupied_temp: "seat-orange",
   occupied: "seat-orange",
   reserved: "seat-purple",
 };
@@ -362,83 +355,36 @@ const SeatManageModal: React.FC<SeatManageModalProps> = ({
 const Staff_Dashboard: React.FC = () => {
   const defaultPins: SeatPin[] = useMemo(
     () => [
-      { id: CONFERENCE_ID, label: "CONFERENCE ROOM", x: 13, y: 21.6, kind: "room" },
+      { id: CONFERENCE_ID, label: "CONFERENCE ROOM", x: 15, y: 15, kind: "room" },
 
-      { id: "6", label: "6", x: 39.3, y: 29, kind: "seat" },
-      { id: "5", label: "5", x: 45.8, y: 29, kind: "seat" },
-      { id: "4", label: "4", x: 52.5, y: 29, kind: "seat" },
-      { id: "3", label: "3", x: 58.9, y: 29, kind: "seat" },
-      { id: "2", label: "2", x: 73.6, y: 29, kind: "seat" },
-      { id: "1", label: "1", x: 80.2, y: 29, kind: "seat" },
+      { id: "6", label: "6", x: 26.7, y: 24.4, kind: "seat" },
+      { id: "5", label: "5", x: 31.6, y: 24.4, kind: "seat" },
+      { id: "4", label: "4", x: 36.5, y: 24.4, kind: "seat" },
+      { id: "3", label: "3", x: 41.4, y: 24.4, kind: "seat" },
+      { id: "11", label: "11", x: 15.2, y: 41.4, kind: "seat" },
+      { id: "10", label: "10", x: 21.5, y: 47.8, kind: "seat" },
+      { id: "9", label: "9", x: 22.9, y: 43.9, kind: "seat" },
+      { id: "8A", label: "8A", x: 33.1, y: 43.9, kind: "seat" },
+      { id: "8B", label: "8B", x: 31.5, y: 49.1, kind: "seat" },
+      { id: "7A", label: "7A", x: 39.4, y: 43.9, kind: "seat" },
+      { id: "7B", label: "7B", x: 40.9, y: 49.1, kind: "seat" },
 
-      { id: "11", label: "11", x: 13, y: 40.7, kind: "seat" },
-      { id: "10", label: "10", x: 25.5, y: 42.7, kind: "seat" },
-      { id: "9", label: "9", x: 28, y: 39.5, kind: "seat" },
-
-      { id: "8A", label: "8A", x: 42, y: 39.5, kind: "seat" },
-      { id: "8B", label: "8B", x: 42.0, y: 43, kind: "seat" },
-
-      { id: "7A", label: "7A", x: 58, y: 39.7, kind: "seat" },
-      { id: "7B", label: "7B", x: 58.2, y: 43, kind: "seat" },
-
-      { id: "13", label: "13", x: 41, y: 61, kind: "seat" },
-
-      { id: "14", label: "14", x: 47.8, y: 52.3, kind: "seat" },
-      { id: "15", label: "15", x: 54.5, y: 52.3, kind: "seat" },
-      { id: "16", label: "16", x: 61, y: 52.2, kind: "seat" },
-      { id: "17", label: "17", x: 67.6, y: 52.3, kind: "seat" },
-
-      { id: "25", label: "25", x: 55.5, y: 60.8, kind: "seat" },
-
-      { id: "18", label: "18", x: 47.8, y: 69.5, kind: "seat" },
-      { id: "19", label: "19", x: 56.7, y: 69.5, kind: "seat" },
-      { id: "20", label: "20", x: 65.8, y: 69.5, kind: "seat" },
-
-      { id: "24", label: "24", x: 76, y: 56.7, kind: "seat" },
-      { id: "23", label: "23", x: 81.5, y: 59.5, kind: "seat" },
-      { id: "22", label: "22", x: 74.4, y: 65.3, kind: "seat" },
-      { id: "21", label: "21", x: 82, y: 68.7, kind: "seat" },
-
-      { id: "12A", label: "12A", x: 9.1, y: 67, kind: "seat" },
-      { id: "12B", label: "12B", x: 16.5, y: 68.3, kind: "seat" },
-      { id: "12C", label: "12C", x: 24, y: 68.2, kind: "seat" },
-
-      {
-        id: SWATCH_GREEN_ID,
-        label: "",
-        x: 90,
-        y: 83.5,
-        kind: "seat",
-        readonly: true,
-        fixedStatus: "temp_available",
-      },
-      {
-        id: SWATCH_YELLOW_ID,
-        label: "",
-        x: 90,
-        y: 88,
-        kind: "seat",
-        readonly: true,
-        fixedStatus: "occupied_temp",
-      },
-      {
-        id: SWATCH_RED_ID,
-        label: "",
-        x: 90,
-        y: 92.5,
-        kind: "seat",
-        readonly: true,
-        fixedStatus: "occupied",
-      },
-      {
-        id: SWATCH_PURPLE_ID,
-        label: "",
-        x: 90,
-        y: 96,
-        kind: "seat",
-        readonly: true,
-        fixedStatus: "reserved",
-      },
+      { id: "21", label: "21", x: 26.4, y: 60, kind: "seat" },
+      { id: "14", label: "14", x: 36.3, y: 58.8, kind: "seat" },
+      { id: "15", label: "15", x: 40.6, y: 58.8, kind: "seat" },
+      { id: "16", label: "16", x: 44.7, y: 58.8, kind: "seat" },
+      { id: "17", label: "17", x: 48.9, y: 58.8, kind: "seat" },
+      { id: "13", label: "13", x: 33.6, y: 70.2, kind: "seat" },
+      { id: "25", label: "25", x: 43.6, y: 71, kind: "seat" },
+      { id: "24", label: "24", x: 54, y: 64.9, kind: "seat" },
+      { id: "23", label: "23", x: 54.9, y: 68.3, kind: "seat" },
+      { id: "22", label: "22", x: 55.6, y: 80.2, kind: "seat" },
+      { id: "12A", label: "12A", x: 15.5, y: 79.9, kind: "seat" },
+      { id: "12B", label: "12B", x: 19.1, y: 79.9, kind: "seat" },
+      { id: "12C", label: "12C", x: 22.5, y: 79.9, kind: "seat" },
+      { id: "18", label: "18", x: 39.2, y: 83.7, kind: "seat" },
+      { id: "19", label: "19", x: 43.8, y: 83.7, kind: "seat" },
+      { id: "20", label: "20", x: 48.4, y: 83.7, kind: "seat" },
     ],
     []
   );
@@ -1052,6 +998,8 @@ const Staff_Dashboard: React.FC = () => {
                   const readonlyCls = p.readonly ? " seat-pin--readonly" : "";
                   const cls = `${baseCls} ${STATUS_COLOR[st]}${selectedCls}${readonlyCls}`;
                   const isRoom = p.kind === "room";
+                  const displayX = isRoom ? p.x : p.x - 1.1;
+                  const displayY = isRoom ? p.y : p.y - 1.8;
 
                   return (
                     <button
@@ -1060,8 +1008,8 @@ const Staff_Dashboard: React.FC = () => {
                       className={cls}
                       style={
                         {
-                          left: `${p.x}%`,
-                          top: `${p.y}%`,
+                          left: `${displayX}%`,
+                          top: `${displayY}%`,
                           "--i": index,
                         } as React.CSSProperties
                       }
@@ -1084,7 +1032,14 @@ const Staff_Dashboard: React.FC = () => {
                         openManageModalForPin(p.id, isRoom ? "room" : "seat");
                       }}
                     >
-                      {p.label}
+                      {isRoom ? (
+                        <span className="seat-pin-room-label">
+                          <span>CONFERENCE</span>
+                          <span>ROOM</span>
+                        </span>
+                      ) : (
+                        p.label
+                      )}
                     </button>
                   );
                 })}
@@ -1092,19 +1047,13 @@ const Staff_Dashboard: React.FC = () => {
 
               <div className="seatmap-legend">
                 <div className="legend-item">
-                  <span className="legend-dot seat-green" /> Temporarily Available
+                  <span className="legend-dot seat-green" /> Vacant
                 </div>
                 <div className="legend-item">
-                  <span className="legend-dot seat-yellow" /> Occupied Temporarily
-                  (TEMP)
+                  <span className="legend-dot seat-orange" /> Occupied
                 </div>
                 <div className="legend-item">
-                  <span className="legend-dot seat-orange" /> Occupied (CURRENT
-                  PROMO / BLOCKED)
-                </div>
-                <div className="legend-item">
-                  <span className="legend-dot seat-purple" /> Reserved (FUTURE
-                  PROMO / RESERVED)
+                  <span className="legend-dot seat-purple" /> Reserved
                 </div>
               </div>
 
@@ -1120,18 +1069,6 @@ const Staff_Dashboard: React.FC = () => {
                 </div>
               ) : null}
 
-              <img
-                src={bearImage}
-                alt="Bear"
-                className="seatmap-bear-outside"
-                draggable={false}
-              />
-              <img
-                src={grassImage}
-                alt="Grass"
-                className="seatmap-grass-outside"
-                draggable={false}
-              />
             </div>
           </div>
         </div>
