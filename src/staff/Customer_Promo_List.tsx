@@ -5,6 +5,7 @@
   import "../styles/Customer_Promo_List.css";
   import jsPDF from "jspdf";
   import autoTable from "jspdf-autotable";
+  import AddOrderModal from "./AddOrderModal";
 
   type PackageArea = "common_area" | "conference_room";
   type DurationUnit = "hour" | "day" | "month" | "year";
@@ -758,6 +759,7 @@ const getCommonAreaDurationLabel = (r: PromoBookingRow): string => {
 
     const [ordersMap, setOrdersMap] = useState<PromoOrdersMap>({});
     const [orderParentsMap, setOrderParentsMap] = useState<PromoOrderParentsMap>({});
+    const [addOrderTarget, setAddOrderTarget] = useState<PromoBookingRow | null>(null);
 
     const [paymentTarget, setPaymentTarget] = useState<PromoBookingRow | null>(null);
     const [gcashInput, setGcashInput] = useState<string>("0");
@@ -2500,7 +2502,7 @@ const totalConsignmentSummary = records.reduce((sum, r) => {
       };
 
     const totalRows = filteredRows.length;
-    const paidRows = filteredRows.filter((r) => r.is_paid).length;
+    const paidRows = filteredRows.filter((r) => isFinalPaidRow(r)).length;
     const unpaidRows = totalRows - paidRows;
     const systemTotal = round2(filteredRows.reduce((sum, r) => sum + getSystemDue(r), 0));
     const ordersTotal = round2(filteredRows.reduce((sum, r) => sum + getOrderDue(r.promo_code), 0));
@@ -2756,9 +2758,25 @@ const totalConsignmentSummary = records.reduce((sum, r) => {
                               >
                                 View Order
                               </button>
+                              <button
+                                className="cpl-btn-mini"
+                                onClick={() => setAddOrderTarget(row)}
+                                type="button"
+                              >
+                                Add Order
+                              </button>
                             </div>
                           ) : (
-                            <div className="cpl-empty cpl-empty-tight">No order</div>
+                            <div className="cpl-order-col">
+                              <div className="cpl-empty cpl-empty-tight">No order</div>
+                              <button
+                                className="cpl-btn-mini"
+                                onClick={() => setAddOrderTarget(row)}
+                                type="button"
+                              >
+                                Add Order
+                              </button>
+                            </div>
                           )}
                         </td>
                           <td>
@@ -2782,11 +2800,11 @@ const totalConsignmentSummary = records.reduce((sum, r) => {
                           </td>
                           <td>
                           <button
-                            className={`cpl-paid-pill ${row.is_paid ? "paid" : "unpaid"}`}
+                            className={`cpl-paid-pill ${isFinalPaidRow(row) ? "paid" : "unpaid"}`}
                             disabled
                             type="button"
                           >
-                            {row.is_paid ? "PAID" : "UNPAID"}
+                            {isFinalPaidRow(row) ? "PAID" : "UNPAID"}
                           </button>
                           </td>
                           <td>
@@ -3336,6 +3354,15 @@ const totalConsignmentSummary = records.reduce((sum, r) => {
             </div>
           ) : null}
         </FixedCenterModal>
+
+        <AddOrderModal
+          open={!!addOrderTarget}
+          bookingCode={String(addOrderTarget?.promo_code ?? "")}
+          fullName={addOrderTarget?.full_name ?? ""}
+          seatNumber={addOrderTarget ? seatLabel(addOrderTarget) : ""}
+          onClose={() => setAddOrderTarget(null)}
+          onSaved={refreshAll}
+        />
 
         <FixedCenterModal
           open={!!orderCancelTarget}

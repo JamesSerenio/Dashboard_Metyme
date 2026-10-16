@@ -5,6 +5,7 @@ import logo from "../assets/study_hub.png";
 import "../styles/Customer_Lists.css";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import AddOrderModal from "./AddOrderModal";
 
 const HOURLY_RATE = 20;
 const FREE_MINUTES = 0;
@@ -629,6 +630,7 @@ setExportModalOpen(false);
 
   const [selectedSession, setSelectedSession] = useState<CustomerSession | null>(null);
   const [selectedOrderSession, setSelectedOrderSession] = useState<CustomerSession | null>(null);
+  const [addOrderTarget, setAddOrderTarget] = useState<CustomerSession | null>(null);
   const [stoppingId, setStoppingId] = useState<string | null>(null);
   const [locallyStoppedIds, setLocallyStoppedIds] = useState<Record<string, boolean>>({});
 
@@ -2397,6 +2399,13 @@ const totals = useMemo(() => {
                                 </button>
                               </>
                             )}
+                            <button
+                              className="cll-mini-btn cll-orders-btn"
+                              onClick={() => setAddOrderTarget(session)}
+                              type="button"
+                            >
+                              Add Order
+                            </button>
                           </div>
                         </td>
 
@@ -3233,6 +3242,15 @@ const totals = useMemo(() => {
             </button>
           </div>
         </FixedCenterModal>
+
+        <AddOrderModal
+          open={!!addOrderTarget}
+          bookingCode={String(addOrderTarget?.booking_code ?? "")}
+          fullName={addOrderTarget?.full_name ?? ""}
+          seatNumber={addOrderTarget?.seat_number ?? ""}
+          onClose={() => setAddOrderTarget(null)}
+          onSaved={refreshAll}
+        />
 
         {/* CANCEL ITEM */}
         <FixedCenterModal
