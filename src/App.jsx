@@ -14,6 +14,7 @@ import TimeAlertModal from "./components/TimeAlertModal";
 import AddOnCodeAlertModal from "./components/AddOnCodeAlertModal";
 
 import { supabase } from "./utils/supabaseClient";
+import { SESSION_MARKER_KEY, tokenSessionId } from "./utils/deviceActivity";
 
 const ALERT_MINUTES = [5, 3, 1];
 
@@ -105,6 +106,31 @@ const AppRoutes = () => {
       return;
     }
 
+    // A deleted Supabase Auth session can leave a cached JWT in the browser.
+    // The device RPC checks auth.sessions server-side, so a remotely revoked
+    // browser is signed out even while that cached access token has not expired.
+    const currentSessionId = tokenSessionId(sess.session?.access_token);
+    const registeredSessionId = localStorage.getItem(SESSION_MARKER_KEY) || "";
+    const shouldValidateDevice = currentSessionId && registeredSessionId === currentSessionId;
+    const deviceCheck = shouldValidateDevice
+      ? await supabase.rpc("list_login_devices")
+      : { data: null, error: null };
+    if (shouldValidateDevice && !deviceCheck.error) {
+      const hasCurrentSession = Array.isArray(deviceCheck.data) &&
+        deviceCheck.data.some((device) => device.is_current);
+      if (!hasCurrentSession) {
+        await supabase.auth.signOut({ scope: "local" });
+        localStorage.removeItem("role");
+        localStorage.removeItem("user_id");
+        localStorage.removeItem("email");
+        localStorage.removeItem(SESSION_MARKER_KEY);
+        setRole("");
+        resetAllAlertState();
+        if (window.location.pathname !== "/login") window.location.replace("/login");
+        return;
+      }
+    }
+
     const { data: profile, error } = await supabase
       .from("profiles")
       .select("role")
@@ -119,7 +145,7 @@ const AppRoutes = () => {
     const r = (profile?.role || "").toLowerCase();
     localStorage.setItem("role", r);
     setRole(r);
-  }, []);
+  }, [resetAllAlertState]);
 
   useEffect(() => {
     const run = async () => {
@@ -137,10 +163,15 @@ const AppRoutes = () => {
     };
 
     window.addEventListener("storage", onStorage);
+    window.addEventListener("focus", run);
+
+    const sessionCheckId = window.setInterval(run, 30000);
 
     return () => {
       sub.subscription.unsubscribe();
       window.removeEventListener("storage", onStorage);
+      window.removeEventListener("focus", run);
+      window.clearInterval(sessionCheckId);
     };
   }, [syncRoleFromSupabase]);
 
