@@ -17,6 +17,7 @@ import Customer_Cancelled from "./Customer_Cancelled";
 import Staff_Consignment from "./Staff_Consignment";
 import Staff_Consignment_Record from "./Staff_Consignment_Record";
 import Customer_Consignment_Record from "./Customer_Consignment_Record";
+import LoginActivityDevices from "../components/LoginActivityDevices";
 
 /* assets */
 import dashboardIcon from "../assets/add_user.png";
@@ -38,6 +39,7 @@ import consignmentRecordIcon from "../assets/consignment_record.png";
 
 type MenuKey =
   | "dashboard"
+  | "login_activity"
   | "customer_lists"
   | "customer_reservations"
   | "customer_calendar"
@@ -1122,6 +1124,7 @@ const Staff_menu: React.FC = () => {
   const menuItems = useMemo<MenuItem[]>(
     () => [
       { name: "Seat Layout", key: "dashboard", icon: dashboardIcon },
+      { name: "Login Activity & Devices", key: "login_activity", icon: dashboardIcon },
       { name: "Customer Lists", key: "customer_lists", icon: listIcon },
       {
         name: "Customer Reservations",
@@ -1166,6 +1169,8 @@ const Staff_menu: React.FC = () => {
     switch (activePage) {
       case "dashboard":
         return <Staff_Dashboard />;
+      case "login_activity":
+        return <LoginActivityDevices />;
       case "customer_lists":
         return <Customer_Lists />;
       case "customer_reservations":

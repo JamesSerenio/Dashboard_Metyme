@@ -14,6 +14,7 @@ import Admin_Customer_Cancelled from "./Admin_Customer_Cancelled";
 import Admin_Consignment_Approval from "./Admin_Consignment_Approval";
 import Admin_Packages from "./Admin_Packages";
 import Admin_Receipt from "./Admin_Receipt";
+import LoginActivityDevices from "../components/LoginActivityDevices";
 
 
 /* ================= ASSETS ================= */
@@ -38,6 +39,7 @@ type MenuKey =
   | "customer_cancelled"
   | "consignment_approval" 
   | "packages"
+  | "login_activity"
   | "admin_receipt";
 
 type MenuItem = {
@@ -94,6 +96,7 @@ const Admin_menu: React.FC = () => {
   const menuItems = useMemo<MenuItem[]>(
     () => [
       { name: "Dashboard", key: "dashboard", icon: dashboardIcon },
+      { name: "Login Activity & Devices", key: "login_activity", icon: dashboardIcon },
       { name: "Admin Add Ons", key: "add_ons", icon: addOnsIcon },
       { name: "Item Lists", key: "item_lists", icon: itemIcon },
       { name: "Restock Records", key: "restock_records", icon: restockIcon },
@@ -143,6 +146,9 @@ const Admin_menu: React.FC = () => {
     switch (active) {
       case "dashboard":
         return <Admin_Dashboard />;
+
+      case "login_activity":
+        return <LoginActivityDevices />;
 
       case "add_ons":
         return <Admin_Add_Ons />;

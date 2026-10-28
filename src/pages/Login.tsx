@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../utils/supabaseClient";
+import { registerDeviceActivity } from "../utils/deviceActivity";
 import studyHubLogo from "../assets/study_hub.png";
 import leaves from "../assets/leave.png";
 import flowerImg from "../assets/flower.png";
@@ -94,18 +95,35 @@ const Login: React.FC = () => {
         return;
       }
 
-      const { data: profile, error: profileError } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", data.user.id)
-        .maybeSingle<ProfileRow>();
+      await registerDeviceActivity();
 
-      if (profileError) {
-        showError(profileError.message);
-        return;
+      // Prefer the security-definer device RPC because a restrictive RLS
+      // policy may intentionally hide profiles from direct browser queries.
+      const deviceResult = await supabase.rpc("list_login_devices");
+      const currentDevice = Array.isArray(deviceResult.data)
+        ? deviceResult.data.find((row) => row.is_current)
+        : null;
+
+      let role = String(currentDevice?.role || "").toLowerCase();
+      if (!role) {
+        const { data: profile, error: profileError } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", data.user.id)
+          .maybeSingle<ProfileRow>();
+        if (profileError) {
+          showError(profileError.message);
+          await supabase.auth.signOut();
+          return;
+        }
+        role = (profile?.role || "").toLowerCase();
       }
 
-      const role = (profile?.role || "").toLowerCase();
+      if (role !== "admin" && role !== "staff") {
+        showError("This account has no authorized admin or staff role.");
+        await supabase.auth.signOut();
+        return;
+      }
 
       localStorage.setItem("role", role);
       localStorage.setItem("user_id", data.user.id);
@@ -118,8 +136,6 @@ const Login: React.FC = () => {
           navigate("/staff-menu", { replace: true });
         } else if (role === "admin") {
           navigate("/admin-menu", { replace: true });
-        } else {
-          navigate("/home", { replace: true });
         }
       }, 700);
     } catch (err) {
