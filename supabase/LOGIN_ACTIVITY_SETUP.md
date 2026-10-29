@@ -1,7 +1,7 @@
 # Login Activity & Devices
 
 1. Supabase Dashboard → SQL Editor.
-2. Run migrations `003`, `004`, then `005_staff_device_controls.sql` in order.
+2. Run migrations `003`, `004`, `005`, then `006_admin_only_device_controls.sql` in order. Migration 006 makes the feature admin-only.
 3. Restart the app, sign out, then sign in again to register the browser.
 4. Open **Login Activity & Devices** in the sidebar.
 

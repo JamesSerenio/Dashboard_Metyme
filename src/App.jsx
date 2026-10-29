@@ -113,11 +113,10 @@ const AppRoutes = () => {
     const registeredSessionId = localStorage.getItem(SESSION_MARKER_KEY) || "";
     const shouldValidateDevice = currentSessionId && registeredSessionId === currentSessionId;
     const deviceCheck = shouldValidateDevice
-      ? await supabase.rpc("list_login_devices")
+      ? await supabase.rpc("check_live_dashboard_session")
       : { data: null, error: null };
     if (shouldValidateDevice && !deviceCheck.error) {
-      const hasCurrentSession = Array.isArray(deviceCheck.data) &&
-        deviceCheck.data.some((device) => device.is_current);
+      const hasCurrentSession = deviceCheck.data === true;
       if (!hasCurrentSession) {
         await supabase.auth.signOut({ scope: "local" });
         localStorage.removeItem("role");
